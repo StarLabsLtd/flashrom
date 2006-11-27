@@ -1,0 +1,11 @@
+--- lbtable.c.orig	2006-11-23 15:02:39.000000000 +0100
++++ lbtable.c	2006-11-23 14:58:09.000000000 +0100
+@@ -7,7 +7,7 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <sys/mman.h>
+-#include "../../src/include/boot/linuxbios_tables.h"
++#include "linuxbios_tables.h"
+ #include "debug.h"
+ 
+ char *lb_part=NULL, *lb_vendor=NULL;

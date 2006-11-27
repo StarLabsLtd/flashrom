@@ -1,0 +1,37 @@
+This package was debianized by Uwe Hermann <uwe@debian.org> on
+Thu, 23 Nov 2006 14:48:04 +0100.
+
+It was downloaded from:
+svn://linuxbios.org/repos/trunk/LinuxBIOSv2/util/flashrom
+
+Upstream Authors: Various LinuxBIOS developers
+
+Copyright: 2000 Silicon Integrated System Corporation
+           2003 Niki W. Waibel <niki.waibel@gmx.net>
+           2004 Tyan Corp
+           2005-2006 coresystems GmbH <stepan@openbios.org>
+           2006 Uwe Hermann <uwe@hermann-uwe.de>
+           2006 Giampiero Giancipoli <gianci@email.it>
+
+License:
+
+   This package is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation; either version 2 of the License, or
+   (at your option) any later version.
+
+   This package is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this package; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+On Debian systems, the complete text of the GNU General
+Public License can be found in `/usr/share/common-licenses/GPL'.
+
+The Debian packaging is (C) 2006, Uwe Hermann <uwe@debian.org> and
+is licensed under the GPL, see above.
+

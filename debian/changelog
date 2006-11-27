@@ -1,0 +1,6 @@
+flashrom (0.0+r2504-1) unstable; urgency=low
+
+  * Initial release (Closes: #399893).
+
+ -- Uwe Hermann <uwe@debian.org>  Mon, 27 Nov 2006 14:53:33 +0100
+

@@ -1,0 +1,15 @@
+Source: flashrom
+Section: electronics
+Priority: extra
+Maintainer: Uwe Hermann <uwe@debian.org>
+Build-Depends: cdbs, debhelper (>= 5), pciutils-dev
+Standards-Version: 3.7.2
+
+Package: flashrom
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Universal flash programming utility
+ Flashrom is a universal flash programming utility for flash chips
+ (e.g. in DIP or PLCC packaging). It can be used to flash BIOS images,
+ for example.
+

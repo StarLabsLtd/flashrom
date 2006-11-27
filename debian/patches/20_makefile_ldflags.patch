@@ -1,0 +1,29 @@
+--- Makefile.orig	2006-11-23 16:15:03.000000000 +0100
++++ Makefile	2006-11-23 16:15:41.000000000 +0100
+@@ -10,7 +10,7 @@
+ STRIP	= strip
+ #CFLAGS  = -O2 -g -Wall -Werror
+ CFLAGS  = -Os -Wall -Werror -DDISABLE_DOC # -DTS5300
+-LDFLAGS = -lpci -lz -static 
++FLASHROM_LDFLAGS = -lpci -lz
+ 
+ 
+ OBJS  = flash_enable.o udelay.o jedec.o sst28sf040.o am29f040b.o mx29f002.o  \
+@@ -20,7 +20,7 @@
+ all: pciutils dep $(PROGRAM)
+ 
+ $(PROGRAM): $(OBJS)
+-	$(CC) -o $(PROGRAM) $(OBJS) $(LDFLAGS)
++	$(CC) -o $(PROGRAM) $(OBJS) $(FLASHROM_LDFLAGS)
+ 	$(STRIP) -s $(PROGRAM)
+ 
+ clean:
+@@ -38,7 +38,7 @@
+ 		   echo "struct pci_access *pacc;";	   \
+ 		   echo "int main(int argc, char **argv)"; \
+ 		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
+-	@$(CC) $(CFLAGS) .test.c -o .test $(LDFLAGS) &>/dev/null &&	\
++	@$(CC) $(CFLAGS) .test.c -o .test $(FLASHROM_LDFLAGS) &>/dev/null &&	\
+ 		echo "found." || ( echo "not found."; echo;		\
+ 		echo "Please install pciutils and pciutils-devel.";	\
+ 		echo "See README for more information."; echo;		\
