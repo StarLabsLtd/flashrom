@@ -1,6 +1,14 @@
+flashrom (0.0+r2526-1) unstable; urgency=low
+
+  * New upstream release.
+  * Do not compile in DoC support (it's considered unsupported upstream).
+    This will also make the flash part identification process a lot faster.
+
+ -- Uwe Hermann <uwe@debian.org>  Thu, 14 Dec 2006 18:37:07 +0100
+
 flashrom (0.0+r2504-1) unstable; urgency=low
 
   * Initial release (Closes: #399893).
 
- -- Uwe Hermann <uwe@debian.org>  Mon, 27 Nov 2006 14:53:33 +0100
+ -- Uwe Hermann <uwe@debian.org>  Thu, 14 Dec 2006 16:56:49 +0100
 
