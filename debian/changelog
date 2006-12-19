@@ -1,3 +1,12 @@
+flashrom (0.0+r2526-2) unstable; urgency=medium
+
+  * Add missing build dependency on zlib1g-dev (Closes: #403322).
+    Thanks Julien Danjou <acid@debian.org> and
+    Alex de Oliveira Silva <enerv@host.sk>.
+  * Standards-Version: 3.7.2.2 (no changes required).
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 19 Dec 2006 10:36:04 +0100
+
 flashrom (0.0+r2526-1) unstable; urgency=low
 
   * New upstream release.

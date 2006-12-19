@@ -2,8 +2,8 @@ Source: flashrom
 Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
-Build-Depends: cdbs, debhelper (>= 5), pciutils-dev
-Standards-Version: 3.7.2
+Build-Depends: cdbs, debhelper (>= 5), pciutils-dev, zlib1g-dev
+Standards-Version: 3.7.2.2
 
 Package: flashrom
 Architecture: any
