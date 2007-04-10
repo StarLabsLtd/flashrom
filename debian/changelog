@@ -1,3 +1,10 @@
+flashrom (0.0+r2601-1) unstable; urgency=low
+
+  * New upstream release.
+  * Drop a few patches which are now merged upstream.
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 10 Apr 2007 12:38:58 +0200
+
 flashrom (0.0+r2526-2) unstable; urgency=medium
 
   * Add missing build dependency on zlib1g-dev (Closes: #403322).

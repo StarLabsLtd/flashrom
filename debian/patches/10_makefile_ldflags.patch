@@ -1,31 +1,36 @@
---- Makefile.orig	2006-12-14 16:43:47.000000000 +0100
-+++ Makefile	2006-12-14 16:44:21.000000000 +0100
-@@ -9,8 +9,8 @@
- CC      = gcc
- STRIP	= strip
+--- Makefile.orig	2007-04-10 12:36:56.000000000 +0200
++++ Makefile	2007-04-10 12:33:55.000000000 +0200
+@@ -11,12 +11,12 @@
+ INSTALL = /usr/bin/install
+ PREFIX  = /usr/local
  #CFLAGS  = -O2 -g -Wall -Werror
 -CFLAGS  = -Os -Wall -Werror -DDISABLE_DOC # -DTS5300
--LDFLAGS = -lpci -lz -static 
 +FLASHROM_CFLAGS  = -Os -Wall -Werror -DDISABLE_DOC # -DTS5300
+ OS_ARCH	= $(shell uname)
+ ifeq ($(OS_ARCH), SunOS)
+-LDFLAGS = -lpci -lz
 +FLASHROM_LDFLAGS = -lpci -lz
+ else
+-LDFLAGS = -lpci -lz -static 
++FLASHROM_LDFLAGS = -lpci -lz
+ STRIP_ARGS = -s
+ endif
  
- 
- OBJS  = flash_enable.o udelay.o jedec.o sst28sf040.o am29f040b.o mx29f002.o  \
-@@ -20,7 +20,7 @@
+@@ -29,7 +29,7 @@
  all: pciutils dep $(PROGRAM)
  
  $(PROGRAM): $(OBJS)
 -	$(CC) -o $(PROGRAM) $(OBJS) $(LDFLAGS)
 +	$(CC) -o $(PROGRAM) $(OBJS) $(FLASHROM_CFLAGS) $(FLASHROM_LDFLAGS)
- 	$(STRIP) -s $(PROGRAM)
+ 	$(STRIP) $(STRIP_ARGS) $(PROGRAM)
  
  clean:
-@@ -38,7 +38,7 @@
+@@ -47,7 +47,7 @@
  		   echo "struct pci_access *pacc;";	   \
  		   echo "int main(int argc, char **argv)"; \
  		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
 -	@$(CC) $(CFLAGS) .test.c -o .test $(LDFLAGS) &>/dev/null &&	\
-+	@$(CC) $(CFLAGS) .test.c -o .test $(FLASHROM_LDFLAGS) &>/dev/null &&	\
++	@$(CC) $(FLASHROM_CFLAGS) .test.c -o .test $(FLASHROM_LDFLAGS) &>/dev/null && \
  		echo "found." || ( echo "not found."; echo;		\
- 		echo "Please install pciutils and pciutils-devel.";	\
+ 		echo "Please install pciutils-devel and zlib-devel.";	\
  		echo "See README for more information."; echo;		\

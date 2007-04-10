@@ -4,7 +4,7 @@
  * Copyright 2000 Silicon Integrated System Corporation
  * Copyright 2004 Tyan Corp
  *	yhlu yhlu@tyan.com add exclude start and end option
- * Copyright 2005-2006 coresystems GmbH 
+ * Copyright 2005-2007 coresystems GmbH 
  *      Stefan Reinauer <stepan@coresystems.de> added rom layout
  *      support, and checking for suitable rom image, various fixes
  *      support for flashing the Technologic Systems 5300.
@@ -35,6 +35,15 @@
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
+#include <pci/pci.h>
+
+/* for iopl */
+#if defined (__sun) && (defined(__i386) || defined(__amd64))
+#include <strings.h>
+#include <sys/sysi86.h>
+#include <sys/psw.h>
+#include <asm/sunddi.h>
+#endif
 
 #include "flash.h"
 #include "lbtable.h"
@@ -42,71 +51,105 @@
 #include "debug.h"
 
 char *chip_to_probe = NULL;
-
+struct pci_access *pacc; /* For board and chipset_enable */
 int exclude_start_page, exclude_end_page;
 int force=0, verbose=0;
 
+int fd_mem;
+
+/*
+ *
+ */
+struct pci_dev *
+pci_dev_find(uint16_t vendor, uint16_t device)
+{
+        struct pci_dev  *temp;
+        struct pci_filter  filter;
+
+        pci_filter_init(NULL, &filter);
+        filter.vendor = vendor;
+        filter.device = device;
+
+        for (temp = pacc->devices; temp; temp = temp->next)
+                if (pci_filter_match(&filter, temp))
+                        return temp;
+
+        return NULL;
+}
+
+/*
+ *
+ */
+struct pci_dev *
+pci_card_find(uint16_t vendor, uint16_t device,
+              uint16_t card_vendor, uint16_t card_device)
+{
+        struct pci_dev  *temp;
+        struct pci_filter  filter;
+
+        pci_filter_init(NULL, &filter);
+        filter.vendor = vendor;
+        filter.device = device;
+
+        for (temp = pacc->devices; temp; temp = temp->next)
+                if (pci_filter_match(&filter, temp)) {
+                        if ((card_vendor == pci_read_word(temp, 0x2C)) &&
+                            (card_device == pci_read_word(temp, 0x2E)))
+                                return temp;
+                }
+
+        return NULL;
+}
+
 struct flashchip *probe_flash(struct flashchip *flash)
 {
-	int fd_mem;
 	volatile uint8_t *bios;
-	unsigned long size;
-
-	if ((fd_mem = open("/dev/mem", O_RDWR)) < 0) {
-		perror("Error: Can not open /dev/mem. You need to be root.");
-		exit(1);
-	}
+	unsigned long flash_baseaddr, size;
 
 	while (flash->name != NULL) {
 		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0) {
 			flash++;
 			continue;
 		}
-		printf_debug("Trying %s, %d KB\n", flash->name, flash->total_size);
+		printf_debug("Probing for %s, %d KB\n", 
+				flash->name, flash->total_size);
+
 		size = flash->total_size * 1024;
-		/* BUG? what happens if getpagesize() > size!?
-		   -> ``Error MMAP /dev/mem: Invalid argument'' NIKI */
+
+#ifdef TS5300
+		// FIXME: Wrong place for this decision
+		flash_baseaddr = 0x9400000;
+#else
+		flash_baseaddr = (0xffffffff - size + 1);
+#endif
+
+		/* If getpagesize() > size -> 
+		 * `Error MMAP /dev/mem: Invalid argument' 
+		 * This should never happen as we don't support any flash chips
+		 * smaller than 4k or 8k yet.
+		 */
+
 		if (getpagesize() > size) {
 			size = getpagesize();
-			printf("%s: warning: size: %d -> %ld\n",
-			       __FUNCTION__, flash->total_size * 1024,
-			       (unsigned long) size);
+			printf("WARNING: size: %d -> %ld (page size)\n",
+			       flash->total_size * 1024, (unsigned long) size);
 		}
+
 		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    fd_mem, (off_t) (0xffffffff - size + 1));
+			    fd_mem, (off_t)flash_baseaddr );
 		if (bios == MAP_FAILED) {
-			perror("Error: Can't mmap /dev/mem.");
+			perror("Error: Can't mmap " MEM_DEV ".");
 			exit(1);
 		}
 		flash->virt_addr = bios;
-		flash->fd_mem = fd_mem;
 
 		if (flash->probe(flash) == 1) {
 			printf("%s found at physical address: 0x%lx\n",
-			       flash->name, (0xffffffff - size + 1));
+			       flash->name, flash_baseaddr);
 			return flash;
 		}
 		munmap((void *) bios, size);
-#ifdef TS5300
-		/* TS-5300 */
-		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    fd_mem, (off_t) (0x9400000));
-		if (bios == MAP_FAILED) {
-			perror("Error: Can't mmap /dev/mem.");
-			exit(1);
-		}
-		flash->virt_addr = bios;
-		flash->fd_mem = fd_mem;
 
-		if (flash->probe(flash) == 1) {
-			printf("TS-5300 %s found at physical address: 0x%lx\n",
-			       flash->name, 0x9400000UL);
-			return flash;
-		}
-		munmap((void *) bios, size);
-		/* TS-5300 */
-#endif
-		
 		flash++;
 	}
 	return NULL;
@@ -281,9 +324,29 @@ int main(int argc, char *argv[])
 	if (optind < argc)
 		filename = argv[optind++];
 
-	printf("Calibrating delay loop... ");
+        /* First get full io access */
+#if defined (__sun) && (defined(__i386) || defined(__amd64))
+	if (sysi86(SI86V86, V86SC_IOPL, PS_IOPL) != 0){
+#else
+	if (iopl(3) != 0) {
+#endif
+		fprintf(stderr, "ERROR: iopl failed: \"%s\"\n", strerror(errno));
+		exit(1);
+	}
+
+        /* Initialize PCI access for flash enables */
+	pacc = pci_alloc();	/* Get the pci_access structure */
+	/* Set all options you want -- here we stick with the defaults */
+	pci_init(pacc);		/* Initialize the PCI library */
+	pci_scan_bus(pacc);	/* We want to get the list of devices */
+
+	/* Open the memory device. A lot of functions need it */
+	if ((fd_mem = open(MEM_DEV, O_RDWR)) < 0) {
+		perror("Error: Can not access memory using " MEM_DEV ". You need to be root.");
+		exit(1);
+	}
+
 	myusec_calibrate_delay();
-	printf("ok\n");
 
 	/* We look at the lbtable first to see if we need a
 	 * mainboard specific flash enable sequence.
@@ -293,7 +356,13 @@ int main(int argc, char *argv[])
 	/* try to enable it. Failure IS an option, since not all motherboards
 	 * really need this to be done, etc., etc.
 	 */
-	(void) enable_flash_write();
+        ret = chipset_flash_enable();
+        if (ret == -2)
+                printf("WARNING: No chipset found. Flash detection "
+                       "will most likely fail.\n");
+
+        board_flash_enable(lb_vendor, lb_part);
+
 
 	if ((flash = probe_flash(flashchips)) == NULL) {
 		printf("No EEPROM/flash device found.\n");
@@ -345,7 +414,7 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		if(image_stat.st_size!=flash->total_size*1024) {
-			perror("Image size doesnt match");
+			fprintf(stderr, "Error: Image size doesnt match\n");
 			exit(1);
 		}
 

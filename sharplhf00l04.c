@@ -25,7 +25,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <sys/io.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,7 +78,7 @@ int probe_lhf00l04(struct flashchip *flash)
 		size_t size = flash->total_size * 1024;
 		// we need to mmap the write-protect space. 
 		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    flash->fd_mem, (off_t) (0 - 0x400000 - size));
+			    fd_mem, (off_t) (0 - 0x400000 - size));
 		if (bios == MAP_FAILED) {
 			// it's this part but we can't map it ...
 			perror("Error MMAP /dev/mem");
