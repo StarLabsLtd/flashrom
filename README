@@ -47,6 +47,14 @@ or if you want to override these values, you can specify -m, e.g.:
 
   flashrom -w --mainboard ISLAND:ARUMA island_aruma.rom
 
+The following boards require the specification of the board name, if
+no LinuxBIOS table is found:
+
+* IWILL DK8-HTX: use -m iwill:dk8_htx
+* Agami Aruma: use -m AGAMI:ARUMA
+* ASUS P5A: use -m asus:p5a
+* IBM x3455: use -m ibm:x3455
+
 
 ROM Layout Support
 ------------------
@@ -92,6 +100,7 @@ AMD AM-29F040B
 AMD AM-29F016D
 ASD AE49F2008
 Atmel AT-29C040A
+Atmel AT-29C020
 EMST F49B002UA
 Intel 82802AB (Firmware Hub) 
 Intel 82802AC (Firmware Hub) 
@@ -118,6 +127,9 @@ SST SST-49LF008A
 SST SST-49LF004C
 SST SST-49LF008C
 SST SST-49LF016C
+ST ST-M29F002B
+ST ST-M29F002T
+ST ST-M29F002NT
 ST ST-M29F400BT
 ST ST-M29F040B
 SyncMOS S29C51001T/B
@@ -129,6 +141,7 @@ Winbond W29C020C
 Winbond W49F002U
 Winbond W49V002A
 Winbond W49V002FA
+Winbond W39V040FA
 Winbond W39V040A
 Winbond W39V040B
 Winbond W39V080A
@@ -137,10 +150,11 @@ Winbond W39V080A
 Supported Southbridges
 ----------------------
 
-AMD CS5530
+AMD CS5530/CS5530A
 AMD Geode SC1100
 AMD AMD-8111
 ATI SB400
+Broadcom HT-1000
 Intel ICH0-ICH8 (all variations)
 Intel PIIX4/PIIX4E/PIIX4M
 NVIDIA CK804

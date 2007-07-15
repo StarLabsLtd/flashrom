@@ -3,7 +3,7 @@
  *
  *
  * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2005 coresystems GmbH <stepan@openbios.org>
+ * Copyright 2005-2007 coresystems GmbH
  *
  *	This program is free software; you can redistribute it and/or modify
  *	it under the terms of the GNU General Public License as published by
@@ -50,9 +50,8 @@
 #define	STATUS_ESS		(1 << 6)
 #define	STATUS_WSMS		(1 << 7)
 
-
 static __inline__ int write_lockbits_49lfxxxc(volatile uint8_t *bios, int size,
-					    unsigned char bits)
+					      unsigned char bits)
 {
 	int i, left = size;
 	unsigned long address;
@@ -63,24 +62,23 @@ static __inline__ int write_lockbits_49lfxxxc(volatile uint8_t *bios, int size,
 		*(bios + (i * 65536) + 2) = bits;
 	}
 	address = i * 65536;
-		//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
+	//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
 	*(bios + address + 2) = bits;
 	address += 32768;
-		//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
+	//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
 	*(bios + address + 2) = bits;
 	address += 8192;
-		//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
+	//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
 	*(bios + address + 2) = bits;
 	address += 8192;
-		//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
+	//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
 	*(bios + address + 2) = bits;
-
 
 	return (0);
 }
 
 static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
-					   unsigned long address)
+					    unsigned long address)
 {
 	unsigned char status;
 
@@ -88,21 +86,21 @@ static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
 	*(bios + address) = ERASE;
 
 	do {
-    		status = *bios;
+		status = *bios;
 		if (status & (STATUS_ESS | STATUS_BPS)) {
-			printf("sector erase FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)bios + address, status); 
+			printf("sector erase FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)bios + address, status);
 			*bios = CLEAR_STATUS;
-			return(-1);
+			return (-1);
 		}
-        } while (!(status & STATUS_WSMS));
+	} while (!(status & STATUS_WSMS));
 
 	return (0);
 }
 
 static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
-					   uint8_t *src,
-					   volatile uint8_t *dst,
-					   unsigned int page_size)
+					    uint8_t *src,
+					    volatile uint8_t *dst,
+					    unsigned int page_size)
 {
 	int i;
 	unsigned char status;
@@ -122,9 +120,9 @@ static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
 		do {
 			status = *bios;
 			if (status & (STATUS_ESS | STATUS_BPS)) {
-				printf("sector write FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)dst, status); 
+				printf("sector write FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)dst, status);
 				*bios = CLEAR_STATUS;
-				return(-1);
+				return (-1);
 			}
 		} while (!(status & STATUS_WSMS));
 	}
@@ -134,44 +132,39 @@ static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
 
 int probe_49lfxxxc(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
+
 	uint8_t id1, id2;
-	size_t size = flash->total_size * 1024;
 
 	*bios = RESET;
 
 	*bios = READ_ID;
-	id1 = *(volatile uint8_t *) bios;
-	id2 = *(volatile uint8_t *) (bios + 0x01);
+	id1 = *(volatile uint8_t *)bios;
+	id2 = *(volatile uint8_t *)(bios + 0x01);
 
 	*bios = RESET;
 
 	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
+
 	if (!(id1 == flash->manufacture_id && id2 == flash->model_id))
 		return 0;
 
-	bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-		    fd_mem, (off_t) (0xFFFFFFFF - 0x400000 - size + 1));
-	if (bios == MAP_FAILED) {
-		// it's this part but we can't map it ...
-		perror("Error MMAP /dev/mem");
-		exit(1);
-	}
-	flash->virt_addr_2 = bios;
+	map_flash_registers(flash);
+
 	return 1;
 }
 
 int erase_49lfxxxc(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virt_addr;
-	volatile uint8_t *bios2 = flash->virt_addr_2;
+	volatile uint8_t *bios = flash->virtual_memory;
+	volatile uint8_t *registers = flash->virtual_registers;
 	int i;
 	unsigned int total_size = flash->total_size * 1024;
 
-	write_lockbits_49lfxxxc(bios2, total_size, 0);
+	write_lockbits_49lfxxxc(registers, total_size, 0);
 	for (i = 0; i < total_size; i += flash->page_size)
-		if (erase_sector_49lfxxxc(bios, i) != 0 )
-		    return (-1);
+		if (erase_sector_49lfxxxc(bios, i) != 0)
+			return (-1);
 
 	*bios = RESET;
 	return (0);
@@ -180,12 +173,11 @@ int erase_49lfxxxc(struct flashchip *flash)
 int write_49lfxxxc(struct flashchip *flash, uint8_t *buf)
 {
 	int i;
-	int total_size = flash->total_size * 1024, page_size =
-	    flash->page_size;
-	volatile uint8_t *bios = flash->virt_addr;
+	int total_size = flash->total_size * 1024;
+	int page_size = flash->page_size;
+	volatile uint8_t *bios = flash->virtual_memory;
 
-
-	write_lockbits_49lfxxxc(flash->virt_addr_2, total_size, 0);
+	write_lockbits_49lfxxxc(flash->virtual_registers, total_size, 0);
 	printf("Programming Page: ");
 	for (i = 0; i < total_size / page_size; i++) {
 		/* erase the page before programming */
@@ -194,7 +186,7 @@ int write_49lfxxxc(struct flashchip *flash, uint8_t *buf)
 		/* write to the sector */
 		printf("%04d at address: 0x%08x", i, i * page_size);
 		write_sector_49lfxxxc(bios, buf + i * page_size,
-				     bios + i * page_size, page_size);
+				      bios + i * page_size, page_size);
 		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	}
 	printf("\n");

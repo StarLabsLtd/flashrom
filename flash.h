@@ -36,7 +36,6 @@ struct flashchip {
 	int manufacture_id;
 	int model_id;
 
-	volatile uint8_t *virt_addr;
 	int total_size;
 	int page_size;
 
@@ -45,7 +44,11 @@ struct flashchip {
 	int (*write) (struct flashchip *flash, uint8_t *buf);
 	int (*read) (struct flashchip *flash, uint8_t *buf);
 
-	volatile uint8_t *virt_addr_2;
+	/* some flash devices have an additional
+	 * register space
+	 */
+	volatile uint8_t *virtual_memory;
+	volatile uint8_t *virtual_registers;
 };
 
 extern struct flashchip flashchips[];
@@ -64,6 +67,7 @@ extern struct flashchip flashchips[];
 
 #define ATMEL_ID		0x1F	/* Atmel */
 #define AT_29C040A		0xA4
+#define AT_29C020		0xDA
 
 #define MX_ID			0xC2	/* Macronix (MX) */
 #define MX_29F002		0xB0
@@ -98,6 +102,7 @@ extern struct flashchip flashchips[];
 #define WINBOND_ID		0xDA	/* Winbond */
 #define W_29C011		0xC1
 #define W_29C020C		0x45
+#define W_39V040FA		0x34
 #define W_39V040A		0x3D
 #define W_39V040B		0x54
 #define W_39V080A		0xD0
@@ -106,8 +111,10 @@ extern struct flashchip flashchips[];
 #define W_49V002FA		0x32
 
 #define ST_ID			0x20	/* ST */
-#define ST_M29F040B		0xE2
+#define ST_M29F002B		0x34
+#define ST_M29F002T		0xB0	/* M29F002T / M29F002NT */
 #define ST_M29F400BT		0xD5
+#define ST_M29F040B		0xE2
 
 #define EMST_ID			0x8c	/* EMST / EFST */
 #define EMST_F49B002UA		0x00
@@ -129,13 +136,13 @@ void myusec_delay(int time);
 void myusec_calibrate_delay();
 
 /* pci handling for board/chipset_enable */
-struct pci_access *pacc; /* For board and chipset_enable */
+struct pci_access *pacc;	/* For board and chipset_enable */
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
-struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device, 
-		uint16_t card_vendor, uint16_t card_device);
+struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
+			      uint16_t card_vendor, uint16_t card_device);
 
-int board_flash_enable(char *vendor, char *part); /* board_enable.c */
-int chipset_flash_enable(void); /* chipset_enable.c */
+int board_flash_enable(char *vendor, char *part);	/* board_enable.c */
+int chipset_flash_enable(void);	/* chipset_enable.c */
 
 /* physical memory mapping device */
 
@@ -146,5 +153,7 @@ int chipset_flash_enable(void); /* chipset_enable.c */
 #endif
 
 extern int fd_mem;
+
+int map_flash_registers(struct flashchip *flash); /* flashrom.c */
 
 #endif				/* !__FLASH_H__ */

@@ -21,7 +21,7 @@
  *
  *
  * Reference:
- *	4 MEgabit (512K x 8) SuperFlash EEPROM, SST28SF040 data sheet
+ *	4 Megabit (512K x 8) SuperFlash EEPROM, SST28SF040 data sheet
  *
  */
 
@@ -43,13 +43,13 @@ static __inline__ void protect_28sf040(volatile uint8_t *bios)
 	/* ask compiler not to optimize this */
 	volatile uint8_t tmp;
 
-	tmp = *(volatile uint8_t *) (bios + 0x1823);
-	tmp = *(volatile uint8_t *) (bios + 0x1820);
-	tmp = *(volatile uint8_t *) (bios + 0x1822);
-	tmp = *(volatile uint8_t *) (bios + 0x0418);
-	tmp = *(volatile uint8_t *) (bios + 0x041B);
-	tmp = *(volatile uint8_t *) (bios + 0x0419);
-	tmp = *(volatile uint8_t *) (bios + 0x040A);
+	tmp = *(volatile uint8_t *)(bios + 0x1823);
+	tmp = *(volatile uint8_t *)(bios + 0x1820);
+	tmp = *(volatile uint8_t *)(bios + 0x1822);
+	tmp = *(volatile uint8_t *)(bios + 0x0418);
+	tmp = *(volatile uint8_t *)(bios + 0x041B);
+	tmp = *(volatile uint8_t *)(bios + 0x0419);
+	tmp = *(volatile uint8_t *)(bios + 0x040A);
 }
 
 static __inline__ void unprotect_28sf040(volatile uint8_t *bios)
@@ -57,13 +57,13 @@ static __inline__ void unprotect_28sf040(volatile uint8_t *bios)
 	/* ask compiler not to optimize this */
 	volatile uint8_t tmp;
 
-	tmp = *(volatile uint8_t *) (bios + 0x1823);
-	tmp = *(volatile uint8_t *) (bios + 0x1820);
-	tmp = *(volatile uint8_t *) (bios + 0x1822);
-	tmp = *(volatile uint8_t *) (bios + 0x0418);
-	tmp = *(volatile uint8_t *) (bios + 0x041B);
-	tmp = *(volatile uint8_t *) (bios + 0x0419);
-	tmp = *(volatile uint8_t *) (bios + 0x041A);
+	tmp = *(volatile uint8_t *)(bios + 0x1823);
+	tmp = *(volatile uint8_t *)(bios + 0x1820);
+	tmp = *(volatile uint8_t *)(bios + 0x1822);
+	tmp = *(volatile uint8_t *)(bios + 0x0418);
+	tmp = *(volatile uint8_t *)(bios + 0x041B);
+	tmp = *(volatile uint8_t *)(bios + 0x0419);
+	tmp = *(volatile uint8_t *)(bios + 0x041A);
 }
 
 static __inline__ int erase_sector_28sf040(volatile uint8_t *bios,
@@ -105,7 +105,7 @@ static __inline__ int write_sector_28sf040(volatile uint8_t *bios,
 
 int probe_28sf040(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
 	uint8_t id1, id2, tmp;
 
 	/* save the value at the beginning of the Flash */
@@ -116,9 +116,9 @@ int probe_28sf040(struct flashchip *flash)
 
 	*bios = READ_ID;
 	myusec_delay(10);
-	id1 = *(volatile uint8_t *) bios;
+	id1 = *(volatile uint8_t *)bios;
 	myusec_delay(10);
-	id2 = *(volatile uint8_t *) (bios + 0x01);
+	id2 = *(volatile uint8_t *)(bios + 0x01);
 
 	*bios = RESET;
 	myusec_delay(10);
@@ -134,7 +134,7 @@ int probe_28sf040(struct flashchip *flash)
 
 int erase_28sf040(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
 
 	unprotect_28sf040(bios);
 	*bios = CHIP_ERASE;
@@ -150,9 +150,9 @@ int erase_28sf040(struct flashchip *flash)
 int write_28sf040(struct flashchip *flash, uint8_t *buf)
 {
 	int i;
-	int total_size = flash->total_size * 1024, page_size =
-	    flash->page_size;
-	volatile uint8_t *bios = flash->virt_addr;
+	int total_size = flash->total_size * 1024;
+	int page_size = flash->page_size;
+	volatile uint8_t *bios = flash->virtual_memory;
 
 	unprotect_28sf040(bios);
 

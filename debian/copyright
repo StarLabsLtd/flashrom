@@ -2,7 +2,7 @@ This package was debianized by Uwe Hermann <uwe@debian.org> on
 Thu, 23 Nov 2006 14:48:04 +0100.
 
 It was downloaded from:
-svn://linuxbios.org/repos/trunk/LinuxBIOSv2/util/flashrom
+svn://linuxbios.org/repos/trunk/util/flashrom
 
 Upstream Authors: Various LinuxBIOS developers
 
