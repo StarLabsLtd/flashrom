@@ -1,5 +1,5 @@
---- Makefile.orig	2007-04-10 12:36:56.000000000 +0200
-+++ Makefile	2007-04-10 12:33:55.000000000 +0200
+--- Makefile.orig	2007-09-11 17:45:49.000000000 +0200
++++ Makefile	2007-09-11 17:46:03.000000000 +0200
 @@ -11,12 +11,12 @@
  INSTALL = /usr/bin/install
  PREFIX  = /usr/local
@@ -16,16 +16,17 @@
  STRIP_ARGS = -s
  endif
  
-@@ -29,7 +29,7 @@
+@@ -29,8 +29,7 @@
  all: pciutils dep $(PROGRAM)
  
  $(PROGRAM): $(OBJS)
 -	$(CC) -o $(PROGRAM) $(OBJS) $(LDFLAGS)
+-	$(STRIP) $(STRIP_ARGS) $(PROGRAM)
 +	$(CC) -o $(PROGRAM) $(OBJS) $(FLASHROM_CFLAGS) $(FLASHROM_LDFLAGS)
- 	$(STRIP) $(STRIP_ARGS) $(PROGRAM)
  
  clean:
-@@ -47,7 +47,7 @@
+ 	rm -f *.o *~
+@@ -47,7 +46,7 @@
  		   echo "struct pci_access *pacc;";	   \
  		   echo "int main(int argc, char **argv)"; \
  		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )

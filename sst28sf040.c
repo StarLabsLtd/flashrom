@@ -1,35 +1,27 @@
 /*
- * sst28sf040.c: driver for SST28SF040C flash models.
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2005 coresystems GmbH <stepan@openbios.org>
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2005 coresystems GmbH <stepan@openbios.org>
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *
- * Reference:
- *	4 Megabit (512K x 8) SuperFlash EEPROM, SST28SF040 data sheet
- *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
 #include <stdint.h>
 #include "flash.h"
-#include "jedec.h"
-#include "debug.h"
 
 #define AUTO_PG_ERASE1		0x20
 #define AUTO_PG_ERASE2		0xD0
@@ -75,7 +67,7 @@ static __inline__ int erase_sector_28sf040(volatile uint8_t *bios,
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 static __inline__ int write_sector_28sf040(volatile uint8_t *bios,
@@ -100,16 +92,13 @@ static __inline__ int write_sector_28sf040(volatile uint8_t *bios,
 		toggle_ready_jedec(bios);
 	}
 
-	return (0);
+	return 0;
 }
 
 int probe_28sf040(struct flashchip *flash)
 {
 	volatile uint8_t *bios = flash->virtual_memory;
-	uint8_t id1, id2, tmp;
-
-	/* save the value at the beginning of the Flash */
-	tmp = *bios;
+	uint8_t id1, id2;
 
 	*bios = RESET;
 	myusec_delay(10);
@@ -127,8 +116,6 @@ int probe_28sf040(struct flashchip *flash)
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
 		return 1;
 
-	/* if there is no SST28SF040, restore the original value */
-	*bios = tmp;
 	return 0;
 }
 
@@ -144,7 +131,7 @@ int erase_28sf040(struct flashchip *flash)
 	myusec_delay(10);
 	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int write_28sf040(struct flashchip *flash, uint8_t *buf)
@@ -171,5 +158,5 @@ int write_28sf040(struct flashchip *flash, uint8_t *buf)
 
 	protect_28sf040(bios);
 
-	return (0);
+	return 0;
 }

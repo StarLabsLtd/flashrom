@@ -1,5 +1,5 @@
 /*
- * lbtable.c: LinuxBIOS table handling
+ * This file is part of the flashrom project.
  *
  * Copyright (C) 2002 Steven James <pyro@linuxlabs.com>
  * Copyright (C) 2002 Linux Networx
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA, 02110-1301 USA
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
@@ -32,7 +32,6 @@
 #include <sys/mman.h>
 #include "flash.h"
 #include "linuxbios_tables.h"
-#include "debug.h"
 
 char *lb_part = NULL, *lb_vendor = NULL;
 
@@ -45,6 +44,7 @@ static unsigned long compute_checksum(void *addr, unsigned long length)
 	} value;
 	unsigned long sum;
 	unsigned long i;
+
 	/* In the most straight forward way possible,
 	 * compute an ip style checksum.
 	 */
@@ -65,6 +65,7 @@ static unsigned long compute_checksum(void *addr, unsigned long length)
 	}
 	value.byte[0] = sum & 0xff;
 	value.byte[1] = (sum >> 8) & 0xff;
+
 	return (~value.word) & 0xFFFF;
 }
 
@@ -79,10 +80,12 @@ static int count_lb_records(struct lb_header *head)
 {
 	struct lb_record *rec;
 	int count;
+
 	count = 0;
 	for_each_lbrec(head, rec) {
 		count++;
 	}
+
 	return count;
 }
 
@@ -90,6 +93,7 @@ static struct lb_header *find_lb_table(void *base, unsigned long start,
 				       unsigned long end)
 {
 	unsigned long addr;
+
 	/* For now be stupid.... */
 	for (addr = start; addr < end; addr += 16) {
 		struct lb_header *head =
@@ -124,6 +128,7 @@ static struct lb_header *find_lb_table(void *base, unsigned long start,
 		return head;
 
 	};
+
 	return 0;
 }
 
@@ -132,6 +137,7 @@ static void find_mainboard(struct lb_record *ptr, unsigned long addr)
 	struct lb_mainboard *rec;
 	int max_size;
 	char vendor[256], part[256];
+
 	rec = (struct lb_mainboard *)ptr;
 	max_size = rec->size - sizeof(*rec);
 	printf("vendor id: %.*s part id: %.*s\n",
@@ -207,5 +213,6 @@ int linuxbios_init(void)
 		printf("No LinuxBIOS table found.\n");
 		return -1;
 	}
+
 	return 0;
 }

@@ -1,10 +1,10 @@
 /*
- * flashchips.c: flash programming utility - flash devices
+ * This file is part of the flashrom project.
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2004 Tyan Corp
- * Copyright 2005-2007 coresystems GmbH <stepan@openbios.org>
- * 
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2004 Tyan Corp
+ * Copyright (C) 2005-2007 coresystems GmbH <stepan@openbios.org>
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -17,27 +17,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include "flash.h"
-#include "jedec.h"
-#include "m29f400bt.h"
-#include "82802ab.h"
 #ifndef DISABLE_DOC
 #include "msys_doc.h"
 #endif
-#include "am29f040b.h"
-#include "sst28sf040.h"
-#include "sst49lfxxxc.h"
-#include "w49f002u.h"
-#include "sst39sf020.h"
-#include "sst49lf040.h"
-#include "pm49fl004.h"
-#include "mx29f002.h"
-#include "sharplhf00l04.h"
-#include "sst_fwhub.h"
 
 struct flashchip flashchips[] = {
 	{"Am29F040B",	AMD_ID, 	AM_29F040B,	512, 64 * 1024,
@@ -82,8 +68,6 @@ struct flashchip flashchips[] = {
 	 probe_sst_fwhub, erase_sst_fwhub, write_sst_fwhub},
 	{"SST49LF008A", SST_ID,		SST_49LF008A, 	1024, 64 * 1024 ,
 	 probe_sst_fwhub, erase_sst_fwhub, write_sst_fwhub},
-	{"Pm49FL002",	PMC_ID,		PMC_49FL002,	256, 16 * 1024,
-	 probe_jedec,	erase_chip_jedec, write_49fl004},
 	{"SST49LF004C", SST_ID,		SST_49LF004C,	512, 4 * 1024,
 	 probe_49lfxxxc, erase_49lfxxxc, write_49lfxxxc},
 	{"SST49LF008C", SST_ID,		SST_49LF008C, 	1024, 4 * 1024 ,
@@ -92,12 +76,18 @@ struct flashchip flashchips[] = {
 	 probe_49lfxxxc, erase_49lfxxxc, write_49lfxxxc},
 	{"SST49LF160C", SST_ID,		SST_49LF160C, 	2048, 4 * 1024 ,
 	 probe_49lfxxxc, erase_49lfxxxc, write_49lfxxxc},
+	{"Pm49FL002",	PMC_ID,		PMC_49FL002,	256, 16 * 1024,
+	 probe_jedec,	erase_chip_jedec, write_49fl004},
 	{"Pm49FL004",	PMC_ID,		PMC_49FL004,	512, 64 * 1024,
 	 probe_jedec,	erase_chip_jedec, write_49fl004},
 	{"W29C011",	WINBOND_ID,	W_29C011,	128, 128,
 	 probe_jedec,	erase_chip_jedec, write_jedec},
+	{"W29C040P",	WINBOND_ID,	W_29C040P,	512, 256,
+	 probe_jedec,	erase_chip_jedec, write_jedec},
 	{"W29C020C", 	WINBOND_ID, 	W_29C020C,	256, 128,
 	 probe_jedec, 	erase_chip_jedec, write_jedec},
+	{"W29EE011",	WINBOND_ID,	W_29C011,	128, 128,
+	 probe_w29ee011,erase_chip_jedec, write_jedec},
 	{"W49F002U", 	WINBOND_ID, 	W_49F002U,	256, 128,
 	 probe_jedec,	erase_chip_jedec, write_49f002},
 	{"W49V002A", 	WINBOND_ID, 	W_49V002A,	256, 128,
@@ -114,10 +104,30 @@ struct flashchip flashchips[] = {
 	 probe_jedec,	erase_chip_jedec, write_39sf020},
 	{"M29F002B",	ST_ID, 		ST_M29F002B,	256, 64 * 1024,
 	 probe_jedec,	erase_chip_jedec, write_jedec},
+	{"M50FW040",	ST_ID, 		ST_M50FW040,	512, 64 * 1024,
+	 probe_jedec,	erase_chip_jedec, write_jedec},
+	{"M29W040B",	ST_ID, 		ST_M29W040B,	512, 64 * 1024,
+	 probe_jedec,	erase_chip_jedec, write_jedec},
 	{"M29F002T/NT",	ST_ID, 		ST_M29F002T,	256, 64 * 1024,
 	 probe_jedec,	erase_chip_jedec, write_jedec},
 	{"M29F400BT",	ST_ID,		ST_M29F400BT,	512, 64 * 1024,
 	 probe_m29f400bt, erase_m29f400bt, write_linuxbios_m29f400bt},
+	{"M50FLW040A",	ST_ID,		ST_M50FLW040A,	512,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50FLW040B",	ST_ID,		ST_M50FLW040B,	512,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50FLW080A",	ST_ID,		ST_M50FLW080A,	1024,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50FLW080B",	ST_ID,		ST_M50FLW080B,	1024,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50FW080",	ST_ID,		ST_M50FW080,	1024,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50FW016",	ST_ID,		ST_M50FW016,	2048,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M50LPW116",	ST_ID,		ST_M50LPW116,	2048,	64 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
+	{"M29W010B",	ST_ID,		ST_M29W010B,	128,	16 * 1024,
+	 probe_jedec,	erase_chip_jedec,	write_jedec},
 	{"M29F040B",	ST_ID, 		ST_M29F040B,	512, 64 * 1024,
 	 probe_29f040b, erase_29f040b,	write_29f040b},
 	{"82802ab",	137,		173,		512, 64 * 1024,
@@ -143,5 +153,3 @@ struct flashchip flashchips[] = {
 	 probe_jedec,	erase_chip_jedec, write_49f002},
 	{NULL,}
 };
-
-

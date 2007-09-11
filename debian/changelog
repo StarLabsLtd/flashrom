@@ -1,3 +1,15 @@
+flashrom (0.0+r2769-1) unstable; urgency=low
+
+  * New upstream release.
+  * Do not attempt to build flashrom on S/390, as it doesn't build
+    and is not useful there anyway (Closes: #404342, #418712).
+    It is yet to be determined on which other architectures flashrom can
+    work and on which not.
+  * Honour DEB_BUILD_OPTIONS=nostrip variable by removing hardcoded 'strip'
+    invocation in the Makefile and letting cdbs handle it (Closes: #436850).
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 11 Sep 2007 17:54:11 +0200
+
 flashrom (0.0+r2739-1) unstable; urgency=low
 
   * New upstream release.

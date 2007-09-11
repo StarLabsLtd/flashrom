@@ -3,13 +3,15 @@ Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 5), pciutils-dev, zlib1g-dev
-Standards-Version: 3.7.2.2
+Standards-Version: 3.7.2
 
 Package: flashrom
-Architecture: any
+Architecture: alpha amd64 arm armel armeb hppa hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 m32r m68k mips mipsel netbsd-alpha netbsd-i386 powerpc sh sparc
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Universal flash programming utility
- Flashrom is a universal flash programming utility for flash chips
- (e.g. in DIP or PLCC packaging). It can be used to flash BIOS images,
- for example.
+Description: Universal BIOS/ROM/flash programming utility
+ Flashrom is a universal flash programming utility for ROM/flash chips
+ (e.g. in DIP or PLCC packaging). It can be used to flash BIOS/firmware
+ images for example -- be it proprietary BIOS images or LinuxBIOS images.
+ It can also be used to read the current existing BIOS/firmware from a
+ flash chip.
 

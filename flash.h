@@ -1,24 +1,23 @@
 /*
- * flash.h: flash programming utility - central include file
+ * This file is part of the flashrom project.
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2000 Ronald G. Minnich <rminnich@gmail.com>
- * Copyright 2005-2007 coresystems GmbH <stepan@coresystems.de>
- * 
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2000 Ronald G. Minnich <rminnich@gmail.com>
+ * Copyright (C) 2005-2007 coresystems GmbH <stepan@coresystems.de>
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __FLASH_H__
@@ -27,9 +26,9 @@
 #if defined(__GLIBC__)
 #include <sys/io.h>
 #endif
-
 #include <unistd.h>
 #include <stdint.h>
+#include <stdio.h>
 
 struct flashchip {
 	char *name;
@@ -102,6 +101,8 @@ extern struct flashchip flashchips[];
 #define WINBOND_ID		0xDA	/* Winbond */
 #define W_29C011		0xC1
 #define W_29C020C		0x45
+#define W_29C040P		0x46
+#define W_29EE011		0xC1
 #define W_39V040FA		0x34
 #define W_39V040A		0x3D
 #define W_39V040B		0x54
@@ -111,10 +112,20 @@ extern struct flashchip flashchips[];
 #define W_49V002FA		0x32
 
 #define ST_ID			0x20	/* ST */
+#define ST_M50FLW040A		0x08
+#define ST_M50FLW040B		0x28
+#define ST_M50FLW080A		0x80
+#define ST_M50FLW080B		0x81
+#define ST_M50FW040		0x2C
+#define ST_M50FW080		0x2D
+#define ST_M50FW016		0x2E
+#define ST_M50LPW116		0x30
 #define ST_M29F002B		0x34
 #define ST_M29F002T		0xB0	/* M29F002T / M29F002NT */
 #define ST_M29F400BT		0xD5
 #define ST_M29F040B		0xE2
+#define ST_M29W010B		0x23
+#define ST_M29W040B		0xE3
 
 #define EMST_ID			0x8c	/* EMST / EFST */
 #define EMST_F49B002UA		0x00
@@ -154,6 +165,106 @@ int chipset_flash_enable(void);	/* chipset_enable.c */
 
 extern int fd_mem;
 
-int map_flash_registers(struct flashchip *flash); /* flashrom.c */
+/* debug.c */
+extern int verbose;
+#define printf_debug(x...) { if (verbose) printf(x); }
+
+/* flashrom.c */
+int map_flash_registers(struct flashchip *flash);
+
+/* layout.c */
+int show_id(uint8_t *bios, int size);
+int read_romlayout(char *name);
+int find_romentry(char *name);
+int handle_romentries(uint8_t *buffer, uint8_t *content);
+
+/* lbtable.c */
+int linuxbios_init(void);
+extern char *lb_part, *lb_vendor;
+
+/* 82802ab.c */
+int probe_82802ab(struct flashchip *flash);
+int erase_82802ab(struct flashchip *flash);
+int write_82802ab(struct flashchip *flash, uint8_t *buf);
+
+/* am29f040b.c */
+int probe_29f040b(struct flashchip *flash);
+int erase_29f040b(struct flashchip *flash);
+int write_29f040b(struct flashchip *flash, uint8_t *buf);
+
+/* jedec.c */
+void toggle_ready_jedec(volatile uint8_t *dst);
+void data_polling_jedec(volatile uint8_t *dst, uint8_t data);
+void unprotect_jedec(volatile uint8_t *bios);
+void protect_jedec(volatile uint8_t *bios);
+int write_byte_program_jedec(volatile uint8_t *bios, uint8_t *src,
+			     volatile uint8_t *dst);
+int probe_jedec(struct flashchip *flash);
+int erase_chip_jedec(struct flashchip *flash);
+int write_jedec(struct flashchip *flash, uint8_t *buf);
+int erase_sector_jedec(volatile uint8_t *bios, unsigned int page);
+int erase_block_jedec(volatile uint8_t *bios, unsigned int page);
+int write_sector_jedec(volatile uint8_t *bios, uint8_t *src,
+		       volatile uint8_t *dst, unsigned int page_size);
+
+/* m29f400bt.c */
+int probe_m29f400bt(struct flashchip *flash);
+int erase_m29f400bt(struct flashchip *flash);
+int block_erase_m29f400bt(volatile uint8_t *bios,
+				 volatile uint8_t *dst);
+int write_m29f400bt(struct flashchip *flash, uint8_t *buf);
+int write_linuxbios_m29f400bt(struct flashchip *flash, uint8_t *buf);
+void toggle_ready_m29f400bt(volatile uint8_t *dst);
+void data_polling_m29f400bt(volatile uint8_t *dst, uint8_t data);
+void protect_m29f400bt(volatile uint8_t *bios);
+void write_page_m29f400bt(volatile uint8_t *bios, uint8_t *src,
+			  volatile uint8_t *dst, int page_size);
+
+/* mx29f002.c */
+int probe_29f002(struct flashchip *flash);
+int erase_29f002(struct flashchip *flash);
+int write_29f002(struct flashchip *flash, uint8_t *buf);
+
+/* pm49fl004.c */
+int probe_49fl004(struct flashchip *flash);
+int erase_49fl004(struct flashchip *flash);
+int write_49fl004(struct flashchip *flash, uint8_t *buf);
+
+/* sharplhf00l04.c */
+int probe_lhf00l04(struct flashchip *flash);
+int erase_lhf00l04(struct flashchip *flash);
+int write_lhf00l04(struct flashchip *flash, uint8_t *buf);
+void toggle_ready_lhf00l04(volatile uint8_t *dst);
+void data_polling_lhf00l04(volatile uint8_t *dst, uint8_t data);
+void protect_lhf00l04(volatile uint8_t *bios);
+
+/* sst28sf040.c */
+int probe_28sf040(struct flashchip *flash);
+int erase_28sf040(struct flashchip *flash);
+int write_28sf040(struct flashchip *flash, uint8_t *buf);
+
+/* sst39sf020.c */
+int probe_39sf020(struct flashchip *flash);
+int write_39sf020(struct flashchip *flash, uint8_t *buf);
+
+/* sst49lf040.c */
+int erase_49lf040(struct flashchip *flash);
+int write_49lf040(struct flashchip *flash, uint8_t *buf);
+
+/* sst49lfxxxc.c */
+int probe_49lfxxxc(struct flashchip *flash);
+int erase_49lfxxxc(struct flashchip *flash);
+int write_49lfxxxc(struct flashchip *flash, uint8_t *buf);
+
+/* sst_fwhub.c */
+int probe_sst_fwhub(struct flashchip *flash);
+int erase_sst_fwhub(struct flashchip *flash);
+int write_sst_fwhub(struct flashchip *flash, uint8_t *buf);
+
+/* w29ee011.c */
+int probe_w29ee011(struct flashchip *flash);
+
+/* w49f002u.c */
+int write_49f002(struct flashchip *flash, uint8_t *buf);
 
 #endif				/* !__FLASH_H__ */
