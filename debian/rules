@@ -1,8 +1,8 @@
 #!/usr/bin/make -f
   
-DEB_INSTALL_MANPAGES_flashrom := flashrom.1
-
 DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
+LDFLAGS += -lpci -lz
+CFLAGS += -DDISABLE_DOC -D'FLASHROM_VERSION=\"3073\"'
 
 clean::
 	rm -f flashrom .dependencies core
@@ -10,7 +10,4 @@ clean::
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/makefile.mk
 include /usr/share/cdbs/1/rules/simple-patchsys.mk
-
-# Do not compile in support for DoC devices (unsupported).
-DEB_OPT_FLAG += -DDISABLE_DOC
 

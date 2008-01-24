@@ -3,15 +3,19 @@ Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 5), pciutils-dev, zlib1g-dev
-Standards-Version: 3.7.2
+Standards-Version: 3.7.3
+Homepage: http://coreboot.org/Flashrom
 
 Package: flashrom
-Architecture: alpha amd64 arm armel armeb hppa hurd-i386 i386 ia64 kfreebsd-amd64 kfreebsd-i386 m32r m68k mips mipsel netbsd-alpha netbsd-i386 powerpc sh sparc
+Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 ia64 netbsd-alpha netbsd-i386
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Universal BIOS/ROM/flash programming utility
  Flashrom is a universal flash programming utility for ROM/flash chips
- (e.g. in DIP or PLCC packaging). It can be used to flash BIOS/firmware
- images for example -- be it proprietary BIOS images or LinuxBIOS images.
+ (e.g. in DIP or PLCC packaging). It also has support for SPI chips.
+ .
+ The tool can be used to flash BIOS/firmware images for example -- be it
+ proprietary BIOS images or coreboot (previously known as LinuxBIOS) images.
+ .
  It can also be used to read the current existing BIOS/firmware from a
  flash chip.
 

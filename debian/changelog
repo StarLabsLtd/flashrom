@@ -1,3 +1,25 @@
+flashrom (0.0+r3073-1) unstable; urgency=low
+
+  * New upstream release (Closes: #462248).
+    + Flashrom is now installed in /usr/sbin instead of /usr/bin.
+    + The manpage is now in section 8 (not 1).
+    + Fix broken references to old bug tracker URL (Closes: #460554).
+  * Restrict list of architectures to the known-working ones for now.
+    More architectures will gradually be re-added if we're sure they work.
+    + These are known to work: amd64, i386, kfreebsd-amd64, kfreebsd-i386
+    + These should work (untested, though): alpha, hurd-i386, ia64,
+      netbsd-alpha, netbsd-i386
+    + These are disabled for now, as flashrom will very likely not work: arm,
+      armel, armeb, hppa, m32r, m68k, mips, mipsel, powerpc, sh, sparc, s390
+  * Standards-Version: 3.7.3 (no changes required).
+  * debian/control:
+     + Add Homepage field.
+     + Update package description.
+  * debian/copyright: Update URLs and list of authors.
+  * Simplified packaging a bit.
+
+ -- Uwe Hermann <uwe@debian.org>  Thu, 24 Jan 2008 13:47:48 +0100
+
 flashrom (0.0+r2769-1) unstable; urgency=low
 
   * New upstream release.
