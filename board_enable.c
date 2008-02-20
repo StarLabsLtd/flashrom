@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2005-2007 coresystems GmbH <stepan@coresystems.de>
  * Copyright (C) 2006 Uwe Hermann <uwe@hermann-uwe.de>
- * Copyright (C) 2007 Luc Verhaegen <libv@skynet.be>
+ * Copyright (C) 2007-2008 Luc Verhaegen <libv@skynet.be>
  * Copyright (C) 2007 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,6 +28,7 @@
 #include <pci/pci.h>
 #include <stdint.h>
 #include <string.h>
+#include <fcntl.h>
 #include "flash.h"
 
 /*
@@ -213,6 +214,28 @@ static int board_asus_a7v8x_mx(const char *name)
 }
 
 /**
+ * Suited for VIAs EPIA SP.
+ */
+static int board_via_epia_sp(const char *name)
+{
+	struct pci_dev *dev;
+	uint8_t val;
+
+	dev = pci_dev_find(0x1106, 0x3227);	/* VT8237R ISA bridge */
+	if (!dev) {
+		fprintf(stderr, "\nERROR: VT8237R ISA bridge not found.\n");
+		return -1;
+	}
+
+	/* All memory cycles, not just ROM ones, go to LPC */
+	val = pci_read_byte(dev, 0x59);
+	val &= ~0x80;
+	pci_write_byte(dev, 0x59, val);
+
+	return 0;
+}
+
+/**
  * Suited for ASUS P5A.
  *
  * This is rather nasty code, but there's no way to do this cleanly.
@@ -346,12 +369,77 @@ static int board_acorp_6a815epd(const char *name)
 }
 
 /**
+ * Suited for Artec Group DBE61 and DBE62.
+ */
+static int board_artecgroup_dbe6x(const char *name)
+{
+#define DBE6x_MSR_DIVIL_BALL_OPTS	0x51400015
+#define DBE6x_PRI_BOOT_LOC_SHIFT	(2)
+#define DBE6x_BOOT_OP_LATCHED_SHIFT	(8)
+#define DBE6x_SEC_BOOT_LOC_SHIFT	(10)
+#define DBE6x_PRI_BOOT_LOC		(3 << DBE6x_PRI_BOOT_LOC_SHIFT)
+#define DBE6x_BOOT_OP_LATCHED		(3 << DBE6x_BOOT_OP_LATCHED_SHIFT)
+#define DBE6x_SEC_BOOT_LOC		(3 << DBE6x_SEC_BOOT_LOC_SHIFT)
+#define DBE6x_BOOT_LOC_FLASH		(2)
+#define DBE6x_BOOT_LOC_FWHUB		(3)
+
+	unsigned long msr[2];
+	int msr_fd;
+	unsigned long boot_loc;
+
+	msr_fd = open("/dev/cpu/0/msr", O_RDWR);
+	if (msr_fd == -1) {
+		perror("open /dev/cpu/0/msr");
+		return -1;
+	}
+
+	if (lseek(msr_fd, DBE6x_MSR_DIVIL_BALL_OPTS, SEEK_SET) == -1) {
+		perror("lseek");
+		close(msr_fd);
+		return -1;
+	}
+
+	if (read(msr_fd, (void*) msr, 8) != 8) {
+		perror("read");
+		close(msr_fd);
+		return -1;
+	}
+
+	if ((msr[0] & (DBE6x_BOOT_OP_LATCHED)) ==
+	    (DBE6x_BOOT_LOC_FWHUB << DBE6x_BOOT_OP_LATCHED_SHIFT))
+		boot_loc = DBE6x_BOOT_LOC_FWHUB;
+	else
+		boot_loc = DBE6x_BOOT_LOC_FLASH;
+
+	msr[0] &= ~(DBE6x_PRI_BOOT_LOC | DBE6x_SEC_BOOT_LOC);
+	msr[0] |= ((boot_loc << DBE6x_PRI_BOOT_LOC_SHIFT) |
+	    (boot_loc << DBE6x_SEC_BOOT_LOC_SHIFT));
+
+	if (lseek(msr_fd, DBE6x_MSR_DIVIL_BALL_OPTS, SEEK_SET) == -1) {
+		perror("lseek");
+		close(msr_fd);
+		return -1;
+	}
+
+	if (write(msr_fd, (void*) msr, 8) != 8) {
+		perror("write");
+		close(msr_fd);
+		return -1;
+	}
+
+	close(msr_fd);
+	return 0;
+}
+
+/**
  * We use 2 sets of IDs here, you're free to choose which is which. This
  * is to provide a very high degree of certainty when matching a board on
  * the basis of subsystem/card IDs. As not every vendor handles
  * subsystem/card IDs in a sane manner.
  *
  * Keep the second set NULLed if it should be ignored.
+ *
+ * Keep the subsystem IDs NULLed if they don't identify the board fully.
  */
 struct board_pciid_enable {
 	/* Any device, but make it sensible, like the ISA bridge. */
@@ -393,6 +481,8 @@ struct board_pciid_enable board_pciid_enables[] = {
 	 NULL, NULL, "VIA EPIA M/MII/...", board_via_epia_m},
 	{0x1106, 0x3177, 0x1043, 0x80A1, 0x1106, 0x3205, 0x1043, 0x8118,
 	 NULL, NULL, "ASUS A7V8-MX SE", board_asus_a7v8x_mx},
+	{0x1106, 0x3227, 0x1106, 0xAA01, 0x1106, 0x0259, 0x1106, 0xAA01,
+	 NULL, NULL, "VIA EPIA SP", board_via_epia_sp},
 	{0x8086, 0x1076, 0x8086, 0x1176, 0x1106, 0x3059, 0x10f1, 0x2498,
 	 NULL, NULL, "Tyan Tomcat K7M", board_asus_a7v8x_mx},
 	{0x10B9, 0x1541, 0x0000, 0x0000, 0x10B9, 0x1533, 0x0000, 0x0000,
@@ -403,6 +493,10 @@ struct board_pciid_enable board_pciid_enables[] = {
 	 "epox", "ep-bx3", "EPoX EP-BX3", board_epox_ep_bx3},
 	{0x8086, 0x1130, 0x0000, 0x0000, 0x105a, 0x0d30, 0x105a, 0x4d33,
 	 "acorp", "6a815epd", "Acorp 6A815EPD", board_acorp_6a815epd},
+	{0x1022, 0x2090, 0x0000, 0x0000, 0x1022, 0x2080, 0x0000, 0x0000,
+	 "artecgroup", "dbe61", "Artec Group DBE61", board_artecgroup_dbe6x},
+	{0x1022, 0x2090, 0x0000, 0x0000, 0x1022, 0x2080, 0x0000, 0x0000,
+	 "artecgroup", "dbe62", "Artec Group DBE62", board_artecgroup_dbe6x},
 	{0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL}	/* Keep this */
 };
 
@@ -413,9 +507,10 @@ struct board_pciid_enable board_pciid_enables[] = {
 static struct board_pciid_enable *board_match_coreboot_name(const char *vendor, const char *part)
 {
 	struct board_pciid_enable *board = board_pciid_enables;
+	struct board_pciid_enable *partmatch = NULL;
 
 	for (; board->name; board++) {
-		if (!board->lb_vendor || strcmp(board->lb_vendor, vendor))
+		if (vendor && (!board->lb_vendor || strcmp(board->lb_vendor, vendor)))
 			continue;
 
 		if (!board->lb_part || strcmp(board->lb_part, part))
@@ -427,8 +522,23 @@ static struct board_pciid_enable *board_match_coreboot_name(const char *vendor, 
 		if (board->second_vendor &&
 			!pci_dev_find(board->second_vendor, board->second_device))
 			continue;
-		return board;
+
+		if (vendor)
+			return board;
+
+		if (partmatch) {
+			/* a second entry has a matching part name */
+			printf("AMBIGUOUS BOARD NAME: %s\n", part);
+			printf("At least vendors '%s' and '%s' match.\n",
+				partmatch->lb_vendor, board->lb_vendor);
+			printf("Please use the full -m vendor:part syntax.\n");
+			return NULL;
+		}
+		partmatch = board;
 	}
+
+	if (partmatch)
+		return partmatch;
 
 	printf("NOT FOUND %s:%s\n", vendor, part);
 
@@ -477,7 +587,7 @@ int board_flash_enable(const char *vendor, const char *part)
 	struct board_pciid_enable *board = NULL;
 	int ret = 0;
 
-	if (vendor && part)
+	if (part)
 		board = board_match_coreboot_name(vendor, part);
 
 	if (!board)
