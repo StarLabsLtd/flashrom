@@ -1,3 +1,9 @@
+flashrom (0.0+r3112-2) unstable; urgency=low
+
+  * Fix debian/rules to make it work on Ubuntu, too (Closes: #466994).
+
+ -- Uwe Hermann <uwe@debian.org>  Sat, 23 Feb 2008 21:17:09 +0100
+
 flashrom (0.0+r3112-1) unstable; urgency=low
 
   * New upstream release.

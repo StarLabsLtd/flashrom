@@ -1,13 +1,16 @@
 #!/usr/bin/make -f
   
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/makefile.mk
+include /usr/share/cdbs/1/rules/simple-patchsys.mk
+
 DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
 LDFLAGS += -lpci -lz
 CFLAGS += -DDISABLE_DOC -D'FLASHROM_VERSION=\"3112\"'
 
 clean::
-	rm -f flashrom .dependencies core
+	rm -f flashrom .dependencies core .test.c .test
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/makefile.mk
-include /usr/share/cdbs/1/rules/simple-patchsys.mk
+common-binary-post-install-arch:: list-missing
 
