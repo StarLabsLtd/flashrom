@@ -30,7 +30,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
 struct flashchip {
+	const char *vendor;
 	const char *name;
 	/* With 32bit manufacture_id and model_id we can cover IDs up to
 	 * (including) the 4th bank of JEDEC JEP106W Standard Manufacturer's
@@ -273,6 +276,8 @@ extern struct flashchip flashchips[];
 #define W_39V040A		0x3D
 #define W_39V040B		0x54
 #define W_39V080A		0xD0
+#define W_39V080FA		0xD3
+#define W_39V080FA_DM		0x93
 #define W_49F002U		0x0B
 #define W_49V002A		0xB0
 #define W_49V002FA		0x32
@@ -287,11 +292,14 @@ struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
 
+
 /* board_enable.c */
 int board_flash_enable(const char *vendor, const char *part);
+void print_supported_boards(void);
 
 /* chipset_enable.c */
 int chipset_flash_enable(void);
+void print_supported_chipsets(void);
 
 /* Physical memory mapping device */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
@@ -408,10 +416,19 @@ int probe_sst_fwhub(struct flashchip *flash);
 int erase_sst_fwhub(struct flashchip *flash);
 int write_sst_fwhub(struct flashchip *flash, uint8_t *buf);
 
+/* w39V080fa.c */
+int probe_winbond_fwhub(struct flashchip *flash);
+int erase_winbond_fwhub(struct flashchip *flash);
+int write_winbond_fwhub(struct flashchip *flash, uint8_t *buf);
+
 /* w29ee011.c */
 int probe_w29ee011(struct flashchip *flash);
 
 /* w49f002u.c */
 int write_49f002(struct flashchip *flash, uint8_t *buf);
 
+/* stm50flw0x0x.c */
+int probe_stm50flw0x0x(struct flashchip *flash);
+int erase_stm50flw0x0x(struct flashchip *flash);
+int write_stm50flw0x0x(struct flashchip *flash, uint8_t *buf);
 #endif				/* !__FLASH_H__ */

@@ -1,0 +1,2364 @@
+------------------------------------------------------------------------
+r3274 | stepan | 2008-04-28 19:51:09 +0200 (Mo, 28 Apr 2008) | 15 lines
+
+The generic jedec.c does not work for the ST M50FLW flash
+devices, because they need an unlock command first.
+For this reason, ST M50FLW support is moved to a
+new HW support module, because any change in jedec.c
+would bear the risk to cause problems with the already
+supported devices.
+
+It's already tested with ST M50FLW080A; the other
+chips of this family i dont have available, so i couldnt
+test it.
+
+Signed-off-by: Claus Gindhart <claus.gindhart@kontron.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3273 | stuge | 2008-04-28 16:47:30 +0200 (Mo, 28 Apr 2008) | 6 lines
+
+flashrom: Handle NULL probe, erase and write function pointers in the
+flashchips table. The read pointer was already checked properly.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3260 | stepan | 2008-04-24 11:07:57 +0200 (Do, 24 Apr 2008) | 12 lines
+
+Flash pages, which where excluded from updating using the exclude or the
+layout option, as well as areas, whose flash contents already contain the
+desired data, will be skipped.
+These ensures absolute data security of critical areas (BIOS boot block), 
+e.g. against a sudden power off or a CPU hangup during flashing. As a
+nice side effect, it speeds up the flash process, if the BIOS to be flashed
+is very similar to the version in flash. 
+
+Signed-off-by: Claus Gindhart <claus.gindhart@kontron.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3221 | eswierk | 2008-04-08 00:33:33 +0200 (Di, 08 Apr 2008) | 6 lines
+
+ST M50FW016 and ST M50FW040 support the 82802ab command set, not jedec.
+
+Signed-off-by: Ed Swierk <eswierk@arastra.com>
+Acked-by: Joseph Smith <joe@smittys.pointclark.net>
+
+
+------------------------------------------------------------------------
+r3167 | hailfinger | 2008-03-18 01:54:10 +0100 (Di, 18 Mär 2008) | 5 lines
+
+Add ICH9 detection to flashrom. Straight from the datasheet, untested.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r3166 | stepan | 2008-03-18 01:36:18 +0100 (Di, 18 Mär 2008) | 9 lines
+
+oops. forgot to add the file.
+
+Support for the Winbond W39V080FA series of chips.
+Support for flashing on the Kontron 986LCD-M board.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r3165 | stepan | 2008-03-17 23:59:40 +0100 (Mo, 17 Mär 2008) | 7 lines
+
+Support for the Winbond W39V080FA series of chips.
+Support for flashing on the Kontron 986LCD-M board.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r3153 | stepan | 2008-03-16 20:44:13 +0100 (So, 16 Mär 2008) | 7 lines
+
+check whether SST FWH chip was successfully erased on flashchip -E, too
+(trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3152 | uwe | 2008-03-16 03:06:25 +0100 (So, 16 Mär 2008) | 6 lines
+
+Sort list of flash chips alphabetically, add comment (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3151 | stepan | 2008-03-16 00:41:19 +0100 (So, 16 Mär 2008) | 5 lines
+
+remove nasty warning that happened due to our vendor detection
+mechanism.
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3146 | uwe | 2008-03-15 00:55:58 +0100 (Sa, 15 Mär 2008) | 6 lines
+
+Re-add code erroneously removed in r3140.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3145 | linux_junkie | 2008-03-15 00:32:03 +0100 (Sa, 15 Mär 2008) | 4 lines
+
+Changes M50FW080 to use 82802ab.c instead of jedec.c. This fixes the problem of not being able to erase the chip.
+
+Signed-off-by: Joseph Smith <joe@smittys.pointclark.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r3144 | hailfinger | 2008-03-14 18:20:59 +0100 (Fr, 14 Mär 2008) | 11 lines
+
+Prepare for ICH7/ICH8 SPI support by adding some debugging for all
+ICH* chipsets. Functionality (except printing) should be unchanged.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+Ward says:
+This code detects the ICH8 chipset on my laptop, and it appears to use
+SPI.
+
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r3142 | uwe | 2008-03-14 02:24:39 +0100 (Fr, 14 Mär 2008) | 6 lines
+
+Fix broken flashrom build.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3141 | hailfinger | 2008-03-14 01:33:42 +0100 (Fr, 14 Mär 2008) | 5 lines
+
+Fix up one forgotten revert in r3140.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3140 | hailfinger | 2008-03-14 01:02:25 +0100 (Fr, 14 Mär 2008) | 5 lines
+
+Revert the delete of 82802ab.c in r3137.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3139 | uwe | 2008-03-13 19:52:51 +0100 (Do, 13 Mär 2008) | 11 lines
+
+Also print the chip vendor name in --list-supported output (trivial).
+
+Cosmetic changes in some files, partly bending the 80-characters-per-line
+rule in this special case, as the 80-character-limited version looks
+equally crappy even in an 80x25 console/xterm, so let's make it at least
+look good in a high-resolution xterm.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3138 | uwe | 2008-03-13 19:41:07 +0100 (Do, 13 Mär 2008) | 6 lines
+
+Also print the required -m option in --list-supported output (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3137 | hailfinger | 2008-03-13 13:43:31 +0100 (Do, 13 Mär 2008) | 5 lines
+
+Drop 82802ab.c as it is identical to sharplhf00l04.c.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3134 | uwe | 2008-03-12 13:28:40 +0100 (Mi, 12 Mär 2008) | 8 lines
+
+Drop the useless rom.layout file. It's just an example, likely never
+been used in the last few years, and the contents are available in
+the README already anyway.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+
+------------------------------------------------------------------------
+r3133 | uwe | 2008-03-12 12:54:51 +0100 (Mi, 12 Mär 2008) | 7 lines
+
+Add --list-supported option to flashrom which lists the supported
+ROM chips, chipsets, and mainboards (Closes #90).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+
+------------------------------------------------------------------------
+r3126 | uwe | 2008-03-04 17:29:54 +0100 (Di, 04 Mär 2008) | 7 lines
+
+Add missing license header to layout.c. The file was written by
+Stefan Reinauer for coresystems GmbH in 2005, as confirmed on IRC.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3110 | stepan | 2008-02-20 12:11:18 +0100 (Mi, 20 Feb 2008) | 10 lines
+
+flashrom: Add board_enable for Artec Group DBE61 and DBE62
+
+Also add a comment about NULL subsystem IDs leaving the board entry out
+of auto-detection logic.
+
+Signed-off-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3102 | uwe | 2008-02-15 00:22:20 +0100 (Fr, 15 Feb 2008) | 13 lines
+
+With this small change it is possible to build flashrom again when
+specifying custom CFLAGS/LDFLAGS from the make command line like:
+
+  make CFLAGS="..." LDFLAGS="..."
+
+I need to do this when building flashrom in a cross compiler environment
+like buildroot for a foreign target.
+
+Signed-off-by: Clark Rawlins <clark@bit63.org>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3101 | uwe | 2008-02-11 15:32:45 +0100 (Mo, 11 Feb 2008) | 15 lines
+
+flashrom: further cleanups to enable_flash_cs5536
+
+ - Remove the "enable write to flash" message, as the caller appears to
+   already report that.
+
+ - Move the 'modprobe msr' suggestions to the first lseek64 error handling, as
+   we get an error there already.
+
+ - Rename a perror string from "read" to "read msr", as we use the latter
+   already in this function for another read.
+
+Signed-off-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3099 | hailfinger | 2008-02-09 03:03:06 +0100 (Sa, 09 Feb 2008) | 6 lines
+
+Flashrom: Add board enable for VIA EPIA SP.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3098 | uwe | 2008-02-08 11:10:57 +0100 (Fr, 08 Feb 2008) | 7 lines
+
+Improve error handling and make RCONF_DEFAULT_MSR address be a constant.
+Also, move a big code comment to the top of enable_flash_cs5536().
+
+Signed-off-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3097 | uwe | 2008-02-08 10:59:58 +0100 (Fr, 08 Feb 2008) | 13 lines
+
+This implements support for devices using AMD Geode companion chip
+CS5536 that have the Boot ROM on NOR flash that is directly connected to
+FLASH_CS3 (Boot Flash Chip Select).
+We need to write enable it in the NORF_CTL MSR register for flashrom to
+be able to write to it, including JEDEC probe commands.
+
+This patch allows us to stop using AMD gx_utils.ko for BIOS flashing on
+the DBE61.
+
+Signed-off-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3091 | hailfinger | 2008-02-06 23:07:58 +0100 (Mi, 06 Feb 2008) | 10 lines
+
+Handle JEDEC JEP106W continuation codes in SPI RDID. Some vendors like
+Programmable Micro Corp (PMC) need this.
+Both the serial and parallel flash JEDEC detection routines would
+benefit from a parity/sanity check of the vendor ID. Will do this later.
+
+Add support for the PMC Pm25LV family of SPI flash chips.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Chris Lingard  <chris@stockwith.co.uk>
+
+------------------------------------------------------------------------
+r3082 | stuge | 2008-01-27 17:21:21 +0100 (So, 27 Jan 2008) | 7 lines
+
+Make the vendor name optional in the -m flashrom parameter when there's only
+one board name that matches. The full syntax still works, and is required
+when two vendors have boards with the same names.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3080 | stuge | 2008-01-27 08:17:14 +0100 (So, 27 Jan 2008) | 5 lines
+
+Forgot to add Spansion S25FL016A to README, trivial.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3078 | rminnich | 2008-01-26 08:35:47 +0100 (Sa, 26 Jan 2008) | 9 lines
+
+Correctly disable the ROM area Write Protect bit in the Geode LX.
+
+Signed-off-by: Marc Jones <marc.jones@amd.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+Tested on the pcengines alix1c and works fine.
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+
+------------------------------------------------------------------------
+r3074 | hailfinger | 2008-01-25 02:52:45 +0100 (Fr, 25 Jan 2008) | 6 lines
+
+Add ids and chip entry for Spansion S25FL016A to flashrom, tested,
+working.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3072 | hailfinger | 2008-01-22 17:03:19 +0100 (Di, 22 Jan 2008) | 27 lines
+
+Here is just a little and simple patch to get the MX25L3205D working.
+I've tested and verified the chip myself, and it seems to work
+everything like supposted, since Carl-Daniel has patched flashrom to
+use the read funktion on verifying. 
+
+"benchvice flashrom # ./flashrom -m gigabyte:m57sli -v test.4mb
+Calibrating delay loop... OK.
+No coreboot table found.
+Found chipset "NVIDIA MCP55", enabling flash write... OK.
+Found board "GIGABYTE GA-M57SLI-S4": enabling flash write... 
+Serial flash segment 0xfffe0000-0xffffffff enabled
+Serial flash segment 0x000e0000-0x000fffff enabled
+Serial flash segment 0xffee0000-0xffefffff disabled
+Serial flash segment 0xfff80000-0xfffeffff enabled
+LPC write to serial flash enabled
+serial flash pin 29
+OK.
+MX25L3205 found at physical address 0xffc00000.
+Flash part is MX25L3205 (4096 KB).
+Flash image seems to be a legacy BIOS. Disabling checks.
+Verifying flash... VERIFIED.
+benchvice flashrom # ls -l test.4mb
+-rw-r--r-- 1 root root 4194304 22. Jan 16:27 test.4mb
+
+Signed-off-by: Harald Gutmann <harald.gutmann@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3070 | hailfinger | 2008-01-22 16:19:01 +0100 (Di, 22 Jan 2008) | 16 lines
+
+Flashrom did not use the read function for verifying, it used direct memory
+access instead. That fails if the flash chip is not mapped completely.
+If the read function is set in struct flashchip, use it for verification
+as well.
+
+This fixes verification of all SPI flash chips >512 kByte behind an
+IT8716F flash translation chip.
+
+"MX25L8005 found at physical address 0xfff00000.
+Flash part is MX25L8005 (1024 KB).
+Flash image seems to be a legacy BIOS. Disabling checks.
+Verifying flash... VERIFIED."
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Harald Gutmann <harald.gutmann@gmx.net>
+
+------------------------------------------------------------------------
+r3069 | hailfinger | 2008-01-22 15:37:31 +0100 (Di, 22 Jan 2008) | 7 lines
+
+Make sure we delay writing the next byte long enough in SPI byte
+programming.
+Minor formatting changes.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Harald Gutmann <harald.gutmann@gmx.net>
+
+------------------------------------------------------------------------
+r3068 | hailfinger | 2008-01-22 00:55:08 +0100 (Di, 22 Jan 2008) | 7 lines
+
+Omitting the wait for SPI ready when there is no data to be read, e.g.
+readcnt==0 saves 10 seconds with the unconditional 10us delay, reducing
+programming time for SST25VF016B to 40-45 secs.
+
+Signed-off-by: Ronald Hoogenboom <hoogenboom30@zonnet.nl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3067 | uwe | 2008-01-21 16:24:22 +0100 (Mo, 21 Jan 2008) | 9 lines
+
+This patch adds version information to flashrom. Because 'v' and 'V'
+are already in use, the patch uses 'R' (for release) and, of course,
+'--version'.
+
+Signed-off-by: Bernhard Walle <bernhard.walle@gmx.de>
+Acked-by: Ulf Jordan <jordan@chalmers.se>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3061 | hailfinger | 2008-01-19 01:04:46 +0100 (Sa, 19 Jan 2008) | 7 lines
+
+Support SPI flash chips bigger than 512 kByte sitting behind IT8716F
+Super I/O performing LPC-to-SPI flash translation.
+
+Signed-off-by: Ronald Hoogenboom <hoogenboom30@zonnet.nl>
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3059 | uwe | 2008-01-18 18:48:51 +0100 (Fr, 18 Jan 2008) | 6 lines
+
+Minor documentation improvements/fixes in the README and manpage (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3058 | stepan | 2008-01-18 17:17:44 +0100 (Fr, 18 Jan 2008) | 5 lines
+
+rename linuxbios_* files in utils repository.
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3054 | stepan | 2008-01-18 16:33:10 +0100 (Fr, 18 Jan 2008) | 6 lines
+
+for some reasons the externals did not get committed.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3045 | duwe | 2008-01-11 01:32:07 +0100 (Fr, 11 Jan 2008) | 6 lines
+
+This patch removes '\n' from the help output since this looks a bit strange.
+After the patch [...] The line length is still below 80 characters.
+
+Signed-off-by: Bernhard Walle <bernhard.walle@gmx.de>
+Acked-by: Torsten Duwe <duwe@lst.de>
+
+------------------------------------------------------------------------
+r3042 | hailfinger | 2008-01-10 14:27:22 +0100 (Do, 10 Jan 2008) | 5 lines
+
+Enable MX25L8005 support in flashrom. The #defines were already there.
+
+Signed-off-by: Harald Gutmann <harald.gutmann@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3036 | hailfinger | 2008-01-07 14:48:51 +0100 (Mo, 07 Jan 2008) | 6 lines
+
+Add support for the SST25VF040B 4 Mbit SPI flash chip.
+Straight from the data sheet, not tested.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3033 | rminnich | 2008-01-04 18:22:44 +0100 (Fr, 04 Jan 2008) | 4 lines
+
+Add board enable for the gigabyte ga_2761gxdk board
+Signed-off-by: Ronald G. Minnich <rminnich@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3032 | hailfinger | 2008-01-04 17:22:09 +0100 (Fr, 04 Jan 2008) | 6 lines
+
+Print at least the vendor for SPI flash chips if the exact chip ID is
+unknown.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+------------------------------------------------------------------------
+r3031 | hailfinger | 2007-12-31 15:05:08 +0100 (Mo, 31 Dez 2007) | 8 lines
+
+Unfortunately, EN29F002T, EN29F002AT, EN29F002ANT, EN29F002NT all have
+exactly the same ID. Improve model number printing.
+
+Add EN29F002(A)(N)B support while I'm at it.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Markus Boas <bios@ryven.de>
+
+------------------------------------------------------------------------
+r3030 | hailfinger | 2007-12-31 02:49:00 +0100 (Mo, 31 Dez 2007) | 20 lines
+
+Add continuation ID support to jedec.c
+The continuation ID code does not go further than checking for IDs of
+the type 0x7fXX, but does this for vendor and product ID. The current
+published JEDEC spec has a list where the largest vendor ID is 7 bytes
+long, but all leading bytes are 0x7f. The list will grow in the future,
+and using a 64bit variable will not be enough anymore.
+Besides that, it seems that the location of the ID byte after the first
+continuation ID byte is very vendor specific, so we may have to revisit
+that code some time in the future.
+
+(Suggestion for a new encoding:
+Use a two-byte data type for the ID, the lower byte contains the only
+non-0x7f byte, the upper byte contains the number of 0x7f bytes used as
+prefix, which is the bank number minus 1 the vendor ID appears in.)
+
+Add support for EON EN29F002AT.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3029 | hailfinger | 2007-12-31 02:18:26 +0100 (Mo, 31 Dez 2007) | 10 lines
+
+This fixes a few vendor IDs to conform with JEDEC publication 106W
+(JEP106W), adds some device IDs and provides information about
+non-conforming IDs.
+The EON change is left to the patch adding EON chips.
+
+This patch should have no effect on code generation.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3027 | hailfinger | 2007-12-29 12:05:59 +0100 (Sa, 29 Dez 2007) | 8 lines
+
+All SPI chips mentioned in flashchips.c had their sector size listed as
+page size. Fix that. Page size is uniform 256 bytes for SPI.
+
+A sector/block size field in struct flashchip would be nice, though.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3026 | hailfinger | 2007-12-29 11:15:58 +0100 (Sa, 29 Dez 2007) | 8 lines
+
+Print the chip status register for all SPI chips on probe if verbose
+output is specified.
+Pretty-print the chip status register (including block lock information)
+for ST M25P family and Macronix MX25L family chips.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3025 | hailfinger | 2007-12-29 11:14:38 +0100 (Sa, 29 Dez 2007) | 6 lines
+
+Add 25VF016B support to flashrom. Untested, but verified against the
+data sheet.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3012 | hailfinger | 2007-12-17 23:22:40 +0100 (Mo, 17 Dez 2007) | 7 lines
+
+Add support for ST M25P05-A, M25P10-A, M25P20, M25P40, M25P16, M25P32,
+M25P64, M25P128 to flashrom. ST M25P80 support is already there.
+Not tested, but conforming to data sheets and double checked.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r3009 | hailfinger | 2007-12-17 15:33:32 +0100 (Mo, 17 Dez 2007) | 10 lines
+
+To make it easier to add new SPI chips to flashchips.c, rename functions
+with multiple possible opcodes from linear numbering at the end (_1, _2)
+to include the opcode at the end (_60, _c7). That way, you only have to
+take a short look at the data sheet and choose the right function by
+appending the opcode listed in the data sheet.
+No functional changes.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r3008 | hailfinger | 2007-12-16 22:15:27 +0100 (So, 16 Dez 2007) | 6 lines
+
+Add support for ST M25P80 chips to flashrom. Detection was tested.
+Print status register before erase to help debugging block locks.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Corey Osgood <corey.osgood@gmail.com>
+
+------------------------------------------------------------------------
+r3003 | hailfinger | 2007-12-10 17:57:59 +0100 (Mo, 10 Dez 2007) | 12 lines
+
+Add support for more atmel chips:
+AT49F002
+AT49F002N
+AT49F002T
+AT49F002NT
+
+Only tested the read function on AT49F002T.
+datasheet @ http://www.atmel.com/atmel/acrobat/doc1017.pdf
+
+Signed-off-by: Frederico Silva <frederico.silva@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r2997 | uwe | 2007-12-04 22:49:06 +0100 (Di, 04 Dez 2007) | 9 lines
+
+Various coding style fixes, constification, fixed typos (trivial).
+
+Also, s/0xFF80/0xFFC0/ in the Acorp 6A815EPD board-enable, as per
+http://www.linuxbios.org/pipermail/linuxbios/2007-December/027750.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2995 | uwe | 2007-12-02 20:03:23 +0100 (So, 02 Dez 2007) | 7 lines
+
+Add board-enable for Acorp 6A815EPD.
+
+Signed-off-by: Jonathan A. Kollasch <jakllsch@kollasch.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2967 | jcrouse | 2007-11-13 17:45:22 +0100 (Di, 13 Nov 2007) | 9 lines
+
+[LinuxBIOS] flashrom support for AMD Geode CS5536
+
+Attached is a patch that enables AMD Geode CS5536 chipset support.  I
+have tested it successfully on a MSM800 board from digital logic.
+
+Signed-off-by: Lane Brooks <lbrooks@mit.edu>
+Acked-by: Jordan Crouse <jordan.crouse@amd.com>
+
+
+------------------------------------------------------------------------
+r2962 | hailfinger | 2007-11-13 15:56:54 +0100 (Di, 13 Nov 2007) | 9 lines
+
+Fix ATMEL 29C020 detection with flashrom. The JEDEC probe routine had
+a delay of 10 us after entering ID mode and this was insufficient for
+the 29C020. The data sheet claims we have to wait 10 ms, but tests have
+shown that 20 us suffice. Allow for variations in chip delays with a
+factor of 2 safety margin.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r2903 | uwe | 2007-10-30 01:56:50 +0100 (Di, 30 Okt 2007) | 9 lines
+
+Add support for Intel 440MX systems.
+Add support for the Fujitsu MBM29F400TC flash part.
+
+Detection and reading works, writing is not tested.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r2897 | stuge | 2007-10-25 06:11:11 +0200 (Do, 25 Okt 2007) | 11 lines
+
+Added Am29LV040B
+
+Looking through the sources of Uniflash utility I found that this chip
+is no more no less than low-voltage variant of Am29F040B but with
+different ID.
+
+So I created a very quick patch (attached).
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r2884 | hailfinger | 2007-10-22 22:36:16 +0200 (Mo, 22 Okt 2007) | 5 lines
+
+Flashrom: Add more Vendor IDs and ensure correct sorting in flash.h.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r2881 | hailfinger | 2007-10-22 18:15:28 +0200 (Mo, 22 Okt 2007) | 6 lines
+
+Introduce block and sector erase routines to flashrom, but do not use
+them yet.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2876 | hailfinger | 2007-10-18 19:56:42 +0200 (Do, 18 Okt 2007) | 8 lines
+
+Remove hardcoded wait from SPI write/erase routines and check the chip
+status register instead.
+This has been tested by Harald Gutmann <harald.gutmann@gmx.net> with a
+MX25L4005 chip.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2875 | uwe | 2007-10-18 02:29:05 +0200 (Do, 18 Okt 2007) | 6 lines
+
+Documentation fixes and updates (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2874 | hailfinger | 2007-10-18 02:24:07 +0200 (Do, 18 Okt 2007) | 12 lines
+
+Add generic SPI flash erase and write support to flashrom. The first
+chip the code was tested and verified with is the Macronix MX25L4005,
+but other chips should work as well.
+Timeouts are still hardcoded to data sheet maxima, but the status
+register checking code is already there.
+Thanks to Harald Gutmann for the initial code on which this is loosely
+based.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2873 | uwe | 2007-10-18 01:55:15 +0200 (Do, 18 Okt 2007) | 6 lines
+
+Some cosmetic cleanups in the flashrom code and output.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2868 | hailfinger | 2007-10-18 00:30:07 +0200 (Do, 18 Okt 2007) | 8 lines
+
+Fix wrong values/typos in chipset_enable.c. This has been confirmed by
+Ed Swierk in
+http://www.mail-archive.com/linuxbios@linuxbios.org/msg09788.html .
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2866 | uwe | 2007-10-17 01:36:34 +0200 (Mi, 17 Okt 2007) | 13 lines
+
+Multiple flashrom fixes:
+
+ - Install binary in /usr/sbin (not /usr/bin), as it's a root-only tool.
+
+ - Rename manpage from flashrom.1 to flashrom.8, as section 8 contains
+   "System administration commands (usually only for root)".
+
+ - Actually install the manpage upon 'make install'.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2864 | hailfinger | 2007-10-16 23:18:43 +0200 (Di, 16 Okt 2007) | 6 lines
+
+Add Gigabyte M61P-S3 SPI flash support to board_enable.c
+
+Signed-off-by: Michael van der Kolff <mvanderkolff@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r2863 | hailfinger | 2007-10-16 23:09:06 +0200 (Di, 16 Okt 2007) | 7 lines
+
+Convert the existing it8716f_* functions to generic_spi_* functions by
+applying abstraction and wrapping.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2858 | stepan | 2007-10-15 23:45:29 +0200 (Mo, 15 Okt 2007) | 15 lines
+
+(forgot to add spi.c)
+
+Move SPI code out of board_enable.c where it started its life. The SPI
+chip finding and SPI chip accessor code is moved as well. This can be
+split later if we feel like it.
+
+The non-use of svn cp is intentional because the only history we'd have
+to preserve are a few commits which were early prototypes of chip
+identification code. For those who intend to look at that history, they
+can look at board_enable.c revision 2853.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2857 | stepan | 2007-10-15 23:44:47 +0200 (Mo, 15 Okt 2007) | 13 lines
+
+Move SPI code out of board_enable.c where it started its life. The SPI
+chip finding and SPI chip accessor code is moved as well. This can be
+split later if we feel like it.
+
+The non-use of svn cp is intentional because the only history we'd have
+to preserve are a few commits which were early prototypes of chip
+identification code. For those who intend to look at that history, they
+can look at board_enable.c revision 2853.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2850 | rminnich | 2007-10-12 23:22:40 +0200 (Fr, 12 Okt 2007) | 281 lines
+
+
+Changes to flashrom to support the K8N-NEO3, first tested at Google on GSOC day :-)
+
+Also minor changes to remove tab-space combinations where possible. 
+
+Signed-off-by: Ronald G. Minnich <rminnich@gmail.com>
+Signed-off-by: David Hendricks <david.hendricks@gmail.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+Index: jedec.c
+===================================================================
+--- jedec.c	(revision 2847)
++++ jedec.c	(working copy)
+@@ -281,7 +281,7 @@
+ 	// dumb check if erase was successful.
+ 	for (i = 0; i < total_size; i++) {
+ 		if (bios[i] != (uint8_t) 0xff) {
+-			printf("ERASE FAILED\n");
++			printf("ERASE FAILED @%d, val %02x\n", i, bios[i]);
+ 			return -1;
+ 		}
+ 	}
+Index: board_enable.c
+===================================================================
+--- board_enable.c	(revision 2847)
++++ board_enable.c	(working copy)
+@@ -153,7 +153,8 @@
+ 		return 1;
+ 	}
+ 	/* Start IO, 33MHz, readcnt input bytes, writecnt output bytes. Note:
+-	   We can't use writecnt directly, but have to use a strange encoding */
++	 * We can't use writecnt directly, but have to use a strange encoding 
++	 */ 
+ 	outb((0x5 << 4) | ((readcnt & 0x3) << 2) | (writeenc), port);
+ 	do {
+ 		busy = inb(port) & 0x80;
+@@ -202,43 +203,39 @@
+ /*
+  * Helper functions for many Winbond Super I/Os of the W836xx range.
+  */
+-#define W836_INDEX 0x2E
+-#define W836_DATA  0x2F
+-
+ /* Enter extended functions */
+-static void w836xx_ext_enter(void)
++static void w836xx_ext_enter(uint16_t port)
+ {
+-	outb(0x87, W836_INDEX);
+-	outb(0x87, W836_INDEX);
++	outb(0x87, port);
++	outb(0x87, port);
+ }
+ 
+ /* Leave extended functions */
+-static void w836xx_ext_leave(void)
++static void w836xx_ext_leave(uint16_t port)
+ {
+-	outb(0xAA, W836_INDEX);
++	outb(0xAA, port);
+ }
+ 
+ /* General functions for reading/writing Winbond Super I/Os. */
+-static unsigned char wbsio_read(unsigned char index)
++static unsigned char wbsio_read(uint16_t index, uint8_t reg)
+ {
+-	outb(index, W836_INDEX);
+-	return inb(W836_DATA);
++	outb(reg, index);
++	return inb(index+1);
+ }
+ 
+-static void wbsio_write(unsigned char index, unsigned char data)
++static void wbsio_write(uint16_t index, uint8_t reg, uint8_t data)
+ {
+-	outb(index, W836_INDEX);
+-	outb(data, W836_DATA);
++	outb(reg, index);
++	outb(data, index+1);
+ }
+ 
+-static void wbsio_mask(unsigned char index, unsigned char data,
+-		       unsigned char mask)
++static void wbsio_mask(uint16_t index, uint8_t reg, uint8_t data, uint8_t mask)
+ {
+-	unsigned char tmp;
++	uint8_t tmp;
+ 
+-	outb(index, W836_INDEX);
+-	tmp = inb(W836_DATA) & ~mask;
+-	outb(tmp | (data & mask), W836_DATA);
++	outb(reg, index);
++	tmp = inb(index+1) & ~mask;
++	outb(tmp | (data & mask), index+1);
+ }
+ 
+ /**
+@@ -248,37 +245,80 @@
+  *  - Agami Aruma
+  *  - IWILL DK8-HTX
+  */
+-static int w83627hf_gpio24_raise(const char *name)
++static int w83627hf_gpio24_raise(uint16_t index, const char *name)
+ {
+-	w836xx_ext_enter();
++	w836xx_ext_enter(index);
+ 
+ 	/* Is this the w83627hf? */
+-	if (wbsio_read(0x20) != 0x52) {	/* SIO device ID register */
++	if (wbsio_read(index, 0x20) != 0x52) {	/* Super I/O device ID register */
+ 		fprintf(stderr, "\nERROR: %s: W83627HF: Wrong ID: 0x%02X.\n",
+-			name, wbsio_read(0x20));
+-		w836xx_ext_leave();
++			name, wbsio_read(index, 0x20));
++		w836xx_ext_leave(index);
+ 		return -1;
+ 	}
+ 
+ 	/* PIN89S: WDTO/GP24 multiplex -> GPIO24 */
+-	wbsio_mask(0x2B, 0x10, 0x10);
++	wbsio_mask(index, 0x2B, 0x10, 0x10);
+ 
+-	wbsio_write(0x07, 0x08);	/* Select logical device 8: GPIO port 2 */
++	wbsio_write(index, 0x07, 0x08);	/* Select logical device 8: GPIO port 2 */
+ 
+-	wbsio_mask(0x30, 0x01, 0x01);	/* Activate logical device. */
++	wbsio_mask(index, 0x30, 0x01, 0x01);	/* Activate logical device. */
+ 
+-	wbsio_mask(0xF0, 0x00, 0x10);	/* GPIO24 -> output */
++	wbsio_mask(index, 0xF0, 0x00, 0x10);	/* GPIO24 -> output */
+ 
+-	wbsio_mask(0xF2, 0x00, 0x10);	/* Clear GPIO24 inversion */
++	wbsio_mask(index, 0xF2, 0x00, 0x10);	/* Clear GPIO24 inversion */
+ 
+-	wbsio_mask(0xF1, 0x10, 0x10);	/* Raise GPIO24 */
++	wbsio_mask(index, 0xF1, 0x10, 0x10);	/* Raise GPIO24 */
+ 
+-	w836xx_ext_leave();
++	w836xx_ext_leave(index);
+ 
+ 	return 0;
+ }
+ 
++static int w83627hf_gpio24_raise_2e(const char *name)
++{
++	return w83627hf_gpio24_raise(0x2d, name);
++}
++
+ /**
++ * Winbond W83627THF: GPIO 4, bit 4
++ *
++ * Suited for:
++ *  - MSI K8N-NEO3
++ */
++static int w83627thf_gpio4_4_raise(uint16_t index, const char *name)
++{
++	w836xx_ext_enter(index);
++	/* Is this the w83627thf? */
++	if (wbsio_read(index, 0x20) != 0x82) {	/* Super I/O device ID register */
++		fprintf(stderr, "\nERROR: %s: W83627THF: Wrong ID: 0x%02X.\n",
++			name, wbsio_read(index, 0x20));
++		w836xx_ext_leave(index);
++		return -1;
++	}
++
++	/* PINxxxxS: GPIO4/bit 4 multiplex -> GPIOXXX */
++
++	wbsio_write(index, 0x07, 0x09);	/* Select logical device 9: GPIO port 4 */
++
++	wbsio_mask(index, 0x30, 0x02, 0x02);	/* Activate logical device. */
++
++	wbsio_mask(index, 0xF4, 0x00, 0x10);	/* GPIO4 bit 4 -> output */
++
++	wbsio_mask(index, 0xF6, 0x00, 0x10);	/* Clear GPIO4 bit 4 inversion */
++
++	wbsio_mask(index, 0xF5, 0x10, 0x10);	/* Raise GPIO4 bit 4 */
++
++	w836xx_ext_leave(index);
++
++	return 0;
++}
++
++static int w83627thf_gpio4_4_raise_4e(const char *name)
++{
++	return w83627thf_gpio4_4_raise(0x4E, name);
++}
++/**
+  * Suited for VIAs EPIA M and MII, and maybe other CLE266 based EPIAs.
+  *
+  * We don't need to do this when using LinuxBIOS, GPIO15 is never lowered there.
+@@ -335,12 +375,12 @@
+ 	pci_write_byte(dev, 0x59, val);
+ 
+ 	/* Raise ROM MEMW# line on Winbond w83697 SuperIO */
+-	w836xx_ext_enter();
++	w836xx_ext_enter(0x2E);
+ 
+-	if (!(wbsio_read(0x24) & 0x02))	/* flash rom enabled? */
+-		wbsio_mask(0x24, 0x08, 0x08);	/* enable MEMW# */
++	if (!(wbsio_read(0x2E, 0x24) & 0x02))	/* flash rom enabled? */
++		wbsio_mask(0x2E, 0x24, 0x08, 0x08);	/* enable MEMW# */
+ 
+-	w836xx_ext_leave();
++	w836xx_ext_leave(0x2E);
+ 
+ 	return 0;
+ }
+@@ -487,9 +527,11 @@
+ 	{0x10de, 0x0360, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+ 	 "gigabyte", "m57sli", "GIGABYTE GA-M57SLI", it87xx_probe_serial_flash},
+ 	{0x1022, 0x7468, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+-	 "iwill", "dk8_htx", "IWILL DK8-HTX", w83627hf_gpio24_raise},
++	 "iwill", "dk8_htx", "IWILL DK8-HTX", w83627hf_gpio24_raise_2e},
++	{0x10de, 0x005e, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
++	 "msi", "k8n-neo3", "MSI K8N Neo3", w83627thf_gpio4_4_raise_4e},
+ 	{0x1022, 0x746B, 0x1022, 0x36C0, 0x0000, 0x0000, 0x0000, 0x0000,
+-	 "AGAMI", "ARUMA", "agami Aruma", w83627hf_gpio24_raise},
++	 "AGAMI", "ARUMA", "agami Aruma", w83627hf_gpio24_raise_2e},
+ 	{0x1106, 0x3177, 0x1106, 0xAA01, 0x1106, 0x3123, 0x1106, 0xAA01,
+ 	 NULL, NULL, "VIA EPIA M/MII/...", board_via_epia_m},
+ 	{0x1106, 0x3177, 0x1043, 0x80A1, 0x1106, 0x3205, 0x1043, 0x8118,
+@@ -509,8 +551,8 @@
+  * Match boards on LinuxBIOS table gathered vendor and part name.
+  * Require main PCI IDs to match too as extra safety.
+  */
+-static struct board_pciid_enable *board_match_linuxbios_name(char *vendor,
+-							     char *part)
++static struct board_pciid_enable *board_match_linuxbios_name(char *vendor, 
++								char *part)
+ {
+ 	struct board_pciid_enable *board = board_pciid_enables;
+ 
+@@ -525,10 +567,11 @@
+ 			continue;
+ 
+ 		if (board->second_vendor &&
+-		    !pci_dev_find(board->second_vendor, board->second_device))
++			!pci_dev_find(board->second_vendor, board->second_device))
+ 			continue;
+ 		return board;
+ 	}
++	printf("NOT FOUND %s:%s\n", vendor, part);
+ 	return NULL;
+ }
+ 
+@@ -545,20 +588,20 @@
+ 			continue;
+ 
+ 		if (!pci_card_find(board->first_vendor, board->first_device,
+-				   board->first_card_vendor,
+-				   board->first_card_device))
++					board->first_card_vendor,
++					board->first_card_device))
+ 			continue;
+ 
+ 		if (board->second_vendor) {
+ 			if (board->second_card_vendor) {
+ 				if (!pci_card_find(board->second_vendor,
+-						   board->second_device,
+-						   board->second_card_vendor,
+-						   board->second_card_device))
++						board->second_device,
++						board->second_card_vendor,
++						board->second_card_device))
+ 					continue;
+ 			} else {
+ 				if (!pci_dev_find(board->second_vendor,
+-						  board->second_device))
++							board->second_device))
+ 					continue;
+ 			}
+ 		}
+@@ -582,7 +625,7 @@
+ 
+ 	if (board) {
+ 		printf("Found board \"%s\": Enabling flash write... ",
+-		       board->name);
++			board->name);
+ 
+ 		ret = board->enable(board->name);
+ 		if (ret)
+
+------------------------------------------------------------------------
+r2847 | uwe | 2007-10-10 19:42:20 +0200 (Mi, 10 Okt 2007) | 6 lines
+
+Revert my last cleanup patch.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2846 | uwe | 2007-10-10 18:31:30 +0200 (Mi, 10 Okt 2007) | 6 lines
+
+Cosmetic changes to make the flashrom output more consistent (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2820 | stepan | 2007-10-04 08:26:41 +0200 (Do, 04 Okt 2007) | 9 lines
+
+[FLASHROM] Fix the help, and print a message when nothing happens
+
+The help implied that writes happen by default, which they don't.  Fix
+the text, and say something when we dont specify any commands.
+
+Signed-off-by: Jordan Crouse <jordan.crouse@amd.com>    
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2817 | ward | 2007-10-02 17:49:25 +0200 (Di, 02 Okt 2007) | 17 lines
+
+
+This patch aims to restructure SPI flash support in a more reasonable
+way. It introduces a generic SPI host driver for the IT8716F Super I/O
+which will enable easy SPI programming without having to care for the
+peculiarities of the SPI host.
+
+To activate probing for the IT8716F, you have to use the gigabyte:m57sli
+mainboard override. SPI support will then use the gathered SPI host data
+to access the SPI flash.
+
+This has been tested sucessfully by Ward Vandewege <ward@gnu.org> on the
+GA-M57SLI v2.0, which has a MX25L4005 SPI flash part.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+
+------------------------------------------------------------------------
+r2811 | ward | 2007-09-27 16:29:57 +0200 (Do, 27 Sep 2007) | 10 lines
+
+
+Add preliminary SPI flash identification support for SPI chips attached
+to ITE IT8716F Super I/O. Right now this is hardcoded to the Gigabyte
+M57SLI board. It works only with rev 2.0 of the board, but it will bail
+out on earlier versions, so no damage can occur.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+
+------------------------------------------------------------------------
+r2770 | uwe | 2007-09-11 17:58:18 +0200 (Di, 11 Sep 2007) | 7 lines
+
+Change out/in combinations to pci_read/write_byte in
+sis630 chipset enable.
+
+Signed-off-by: Alex Beregszaszi <alex@rtfs.hu>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2769 | uwe | 2007-09-09 22:24:29 +0200 (So, 09 Sep 2007) | 6 lines
+
+Remove useless 'extern' keywords (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2768 | uwe | 2007-09-09 22:21:05 +0200 (So, 09 Sep 2007) | 6 lines
+
+Add '(C)' where it's missing (for consistency reasons).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2767 | uwe | 2007-09-09 22:02:45 +0200 (So, 09 Sep 2007) | 14 lines
+
+Add missing license header to udelay.c.
+
+I'm self-ack'ing this, as the origin of the code in udelay.c (and thus
+the license and copyright owner) is pretty clear.
+
+The code which is now in udelay.c was split out from flash_rom.c in r1428,
+and flash_rom.c, in turn, has been around since the beginning and had a
+'Copyright 2000 Silicon Integrated System Corporation' line as well as the
+usual GPLv2-or-later license header.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2764 | uwe | 2007-09-08 16:36:01 +0200 (Sa, 08 Sep 2007) | 7 lines
+
+Add a copy of the GPL in the flashrom repository as it's an independent
+project (being packaged by distros, among other things).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2753 | uwe | 2007-08-30 12:17:50 +0200 (Do, 30 Aug 2007) | 6 lines
+
+Add support for the Winbond W29EE011.
+
+Signed-off-by: Markus Boas <ryven@ryven.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2752 | uwe | 2007-08-30 12:11:08 +0200 (Do, 30 Aug 2007) | 6 lines
+
+Add support for the Winbond W29C040P.
+
+Signed-off-by: Markus Boas <ryven@ryven.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2751 | uwe | 2007-08-29 19:52:32 +0200 (Mi, 29 Aug 2007) | 7 lines
+
+Change all flashrom license headers to use our standard format.
+No changes in content of the files.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2748 | uwe | 2007-08-23 18:08:21 +0200 (Do, 23 Aug 2007) | 6 lines
+
+Cosmetic fixes (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2747 | uwe | 2007-08-23 17:20:38 +0200 (Do, 23 Aug 2007) | 6 lines
+
+Drop duplicated code (copies of plain JEDEC functions).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2746 | uwe | 2007-08-23 15:34:59 +0200 (Do, 23 Aug 2007) | 6 lines
+
+Drop a bunch of useless header files, merge them into flash.h.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2745 | uwe | 2007-08-23 12:20:40 +0200 (Do, 23 Aug 2007) | 6 lines
+
+Move code into *.c files, there's no reason to have it in header files.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2744 | stuge | 2007-08-13 06:10:32 +0200 (Mo, 13 Aug 2007) | 10 lines
+
+Fix bug in probe_28sf040() causing flash corruption on SST49LF160C verify.
+
+The first byte of the flash chip was read at the start of the function
+and later written back to address 0 if the flash chip was not identified
+as SST28SF040, which means most of the time. This write caused corruption
+of flash contents when verifying a SST49LF160C part.
+
+Signed-off-by: Ed Swierk <eswierk@arastra.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r2743 | uwe | 2007-08-11 18:59:11 +0200 (Sa, 11 Aug 2007) | 7 lines
+
+flashrom: Add board enable for the EPoX EP-BX3.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Peter Stuge <peter@stuge.se>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2742 | uwe | 2007-07-27 05:32:45 +0200 (Fr, 27 Jul 2007) | 6 lines
+
+flashrom: Add missing supported flash chips to the README (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2741 | uwe | 2007-07-25 19:55:45 +0200 (Mi, 25 Jul 2007) | 11 lines
+
+This patch adds support for the M50FLW040A, M50FLW040B, M50FLW080A,
+M50FLW080B, M50FW080, M50FW016, M50LPW116, M29W010B flash chips made
+by ST to flashrom.
+
+The patch is based on the data sheets of the chips and has not been
+tested at all.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2740 | uwe | 2007-07-24 20:18:05 +0200 (Di, 24 Jul 2007) | 9 lines
+
+This patch adds support for ST M50FW040 and ST M29W040B to flashrom.
+Only reading from the chips was tested; writing support is untested.
+
+Thanks to Gürkan Sengün <gurkan@linuks.mine.nu> for testing!
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2732 | uwe | 2007-07-04 19:51:49 +0200 (Mi, 04 Jul 2007) | 8 lines
+
+Flashrom: Add support for Tyan Tomcat K7M.
+
+Same board enable as Asus A7V8-MX. Tested by Reinhard Max.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2730 | uwe | 2007-07-01 21:42:39 +0200 (So, 01 Jul 2007) | 7 lines
+
+Move 'flashrom' into global util/flashrom svn directory, as it's not
+LinuxBIOSv2-specific (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2715 | uwe | 2007-06-06 23:35:45 +0200 (Mi, 06 Jun 2007) | 12 lines
+
+Fix up and document the AMD CS5530/CS5530A support in flashrom.
+
+The previous code was pretty unreadable, undocumented and did some totally
+unrelated things (such as mucking with the game port or port 0x92).
+
+This version is tested with a 256 KB chip and should work for the
+CS5530 and CS5530A.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2713 | uwe | 2007-06-05 17:02:18 +0200 (Di, 05 Jun 2007) | 7 lines
+
+flashrom: Document the newly supported IBM x3455 board and the
+now-supported Broadcom HT-1000 chipset (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2712 | stepan | 2007-06-05 14:51:52 +0200 (Di, 05 Jun 2007) | 6 lines
+
+Move GPIO settings to board specific code for IBM x3455
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2711 | stepan | 2007-06-05 12:28:39 +0200 (Di, 05 Jun 2007) | 6 lines
+
+Add support for BCM HT1000 chipset to flashrom. Tested on IBM x3455.
+(trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2696 | uwe | 2007-05-24 21:17:29 +0200 (Do, 24 Mai 2007) | 6 lines
+
+Minor cosmetics (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2693 | stepan | 2007-05-24 11:26:39 +0200 (Do, 24 Mai 2007) | 6 lines
+
+drop leftover includes (trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2692 | stepan | 2007-05-24 11:08:36 +0200 (Do, 24 Mai 2007) | 5 lines
+
+some copyright analysis
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2691 | stepan | 2007-05-24 10:48:10 +0200 (Do, 24 Mai 2007) | 5 lines
+
+factor out register mapping code (trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2690 | stepan | 2007-05-23 20:24:58 +0200 (Mi, 23 Mai 2007) | 6 lines
+
+Unify mmap error messages in flashrom (trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2689 | stepan | 2007-05-23 19:20:56 +0200 (Mi, 23 Mai 2007) | 10 lines
+
+big cosmetic offensive on flashrom. (trivial)
+* Give decent names to virt_addr and virt_addr_2
+* add some comments
+* move virtual addresses to the end of the struct,
+  so they dont mess up the initializer.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2686 | uwe | 2007-05-21 23:39:08 +0200 (Mo, 21 Mai 2007) | 6 lines
+
+Add support for the Winbond W39V040FA chip.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2677 | uwe | 2007-05-20 18:16:13 +0200 (So, 20 Mai 2007) | 13 lines
+
+Flashrom: add support for ASUS P5A (Socket 7, ALi based).
+
+* Add support for the ALi M1533 to chipset_enable.c
+* Add some SMBus poking needed for the ASUS P5A, to board_enable.c
+
+Since PCI subsystem IDs are worthless with this board, people will
+have to name the board directly.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2643 | uwe | 2007-05-09 12:17:44 +0200 (Mi, 09 Mai 2007) | 11 lines
+
+Fix coding style of flashrom by running indent on all files:
+
+  indent -npro -kr -i8 -ts8 -sob -l80 -ss -ncs *.[ch]
+
+Some minor fixups were required, and maybe a few more cosmetic
+changeѕ are needed.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2627 | stuge | 2007-05-04 06:47:04 +0200 (Fr, 04 Mai 2007) | 15 lines
+
+Add WinBond Super IO helpers.
+
+* These helpers severely clear up winbond superio usage.
+* Removed board_iwill_dk8_htx as it can be replaced by
+  board_agami_aruma (Mondrian Nuessle).
+* Renamed board_agami_aruma to w83627hf_gpio24_raise.
+* Clarified comments in w83627hf_gpio24_raise, and added
+  some things from the old iwill code.
+* Moved all board functions name argument to const.
+  (warning breaks build)
+* Moved iwill entry in board_pciid_enables.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r2624 | uwe | 2007-05-03 12:09:23 +0200 (Do, 03 Mai 2007) | 8 lines
+
+Enable flashing on the IWILL DK8-HTX board by configuring the Super I/O
+to set the right GPIO pins, so write protection is disabled.
+
+Signed-off-by: Mondrian Nuessle <nuessle@uni-mannheim.de>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2621 | stuge | 2007-04-28 04:22:59 +0200 (Sa, 28 Apr 2007) | 11 lines
+
+Add initial support for the following flash chips:
+
+ - Atmel AT29C020
+ - STMicroelectronics M29F002B
+ - STMicroelectronics M29F002T
+ - STMicroelectronics M29F002NT
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Signed-off-by: Roger Zauner <roger@eskimo.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r2610 | stepan | 2007-04-14 18:32:59 +0200 (Sa, 14 Apr 2007) | 7 lines
+
+Exit on return code of read_layout and print error message to stderr
+instead of stdout (trivial)
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2603 | stepan | 2007-04-12 01:31:45 +0200 (Do, 12 Apr 2007) | 7 lines
+
+Rename flash_rom.c to flashrom.c. The tool is called 'flashrom' after
+all.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2601 | uwe | 2007-04-10 00:59:22 +0200 (Di, 10 Apr 2007) | 6 lines
+
+flashrom: Add VIA CX700 to the list of supported southbridges (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2599 | stepan | 2007-04-10 00:27:45 +0200 (Di, 10 Apr 2007) | 6 lines
+
+add support for CX700 builtin southbridge
+Signed-off-by: Randall Philipson <rtphilipson@cox.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2585 | stepan | 2007-04-06 13:58:03 +0200 (Fr, 06 Apr 2007) | 11 lines
+
+Trivial (cosmetic) cleanup:
+* Only open /dev/mem once and do it early.
+* Drop extern for function prototypes.
+* Minimize ts5300 impact in probe_flash()
+
+This cleanup will making ICH7 SPI support quite some easier.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2581 | stepan | 2007-04-05 00:45:58 +0200 (Do, 05 Apr 2007) | 19 lines
+
+flashrom: split flash_enable.c into chipset_enable.c and board_enable.c
+
+This splits up the ROM Write enable code into chipset specific and
+board specific parts. This of course means that a lot of code is
+plainly moved about.
+
+* Allows for linuxbios name matching and pci-subsystem id matching.
+  The latter uses a double set to properly distuinguish boards despite
+  of some known vendors being lax about it.
+* Fixes GPIO15 being raised on every VT8235 southbridge, regardless of what
+  that line actually controls; rom on EPIA-M, backlight on mitac 8999 laptop.
+* Adds flashrom support for Asus A7V400-MX (KM400 + VT8235)
+* Island aruma was renamed agami aruma, the board specific code now got
+  adjusted. A set of pci-ids was retrieved from source code.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2578 | uwe | 2007-04-01 22:00:32 +0200 (So, 01 Apr 2007) | 6 lines
+
+Drop useless and partly even incorrect comments (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2577 | uwe | 2007-04-01 21:44:21 +0200 (So, 01 Apr 2007) | 6 lines
+
+Coding style fixes (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2575 | uwe | 2007-03-31 21:48:38 +0200 (Sa, 31 Mär 2007) | 6 lines
+
+Flashrom: Add support for the ICH7-DH southbridge (untested).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r2573 | stepan | 2007-03-22 15:51:45 +0100 (Do, 22 Mär 2007) | 7 lines
+
+This is a trivial cosmetic fix. Without it, the error message might look like:
+Image size doesnt match: Success
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2570 | uwe | 2007-03-07 00:49:49 +0100 (Mi, 07 Mär 2007) | 9 lines
+
+The attached patch adds additional PCI IDs for MCP55 LPC devices to
+flashrom. 0x0360 is needed to support the DFI LANParty NF590SLI, and I
+am deducing the others based on pci_ids.h in the Linux kernel.
+
+Signed-off-by: Ed Swierk <eswierk@arastra.com>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2568 | uwe | 2007-03-02 23:16:38 +0100 (Fr, 02 Mär 2007) | 13 lines
+
+flashrom: Fix wrong VT8235 flash enable failed warning.
+
+* Fix harmless but worrying warning where the return value of
+  pci_write_byte is misinterpreted.
+* Hash together VT8231 and VT8235 code into VT823x. VT8231 is the better
+  implementation, but lacked the write protect disable code that's
+  apparently needed for VT8235.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2565 | uwe | 2007-03-02 03:25:36 +0100 (Fr, 02 Mär 2007) | 7 lines
+
+Add Winbond W39V080A support to Flashrom.
+
+Signed-off-by: David Hendricks <david.hendricks@gmail.com>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2564 | stepan | 2007-02-28 22:50:15 +0100 (Mi, 28 Feb 2007) | 6 lines
+
+Add support for the Gigabyte m57sli-s4 board to flashrom.
+
+Signed-off-by: Ward Vandewege <ward@gnu.org>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2553 | uwe | 2007-02-16 15:36:12 +0100 (Fr, 16 Feb 2007) | 9 lines
+
+Currently the flashrom Makefile tries to detect whether pciutils-devel
+is installed, but the test also fails if zlib-devel is missing. This
+patch changes the error message accordingly.
+
+Signed-off-by: Ed Swierk <eswierk@arastra.com>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2551 | stepan | 2007-02-06 20:53:51 +0100 (Di, 06 Feb 2007) | 7 lines
+
+Include src/include/boot/linuxbios_tables.h in the flashrom source
+tree to make it compilable independant of the LinuxBIOS source code.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2550 | stepan | 2007-02-06 20:47:50 +0100 (Di, 06 Feb 2007) | 21 lines
+
+This patch is a rework of Adam Kaufman's Solaris patch.
+
+* flash.h:
+  - add a license header
+  - add system definitions
+* flash_enable.c:
+  - put io priviledge access in one single place
+  - add includes required for Solaris.
+* lbtable.c, flash_rom.c, 82802ab.c:
+  - use MEM_DEV so it works on Solaris
+* sst49lfxxxc.c, sharplhf00l04.c, sst_fwhub.c, 82802ab.c
+  - drop unneeded include to sys/io.h
+* Makefile
+  - adapt to Solaris specifics.
+
+Signed-off-by: Adam Kaufman <adam.kaufman@pinnacle.com>
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Adam Kaufman <adam.kaufman@pinnacle.com>
+
+
+------------------------------------------------------------------------
+r2539 | uwe | 2007-01-27 14:39:06 +0100 (Sa, 27 Jan 2007) | 6 lines
+
+Add support for the SST 49LF160C.
+
+Signed-off-by: Alan Carvalho de Assis <acassis@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2538 | uwe | 2007-01-24 12:09:03 +0100 (Mi, 24 Jan 2007) | 7 lines
+
+Delete superfluous and incorrect comment (trivial).
+See also http://www.openbios.org/pipermail/linuxbios/2007-January/018042.html.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2537 | uwe | 2007-01-22 21:21:17 +0100 (Mo, 22 Jan 2007) | 9 lines
+
+Add support for the SST-49LF004C, SST-49LF008C, SST-49LF016C in flashrom.
+Also add suport for NVIDIA MCP55.
+
+Signed-off-by: Yinghai Lu <yinghai.lu@amd.com>
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+
+------------------------------------------------------------------------
+r2531 | uwe | 2006-12-20 15:59:56 +0100 (Mi, 20 Dez 2006) | 6 lines
+
+Improve flashrom description in the manpage a bit (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2530 | uwe | 2006-12-20 15:53:22 +0100 (Mi, 20 Dez 2006) | 6 lines
+
+Update flashrom requirements in the README (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2524 | uwe | 2006-12-14 01:59:41 +0100 (Do, 14 Dez 2006) | 8 lines
+
+Add an install target to the flashrom Makefile which installs flashrom
+into /usr/local/bin. Closes #54.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+
+------------------------------------------------------------------------
+r2518 | uwe | 2006-12-04 09:20:40 +0100 (Mo, 04 Dez 2006) | 6 lines
+
+Update list of supported flash chips in the flashrom README (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2517 | uwe | 2006-12-04 09:15:47 +0100 (Mo, 04 Dez 2006) | 9 lines
+
+List the supported flash chips and southbridges in the flashrom
+README file (trivial).
+
+Closes #52.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2507 | uwe | 2006-11-22 16:27:29 +0100 (Mi, 22 Nov 2006) | 6 lines
+
+Fix location of the bug tracker in the manpage (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2505 | stepan | 2006-11-22 01:29:51 +0100 (Mi, 22 Nov 2006) | 19 lines
+
+apply patch from Giampiero Giancipoli <gianci@email.it>:
+
+Fixed write_page_write_jedec() in jedec.c. Added a check-reprogram loop
+in the same function, to come around the high page write failure rate on
+some boards.
+
+This patch includes the changes suggested by Ron to simplify the control
+flow.
+
+It also includes trivial changes by me to make flashrom build on newer 
+systems (libpci needs libz now). I also made a small type case compile fix
+and proper return code handling in one or two places.
+
+Signed-off-by: Giampiero Giancipoli <gianci@email.it>
+Signed-off-by: Ronald G Minnich <rminnich@gmail.com>
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2504 | stepan | 2006-11-22 00:51:08 +0100 (Mi, 22 Nov 2006) | 4 lines
+
+Add support for ASD AE49F2008 
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de> (trivial patch)
+
+------------------------------------------------------------------------
+r2503 | stepan | 2006-11-22 00:48:51 +0100 (Mi, 22 Nov 2006) | 6 lines
+
+flashrom: Only write the flash if the image has the same size
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Segher Boessenkool <segher@kernel.crashing.org>
+
+
+------------------------------------------------------------------------
+r2502 | uwe | 2006-11-21 16:09:05 +0100 (Di, 21 Nov 2006) | 6 lines
+
+Rename SM_ID to SYNCMOS_ID (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2501 | uwe | 2006-11-21 16:02:27 +0100 (Di, 21 Nov 2006) | 7 lines
+
+Add support for the SyncMOS S29C51001T, S29C51004T, and S29C31004T
+flash chips to flashrom (closes: #50).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+
+------------------------------------------------------------------------
+r2500 | uwe | 2006-11-20 21:32:35 +0100 (Mo, 20 Nov 2006) | 6 lines
+
+Cosmetic fixes and typos (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2499 | uwe | 2006-11-20 21:03:07 +0100 (Mo, 20 Nov 2006) | 6 lines
+
+Support for the 256K SyncMos S29C51002T flash.
+
+Signed-off-by: Giampiero Giancipoli <gianci@email.it>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r2494 | stepan | 2006-11-07 14:48:46 +0100 (Di, 07 Nov 2006) | 5 lines
+
+Instead of checking the first byte only, the whole part is checked now. This
+will detect any improper erase, closes #31
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de> 
+
+------------------------------------------------------------------------
+r2493 | uwe | 2006-11-07 12:16:21 +0100 (Di, 07 Nov 2006) | 8 lines
+
+Fix some code comments of the Intel PIIX4/PIIX4E/PIIX4M code.
+Add detailed instructions on how and where to get the datasheet,
+its name, and order number (Closes #34).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de> 
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2492 | stepan | 2006-11-07 11:22:20 +0100 (Di, 07 Nov 2006) | 5 lines
+
+Support for VIA VT82C686 in flashrom utility (trivial)
+closes #30
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2489 | uwe | 2006-11-05 19:26:08 +0100 (So, 05 Nov 2006) | 7 lines
+
+Add support for Intel PIIX4/PIIX4E/PIIX4M-based mainboards to flashrom.
+Tested on real hardware, reading, detecting and writing various chips works.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r2456 | stepan | 2006-10-14 23:04:49 +0200 (Sa, 14 Okt 2006) | 3 lines
+
+* add vt8237 support (Uwe Hermann)
+* add more MCP51 support (me)
+
+------------------------------------------------------------------------
+r2450 | stepan | 2006-10-08 00:59:03 +0200 (So, 08 Okt 2006) | 4 lines
+
+here's a small patch to add support for the SST 49LF020A to flashrom.
+by Uwe Hermann <uwe@hermann-uwe.de>
+X-Signed-Off-By: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2449 | stepan | 2006-10-07 02:23:51 +0200 (Sa, 07 Okt 2006) | 4 lines
+
+Tiny patch to show the size of the detected flash part 
+from Uwe Hermann <uwe@hermann-uwe.de>
+X-Signed-Off-By: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2448 | stepan | 2006-10-07 02:21:13 +0200 (Sa, 07 Okt 2006) | 4 lines
+
+Fix flashrom for sst49lf080a and small print bug,
+by Roman Kononov <kononov195-lbl@yahoo.com>.
+X-Signed-Off-By: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r2431 | stepan | 2006-09-21 15:09:22 +0200 (Do, 21 Sep 2006) | 2 lines
+
+abuild manpage and other fixes from Uwe Hermann. Thank you!
+
+------------------------------------------------------------------------
+r2395 | stepan | 2006-09-06 17:48:48 +0200 (Mi, 06 Sep 2006) | 2 lines
+
+Add patch from Uwe Hermann to support more ICH southbridges
+
+------------------------------------------------------------------------
+r2390 | stepan | 2006-08-25 21:21:42 +0200 (Fr, 25 Aug 2006) | 2 lines
+
+Print a warning if southbridge is not known to flashrom.
+
+------------------------------------------------------------------------
+r2386 | stepan | 2006-08-23 16:33:54 +0200 (Mi, 23 Aug 2006) | 2 lines
+
+Removing $Id$ tags as they have no meaning in SVN
+
+------------------------------------------------------------------------
+r2358 | stepan | 2006-08-03 12:49:09 +0200 (Do, 03 Aug 2006) | 2 lines
+
+some documentation updates by Uwe and some smaller ones by me.
+
+------------------------------------------------------------------------
+r2354 | stepan | 2006-08-01 01:37:17 +0200 (Di, 01 Aug 2006) | 3 lines
+
+Add support for SST39SF040 and SST39SF010A
+apply C.-D. Hailfinger's patch for Winbond part (untested)
+
+------------------------------------------------------------------------
+r2349 | stepan | 2006-07-28 01:29:02 +0200 (Fr, 28 Jul 2006) | 2 lines
+
+add flashrom manpage from Uwe Hermann
+
+------------------------------------------------------------------------
+r2341 | stepan | 2006-07-19 17:13:21 +0200 (Mi, 19 Jul 2006) | 6 lines
+
+From: Scott Tsai, scott.tsai <AT> arima.com.tw
+Tested on my home Shuttle SB51G box.
+data sheet:
+http://www.alldatasheet.com/datasheet-pdf/pdf/47674/WINBOND/W49V002FAP.html
+
+
+------------------------------------------------------------------------
+r2336 | stepan | 2006-06-30 22:07:50 +0200 (Fr, 30 Jun 2006) | 2 lines
+
+add support for EFST F49B002UA (untested)
+
+------------------------------------------------------------------------
+r2332 | stepan | 2006-06-25 11:56:45 +0200 (So, 25 Jun 2006) | 2 lines
+
+add support for PMC 49FL002 as used in the RD1-PMC2
+
+------------------------------------------------------------------------
+r2321 | stepan | 2006-06-14 17:58:41 +0200 (Mi, 14 Jun 2006) | 2 lines
+
+new flash part
+
+------------------------------------------------------------------------
+r2230 | stepan | 2006-03-31 13:36:06 +0200 (Fr, 31 Mär 2006) | 6 lines
+
+* https://openbios.org/roundup/linuxbios/issue96 - SST_49LF040B flash support for flashrom
+* https://openbios.org/roundup/linuxbios/issue99 - add ICH4-M support to flashrom
+
+both from scott.tsai <AT> arima.com.tw
+
+
+------------------------------------------------------------------------
+r2229 | stepan | 2006-03-31 13:26:55 +0200 (Fr, 31 Mär 2006) | 4 lines
+
+* support for Winbond W39V040A
+* Support for ATI SB400 (RS480 chipset)
+* Support for Intel ICH7 (from Scott Tsai, scott.tsai <AT> arima.com.tw)
+
+------------------------------------------------------------------------
+r2220 | stepan | 2006-03-20 22:37:54 +0100 (Mo, 20 Mär 2006) | 2 lines
+
+compilation fix for gcc 4.0.2 (SUSE10)
+
+------------------------------------------------------------------------
+r2215 | stepan | 2006-03-19 23:30:42 +0100 (So, 19 Mär 2006) | 3 lines
+
+redo ts5300 auto.c
+add ts5300 flag as comment in flashrom utility Makefile
+
+------------------------------------------------------------------------
+r2210 | stepan | 2006-03-17 23:35:56 +0100 (Fr, 17 Mär 2006) | 3 lines
+
+update dumpmmcr.c utility
+another flash chip that doesn't clog the serial line
+
+------------------------------------------------------------------------
+r2205 | stepan | 2006-03-16 17:57:41 +0100 (Do, 16 Mär 2006) | 5 lines
+
+- speed up flash verification by only printing 1 of 4096 addresses
+- support for flashing technologic system ts5300 SBC (needs -DTS5300 in
+  the makefile)
+
+
+------------------------------------------------------------------------
+r2204 | stepan | 2006-03-16 17:46:19 +0100 (Do, 16 Mär 2006) | 3 lines
+
+make am29f040b driver more solid by printing every 4096th flash address.
+This fixes the timing when flashing over a serial console.
+
+------------------------------------------------------------------------
+r2203 | stepan | 2006-03-16 17:44:07 +0100 (Do, 16 Mär 2006) | 2 lines
+
+support for Am29F016D
+
+------------------------------------------------------------------------
+r2197 | rminnich | 2006-03-14 20:58:14 +0100 (Di, 14 Mär 2006) | 5 lines
+
+Fix for nehemiah
+other fixes for gx2 ram init. 
+
+support for sharplfg00l04 -- not working yet.
+
+------------------------------------------------------------------------
+r2189 | rminnich | 2006-03-01 17:11:05 +0100 (Mi, 01 Mär 2006) | 2 lines
+
+a few new items and mods for ollie
+
+------------------------------------------------------------------------
+r2183 | rminnich | 2006-02-24 18:10:10 +0100 (Fr, 24 Feb 2006) | 2 lines
+
+added support for ICH5
+
+------------------------------------------------------------------------
+r2182 | stepan | 2006-02-24 14:47:26 +0100 (Fr, 24 Feb 2006) | 2 lines
+
+new flashchip support by Leon Woestenberg <leonw@mailcan.com>
+
+------------------------------------------------------------------------
+r2180 | rminnich | 2006-02-23 18:16:44 +0100 (Do, 23 Feb 2006) | 2 lines
+
+added sharp flash
+
+------------------------------------------------------------------------
+r2151 | stepan | 2006-01-04 17:42:57 +0100 (Mi, 04 Jan 2006) | 2 lines
+
+pass on return values
+
+------------------------------------------------------------------------
+r2147 | stepan | 2005-12-18 19:40:46 +0100 (So, 18 Dez 2005) | 3 lines
+
+redo image checking in conversion case. Please update to this
+release if you are using flashrom.
+
+------------------------------------------------------------------------
+r2146 | stepan | 2005-12-18 17:41:10 +0100 (So, 18 Dez 2005) | 4 lines
+
+* make -v switch print debug messages.
+* do case insensitive comparison of mainboards, as wished on the
+  mailinglist
+
+------------------------------------------------------------------------
+r2117 | stepan | 2005-12-01 17:19:24 +0100 (Do, 01 Dez 2005) | 2 lines
+
+issue 40, make flashrom utility build process more solid.
+
+------------------------------------------------------------------------
+r2114 | stepan | 2005-12-01 11:51:08 +0100 (Do, 01 Dez 2005) | 2 lines
+
+mention build dependencies in Makefile.
+
+------------------------------------------------------------------------
+r2111 | ollie | 2005-11-26 22:55:36 +0100 (Sa, 26 Nov 2005) | 1 line
+
+flasrom update from Stefan, resovle issue 21
+------------------------------------------------------------------------
+r2102 | stepan | 2005-11-24 11:45:34 +0100 (Do, 24 Nov 2005) | 2 lines
+
+rename the directory to match the program name
+
+------------------------------------------------------------------------
+r1988 | ollie | 2005-08-03 17:04:53 +0200 (Mi, 03 Aug 2005) | 1 line
+
+bug fix from Jonathan McDowell <noodles@earth.li>
+------------------------------------------------------------------------
+r1946 | arch | 2005-07-06 19:13:46 +0200 (Mi, 06 Jul 2005) | 5 lines
+
+Revision: linuxbios@linuxbios.org--devel/freebios--devel--2.0--patch-30
+Creator:  Yinghai Lu <yhlu@tyan.com>
+
+Nvidia Ck804 support
+
+------------------------------------------------------------------------
+r1852 | ollie | 2005-01-11 03:48:22 +0100 (Di, 11 Jan 2005) | 2 lines
+
+*** empty log message ***
+
+------------------------------------------------------------------------
+r1815 | ollie | 2004-12-08 21:10:01 +0100 (Mi, 08 Dez 2004) | 2 lines
+
+added -E option for chip erase, remove duplicated code
+
+------------------------------------------------------------------------
+r1814 | ollie | 2004-12-08 03:10:33 +0100 (Mi, 08 Dez 2004) | 2 lines
+
+add retry to write_byte_program_jedec(), 99% success rate
+
+------------------------------------------------------------------------
+r1813 | ollie | 2004-12-07 18:19:04 +0100 (Di, 07 Dez 2004) | 2 lines
+
+enable LPC decoding for 1 MB more addresss, for supporting SST49LF00xA/B
+
+------------------------------------------------------------------------
+r1812 | ollie | 2004-12-07 04:15:51 +0100 (Di, 07 Dez 2004) | 3 lines
+
+SST49LF00[2,3,4] should use
+the same driver as 49LF008
+
+------------------------------------------------------------------------
+r1693 | yhlu | 2004-10-20 07:07:16 +0200 (Mi, 20 Okt 2004) | 2 lines
+
+Tyan update to work with new CPU Config
+
+------------------------------------------------------------------------
+r1651 | rminnich | 2004-09-30 18:37:01 +0200 (Do, 30 Sep 2004) | 2 lines
+
+support for sst firmware hub
+
+------------------------------------------------------------------------
+r1650 | rminnich | 2004-09-28 22:32:17 +0200 (Di, 28 Sep 2004) | 2 lines
+
+use hex print in id1, id2
+
+------------------------------------------------------------------------
+r1649 | rminnich | 2004-09-28 22:09:06 +0200 (Di, 28 Sep 2004) | 2 lines
+
+add support for ICH4. more i955pm stuff.
+
+------------------------------------------------------------------------
+r1647 | ollie | 2004-09-07 23:31:47 +0200 (Di, 07 Sep 2004) | 2 lines
+
+code reformat
+
+------------------------------------------------------------------------
+r1496 | rminnich | 2004-04-13 21:10:48 +0200 (Di, 13 Apr 2004) | 2 lines
+
+add missing return at 205
+
+------------------------------------------------------------------------
+r1487 | ollie | 2004-03-27 01:31:03 +0100 (Sa, 27 Mär 2004) | 2 lines
+
+data tye consistence
+
+------------------------------------------------------------------------
+r1486 | ollie | 2004-03-27 01:18:15 +0100 (Sa, 27 Mär 2004) | 2 lines
+
+removed false alarm of erase/write, use verify '-v' if you are not sure about the integrity
+
+------------------------------------------------------------------------
+r1464 | ollie | 2004-03-22 23:19:17 +0100 (Mo, 22 Mär 2004) | 2 lines
+
+more jedec standard consolidatation.
+
+------------------------------------------------------------------------
+r1459 | ollie | 2004-03-20 18:39:43 +0100 (Sa, 20 Mär 2004) | 2 lines
+
+rmove unused #define and function declaretion
+
+------------------------------------------------------------------------
+r1458 | ollie | 2004-03-20 18:05:01 +0100 (Sa, 20 Mär 2004) | 3 lines
+
+I have no idea what i was trying to show off when I used the while loop rather
+than for loop. Please forgive me, I was too young 4 years ago.
+
+------------------------------------------------------------------------
+r1457 | ollie | 2004-03-20 17:46:10 +0100 (Sa, 20 Mär 2004) | 2 lines
+
+consolidate more jedec standard code
+
+------------------------------------------------------------------------
+r1456 | ollie | 2004-03-19 23:10:07 +0100 (Fr, 19 Mär 2004) | 2 lines
+
+remove duplicated code
+
+------------------------------------------------------------------------
+r1439 | dhendricks | 2004-03-18 22:59:05 +0100 (Do, 18 Mär 2004) | 2 lines
+
+Added support for SST49LF0xxA parts.
+
+------------------------------------------------------------------------
+r1438 | dhendricks | 2004-03-18 22:55:22 +0100 (Do, 18 Mär 2004) | 2 lines
+
+Added support for more SST 49lf0xxA parts
+
+------------------------------------------------------------------------
+r1437 | ollie | 2004-03-18 21:35:33 +0100 (Do, 18 Mär 2004) | 2 lines
+
+forgot a semicolon
+
+------------------------------------------------------------------------
+r1436 | ollie | 2004-03-18 21:31:54 +0100 (Do, 18 Mär 2004) | 2 lines
+
+removed unused code in pm49fl004, remove experimental delay in sst49lf040
+
+------------------------------------------------------------------------
+r1435 | ollie | 2004-03-18 21:27:33 +0100 (Do, 18 Mär 2004) | 2 lines
+
+fixed stupid i++ evalution order bug
+
+------------------------------------------------------------------------
+r1434 | ollie | 2004-03-18 20:40:07 +0100 (Do, 18 Mär 2004) | 2 lines
+
+fixed 32bit v.s. 64bit long int arithematics
+
+------------------------------------------------------------------------
+r1433 | ollie | 2004-03-18 00:03:37 +0100 (Do, 18 Mär 2004) | 4 lines
+
+removed spd_dump.c, it has nothing to do with flashing flash parts.
+use standard product ID exit method for w49f002u
+move udelay stuff into its own file
+
+------------------------------------------------------------------------
+r1428 | ollie | 2004-03-17 23:22:08 +0100 (Mi, 17 Mär 2004) | 2 lines
+
+move utility functions into new source files
+
+------------------------------------------------------------------------
+r1422 | dhendricks | 2004-03-17 22:47:30 +0100 (Mi, 17 Mär 2004) | 2 lines
+
+Added support for SST49LF040
+
+------------------------------------------------------------------------
+r1376 | rminnich | 2004-02-14 00:09:54 +0100 (Sa, 14 Feb 2004) | 2 lines
+
+fix makefile
+
+------------------------------------------------------------------------
+r1375 | rminnich | 2004-02-10 22:34:18 +0100 (Di, 10 Feb 2004) | 2 lines
+
+now we support 8111 and these parts.
+
+------------------------------------------------------------------------
+r1255 | rminnich | 2003-11-05 17:36:57 +0100 (Mi, 05 Nov 2003) | 2 lines
+
+fix volatile
+
+------------------------------------------------------------------------
+r1232 | rminnich | 2003-10-25 19:01:29 +0200 (Sa, 25 Okt 2003) | 2 lines
+
+due to popular demand, added flash_and_burn to the freebios2 tree.
+
+------------------------------------------------------------------------

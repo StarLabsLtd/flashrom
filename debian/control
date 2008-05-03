@@ -2,12 +2,12 @@ Source: flashrom
 Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
-Build-Depends: cdbs, debhelper (>= 5), pciutils-dev, zlib1g-dev
+Build-Depends: cdbs, debhelper (>= 5), libpci-dev
 Standards-Version: 3.7.3
 Homepage: http://coreboot.org/Flashrom
 
 Package: flashrom
-Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 ia64 netbsd-alpha netbsd-i386
+Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 netbsd-alpha netbsd-i386
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Universal BIOS/ROM/flash programming utility
  Flashrom is a universal flash programming utility for ROM/flash chips
