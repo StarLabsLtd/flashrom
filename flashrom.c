@@ -43,7 +43,7 @@
 char *chip_to_probe = NULL;
 struct pci_access *pacc;	/* For board and chipset_enable */
 int exclude_start_page, exclude_end_page;
-int force = 0, verbose = 0;
+int verbose = 0;
 int fd_mem;
 
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device)
@@ -74,8 +74,8 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 
 	for (temp = pacc->devices; temp; temp = temp->next)
 		if (pci_filter_match(&filter, temp)) {
-			if ((card_vendor == pci_read_word(temp, 0x2C)) &&
-			    (card_device == pci_read_word(temp, 0x2E)))
+			if ((card_vendor == pci_read_word(temp, PCI_SUBSYSTEM_VENDOR_ID)) &&
+			    (card_device == pci_read_word(temp, PCI_SUBSYSTEM_ID)))
 				return temp;
 		}
 
@@ -99,7 +99,7 @@ int map_flash_registers(struct flashchip *flash)
 	return 0;
 }
 
-struct flashchip *probe_flash(struct flashchip *flash)
+struct flashchip *probe_flash(struct flashchip *flash, int force)
 {
 	volatile uint8_t *bios;
 	unsigned long flash_baseaddr, size;
@@ -111,7 +111,7 @@ struct flashchip *probe_flash(struct flashchip *flash)
 		}
 		printf_debug("Probing for %s %s, %d KB: ",
 			     flash->vendor, flash->name, flash->total_size);
-		if (!flash->probe) {
+		if (!flash->probe && !force) {
 			printf_debug("failed! flashrom has no probe function for this flash chip.\n");
 			flash++;
 			continue;
@@ -150,9 +150,10 @@ struct flashchip *probe_flash(struct flashchip *flash)
 		}
 		flash->virtual_memory = bios;
 
-		if (flash->probe(flash) == 1) {
-			printf("%s found at physical address 0x%lx.\n",
-			       flash->name, flash_baseaddr);
+		if (force || flash->probe(flash) == 1) {
+			printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
+			       flash->vendor, flash->name, flash->total_size,
+			       flash_baseaddr);
 			return flash;
 		}
 		munmap((void *)bios, size);
@@ -186,7 +187,8 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 			if (verbose) {
 				printf("0x%08x ", idx);
 			}
-			printf("FAILED!\n");
+			printf("FAILED!  Expected=0x%02x, Read=0x%02x\n",
+				*(buf + idx), *(buf2 + idx));
 			return 1;
 		}
 
@@ -246,11 +248,16 @@ int main(int argc, char *argv[])
 	uint8_t *buf;
 	unsigned long size;
 	FILE *image;
-	struct flashchip *flash;
+	/* Probe for up to three flash chips. */
+	struct flashchip *flash, *flashes[3];
 	int opt;
 	int option_index = 0;
+	int force = 0;
 	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
-	int ret = 0;
+	int ret = 0, i;
+#ifdef __FreeBSD__
+	int io_fd;
+#endif
 
 	static struct option long_options[] = {
 		{"read", 0, 0, 'r'},
@@ -356,7 +363,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (read_it && write_it) {
-		printf("-r and -w are mutually exclusive\n");
+		printf("Error: -r and -w are mutually exclusive.\n");
 		usage(argv[0]);
 	}
 
@@ -366,10 +373,12 @@ int main(int argc, char *argv[])
 	/* First get full io access */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
 	if (sysi86(SI86V86, V86SC_IOPL, PS_IOPL) != 0) {
+#elif defined(__FreeBSD__)
+	if ((io_fd = open("/dev/io", O_RDWR)) < 0) {
 #else
 	if (iopl(3) != 0) {
 #endif
-		fprintf(stderr, "ERROR: iopl failed: \"%s\"\n",
+               fprintf(stderr, "ERROR: Could not get IO privileges (%s).\nYou need to be root.\n",
 			strerror(errno));
 		exit(1);
 	}
@@ -380,8 +389,8 @@ int main(int argc, char *argv[])
 	pci_init(pacc);		/* Initialize the PCI library */
 	pci_scan_bus(pacc);	/* We want to get the list of devices */
 
-	/* Open the memory device. A lot of functions need it */
-	if ((fd_mem = open(MEM_DEV, O_RDWR)) < 0) {
+	/* Open the memory device UNCACHED. That's important for MMIO. */
+	if ((fd_mem = open(MEM_DEV, O_RDWR|O_SYNC)) < 0) {
 		perror("Error: Can not access memory using " MEM_DEV
 		       ". You need to be root.");
 		exit(1);
@@ -405,13 +414,95 @@ int main(int argc, char *argv[])
 
 	board_flash_enable(lb_vendor, lb_part);
 
-	if ((flash = probe_flash(flashchips)) == NULL) {
+	for (i = 0; i < ARRAY_SIZE(flashes); i++) {
+		flashes[i] = probe_flash(i ? flashes[i - 1] + 1 : flashchips, 0);
+		if (!flashes[i])
+			for (i++; i < ARRAY_SIZE(flashes); i++)
+				flashes[i] = NULL;
+	}
+
+	if (flashes[1]) {
+		printf("Multiple flash chips were detected:");
+		for (i = 0; i < ARRAY_SIZE(flashes) && flashes[i]; i++)
+			printf(" %s", flashes[i]->name);
+		printf("\nPlease specify which chip to use with the -c <chipname> option.\n");
+		exit(1);
+	} else if (!flashes[0]) {
 		printf("No EEPROM/flash device found.\n");
+		if (!force || !chip_to_probe) {
+			printf("If you know which flash chip you have, and if this version of flashrom\n");
+			printf("supports a similar flash chip, you can try to force read your chip. Run:\n");
+			printf("flashrom -f -r -c similar_supported_flash_chip filename\n");
+			printf("\n");
+			printf("Note: flashrom can never write when the flash chip isn't found automatically.\n");
+		}
+		if (force && read_it && chip_to_probe) {
+			printf("Force read (-f -r -c) requested, forcing chip probe success:\n");
+			flashes[0] = probe_flash(flashchips, 1);
+			if (!flashes[0]) {
+				printf("flashrom does not support a flash chip named '%s'.\n", chip_to_probe);
+				printf("Run flashrom -L to view the hardware supported in this flashrom version.\n");
+				exit(1);
+			}
+			size = flashes[0]->total_size * 1024;
+			buf = (uint8_t *) calloc(size, sizeof(char));
+
+			if ((image = fopen(filename, "w")) == NULL) {
+				perror(filename);
+				exit(1);
+			}
+			printf("Force reading flash...");
+			if (!flashes[0]->read)
+				memcpy(buf, (const char *)flashes[0]->virtual_memory, size);
+			else
+				flashes[0]->read(flashes[0], buf);
+
+			if (exclude_end_position - exclude_start_position > 0)
+				memset(buf + exclude_start_position, 0,
+				       exclude_end_position - exclude_start_position);
+
+			fwrite(buf, sizeof(char), size, image);
+			fclose(image);
+			printf("done\n");
+			free(buf);
+			exit(0);
+		}
 		// FIXME: flash writes stay enabled!
 		exit(1);
 	}
 
-	printf("Flash part is %s (%d KB).\n", flash->name, flash->total_size);
+	flash = flashes[0];
+
+	if (TEST_OK_MASK != (flash->tested & TEST_OK_MASK)) {
+		printf("===\n");
+		if (flash->tested & TEST_BAD_MASK) {
+			printf("This flash part has status NOT WORKING for operations:");
+			if (flash->tested & TEST_BAD_PROBE)
+				printf(" PROBE");
+			if (flash->tested & TEST_BAD_READ)
+				printf(" READ");
+			if (flash->tested & TEST_BAD_ERASE)
+				printf(" ERASE");
+			if (flash->tested & TEST_BAD_WRITE)
+				printf(" WRITE");
+			printf("\n");
+		} else {
+			printf("This flash part has status UNTESTED for operations:");
+			if (!(flash->tested & TEST_OK_PROBE))
+				printf(" PROBE");
+			if (!(flash->tested & TEST_OK_READ))
+				printf(" READ");
+			if (!(flash->tested & TEST_OK_ERASE))
+				printf(" ERASE");
+			if (!(flash->tested & TEST_OK_WRITE))
+				printf(" WRITE");
+			printf("\n");
+		}
+		printf("Please email a report to flashrom@coreboot.org if any of the above operations\n");
+		printf("work correctly for you with this flash part. Please include the full output\n");
+		printf("from the program, including chipset found. Thank you for your help!\n");
+		printf("===\n");
+	}
 
 	if (!(read_it | write_it | verify_it | erase_it)) {
 		printf("No operations were specified.\n");
@@ -429,7 +520,7 @@ int main(int argc, char *argv[])
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
-		printf("Erasing flash chip\n");
+		printf("Erasing flash chip.\n");
 		if (!flash->erase) {
 			fprintf(stderr, "Error: flashrom has no erase function for this flash chip.\n");
 			return 1;
@@ -466,12 +557,12 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		if (image_stat.st_size != flash->total_size * 1024) {
-			fprintf(stderr, "Error: Image size doesnt match\n");
+			fprintf(stderr, "Error: Image size doesn't match\n");
 			exit(1);
 		}
 
 		fread(buf, sizeof(char), size, image);
-		show_id(buf, size);
+		show_id(buf, size, force);
 		fclose(image);
 	}
 
@@ -513,5 +604,8 @@ int main(int argc, char *argv[])
 	if (verify_it)
 		ret |= verify_flash(flash, buf);
 
+#ifdef __FreeBSD__
+	close(io_fd);
+#endif
 	return ret;
 }

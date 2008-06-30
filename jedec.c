@@ -27,6 +27,14 @@
 
 #define MAX_REFLASH_TRIES 0x10
 
+/* Check one byte for odd parity */
+uint8_t oddparity(uint8_t val)
+{
+	val = (val ^ (val >> 4)) & 0xf;
+	val = (val ^ (val >> 2)) & 0x3;
+	return (val ^ (val >> 1)) & 0x1;
+}
+
 void toggle_ready_jedec(volatile uint8_t *dst)
 {
 	unsigned int i = 0;
@@ -92,10 +100,9 @@ int probe_jedec(struct flashchip *flash)
 	myusec_delay(10);
 	*(volatile uint8_t *)(bios + 0x5555) = 0x90;
 	/* Older chips may need up to 100 us to respond. The ATMEL 29C020
-	 * needs 10 ms according to the data sheet, but it has been tested
-	 * to work reliably with 20 us. Allow a factor of 2 safety margin.
+	 * needs 10 ms according to the data sheet.
 	 */
-	myusec_delay(40);
+	myusec_delay(10000);
 
 	/* Read product ID */
 	id1 = *(volatile uint8_t *)bios;
@@ -123,7 +130,10 @@ int probe_jedec(struct flashchip *flash)
 	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
 	myusec_delay(40);
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, largeid1, largeid2);
+	printf_debug("%s: id1 0x%x, id2 0x%x", __FUNCTION__, largeid1, largeid2);
+	if (!oddparity(id1))
+		printf_debug(", id1 parity violation");
+	printf_debug("\n");
 	if (largeid1 == flash->manufacture_id && largeid2 == flash->model_id)
 		return 1;
 

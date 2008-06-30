@@ -11,7 +11,7 @@ STRIP	= strip
 INSTALL = /usr/bin/install
 PREFIX  = /usr/local
 #CFLAGS  = -O2 -g -Wall -Werror
-CFLAGS  = -Os -Wall -Werror -DDISABLE_DOC # -DTS5300
+CFLAGS  = -Os -Wall -Werror # -DTS5300
 OS_ARCH	= $(shell uname)
 ifeq ($(OS_ARCH), SunOS)
 LDFLAGS = -lpci -lz
@@ -19,12 +19,17 @@ else
 LDFLAGS = -lpci -lz
 STRIP_ARGS = -s
 endif
+ifeq ($(OS_ARCH), FreeBSD)
+CFLAGS += -I/usr/local/include
+LDFLAGS += -L/usr/local/lib
+endif
 
-OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.c \
+OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
 	sst28sf040.o am29f040b.o mx29f002.o sst39sf020.o m29f400bt.o \
-	w49f002u.o 82802ab.o msys_doc.o pm49fl004.o sst49lf040.o \
+	w49f002u.o 82802ab.o pm49fl00x.o sst49lf040.o \
 	sst49lfxxxc.o sst_fwhub.o layout.o cbtable.o flashchips.o \
-	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o
+	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o it87spi.o \
+	ichspi.o
 
 all: pciutils dep $(PROGRAM)
 
@@ -41,11 +46,11 @@ flashrom.o: flashrom.c
 	$(CC) -c $(CFLAGS) $(SVNDEF) $(CPPFLAGS) $< -o $@
 
 clean:
-	rm -f *.o *~
+	rm -f $(PROGRAM) *.o *~
 
 distclean: clean
-	rm -f $(PROGRAM) .dependencies
-	
+	rm -f .dependencies
+
 dep:
 	@$(CC) -MM *.c > .dependencies
 
@@ -63,11 +68,10 @@ pciutils:
 	@rm -f .test.c .test
 
 install: $(PROGRAM)
-	$(INSTALL) flashrom $(PREFIX)/sbin
+	$(INSTALL) $(PROGRAM) $(PREFIX)/sbin
 	mkdir -p $(PREFIX)/share/man/man8
 	$(INSTALL) $(PROGRAM).8 $(PREFIX)/share/man/man8
 
 .PHONY: all clean distclean dep pciutils
 
 -include .dependencies
-

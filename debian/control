@@ -3,7 +3,7 @@ Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 5), libpci-dev
-Standards-Version: 3.7.3
+Standards-Version: 3.8.0
 Homepage: http://coreboot.org/Flashrom
 
 Package: flashrom

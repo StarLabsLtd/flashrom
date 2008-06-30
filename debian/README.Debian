@@ -1,9 +1,9 @@
 flashrom for Debian
 -------------------
 
-WARNING: Be careful with the write operation (-w option)! If you
+WARNING: Be careful with the write and erase operations (-w and -E)! If you
          accidentally overwrite the BIOS of your computer with a broken
          or incorrect BIOS, your computer will be broken and cannot be
          easily recovered! You have been warned!
 
- -- Uwe Hermann <uwe@debian.org>  Thu, 23 Nov 2006 14:48:04 +0100
+ -- Uwe Hermann <uwe@debian.org>  Mon, 30 Jun 2008 17:15:46 +0200

@@ -1,3 +1,10 @@
+flashrom (0.0+r3397-1) unstable; urgency=low
+
+  * New upstream release.
+  * Standards-Version: 3.8.0 (no changes required).
+
+ -- Uwe Hermann <uwe@debian.org>  Mon, 30 Jun 2008 17:11:25 +0200
+
 flashrom (0.0+r3274-1) unstable; urgency=low
 
   * New upstream release.

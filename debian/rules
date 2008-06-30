@@ -7,13 +7,13 @@ include /usr/share/cdbs/1/rules/simple-patchsys.mk
 
 DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
 LDFLAGS += -lpci
-CFLAGS += -DDISABLE_DOC -D'FLASHROM_VERSION=\"3274\"'
+CFLAGS += -D'FLASHROM_VERSION=\"3397\"'
 
 # Upstream ChangeLog generated via 'svn log > ChangeLog'.
 DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog
 
 clean::
-	rm -f flashrom .dependencies core .test.c .test
+	rm -f .dependencies core .test.c .test
 
 common-binary-post-install-arch:: list-missing
 
