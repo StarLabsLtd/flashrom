@@ -1,3 +1,10 @@
+flashrom (0.0+r3613-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/watch: Add dummy file to silence lintian (we track svn revisions).
+
+ -- Uwe Hermann <uwe@debian.org>  Sat, 27 Sep 2008 19:28:36 +0200
+
 flashrom (0.0+r3397-1) unstable; urgency=low
 
   * New upstream release.

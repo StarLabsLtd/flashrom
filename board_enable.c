@@ -114,6 +114,7 @@ static int w83627hf_gpio24_raise_2e(const char *name)
  * Winbond W83627THF: GPIO 4, bit 4
  *
  * Suited for:
+ *  - MSI K8T Neo2-F
  *  - MSI K8N-NEO3
  */
 static int w83627thf_gpio4_4_raise(uint16_t index, const char *name)
@@ -139,6 +140,11 @@ static int w83627thf_gpio4_4_raise(uint16_t index, const char *name)
 	w836xx_ext_leave(index);
 
 	return 0;
+}
+
+static int w83627thf_gpio4_4_raise_2e(const char *name)
+{
+	return w83627thf_gpio4_4_raise(0x2e, name);
 }
 
 static int w83627thf_gpio4_4_raise_4e(const char *name)
@@ -542,6 +548,51 @@ static int board_biostar_p4m80_m4(const char *name)
 }
 
 /**
+ * Winbond W83697HF Super I/O + VIA VT8235 southbridge
+ *
+ * Suited for:
+ *   - MSI KT4V and KT4V-L: AMD K7 + VIA KT400 + VT8235
+ *   - MSI KT3 Ultra2: AMD K7 + VIA KT333 + VT8235
+ */
+static int board_msi_kt4v(const char *name)
+{
+	struct pci_dev *dev;
+	uint8_t val;
+	uint32_t val2;
+	uint16_t port;
+
+	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
+	if (!dev) {
+		fprintf(stderr, "\nERROR: VT823x ISA bridge not found.\n");
+		return -1;
+	}
+
+	val = pci_read_byte(dev, 0x59);
+	val &= 0x0c;
+	pci_write_byte(dev, 0x59, val);
+
+	/* We need the I/O Base Address for this board's flash enable. */
+	port = pci_read_word(dev, 0x88) & 0xff80;
+
+	/* Starting at 'I/O Base + 0x4c' is the GPO Port Output Value.
+	 * We must assert GPO12 for our enable, which is in 0x4d.
+	 */
+	val2 = INB(port + 0x4d);
+	val2 |= 0x10;
+	OUTB(val2, port + 0x4d);
+
+	/* Raise ROM MEMW# line on Winbond W83697 Super I/O. */
+	w836xx_ext_enter(0x2e);
+	if (!(wbsio_read(0x2e, 0x24) & 0x02)) {	/* Flash ROM enabled? */
+		/* Enable MEMW# and set ROM size select to max. (4M). */
+		wbsio_mask(0x2e, 0x24, 0x28, 0x28);
+	}
+	w836xx_ext_leave(0x2e);
+
+	return 0;
+}
+
+/**
  * We use 2 sets of IDs here, you're free to choose which is which. This
  * is to provide a very high degree of certainty when matching a board on
  * the basis of subsystem/card IDs. As not every vendor handles
@@ -575,6 +626,8 @@ struct board_pciid_enable {
 };
 
 struct board_pciid_enable board_pciid_enables[] = {
+	{0x1106, 0x0571, 0x1462, 0x7120, 0x0000, 0x0000, 0x0000, 0x0000,
+	 "msi", "kt4v", "MSI KT4V", board_msi_kt4v},
 	{0x8086, 0x1a30, 0x1043, 0x8070, 0x8086, 0x244b, 0x1043, 0x8028,
 	 NULL, NULL, "ASUS P4B266", ich2_gpio22_raise},
 	{0x10de, 0x0360, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -595,6 +648,8 @@ struct board_pciid_enable board_pciid_enables[] = {
 	 NULL, NULL, "ASUS A7V8-MX SE", board_asus_a7v8x_mx},
 	{0x1106, 0x3227, 0x1106, 0xAA01, 0x1106, 0x0259, 0x1106, 0xAA01,
 	 NULL, NULL, "VIA EPIA SP", board_via_epia_sp},
+	{0x1106, 0x0314, 0x1106, 0xaa08, 0x1106, 0x3227, 0x1106, 0xAA08,
+	 NULL, NULL, "VIA EPIA-CN", board_via_epia_sp},
 	{0x8086, 0x1076, 0x8086, 0x1176, 0x1106, 0x3059, 0x10f1, 0x2498,
 	 NULL, NULL, "Tyan Tomcat K7M", board_asus_a7v8x_mx},
 	{0x10B9, 0x1541, 0x0000, 0x0000, 0x10B9, 0x1533, 0x0000, 0x0000,
@@ -615,6 +670,8 @@ struct board_pciid_enable board_pciid_enables[] = {
  	 NULL, NULL, "BioStar P4M80-M4", board_biostar_p4m80_m4},
  	{0x1106, 0x3227, 0x1458, 0x5001, 0x10ec, 0x8139, 0x1458, 0xe000,
  	 NULL, NULL, "GIGABYTE GA-7VT600", board_biostar_p4m80_m4},
+	{0x1106, 0x3149, 0x1462, 0x7094, 0x10ec, 0x8167, 0x1462, 0x094c,
+	 NULL, NULL, "MSI K8T Neo2", w83627thf_gpio4_4_raise_2e},
 	{0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL}	/* Keep this */
 };
 
@@ -648,10 +705,10 @@ static struct board_pciid_enable *board_match_coreboot_name(const char *vendor, 
 	struct board_pciid_enable *partmatch = NULL;
 
 	for (; board->name; board++) {
-		if (vendor && (!board->lb_vendor || strcmp(board->lb_vendor, vendor)))
+		if (vendor && (!board->lb_vendor || strcasecmp(board->lb_vendor, vendor)))
 			continue;
 
-		if (!board->lb_part || strcmp(board->lb_part, part))
+		if (!board->lb_part || strcasecmp(board->lb_part, part))
 			continue;
 
 		if (!pci_dev_find(board->first_vendor, board->first_device))
@@ -678,8 +735,7 @@ static struct board_pciid_enable *board_match_coreboot_name(const char *vendor, 
 	if (partmatch)
 		return partmatch;
 
-	printf("NOT FOUND %s:%s\n", vendor, part);
-
+	printf("\nUnknown vendor:board from coreboot table or -m option: %s:%s\n\n", vendor, part);
 	return NULL;
 }
 

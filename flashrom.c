@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2004 Tyan Corp <yhlu@tyan.com>
- * Copyright (C) 2005-2007 coresystems GmbH 
+ * Copyright (C) 2005-2008 coresystems GmbH 
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -99,33 +99,23 @@ int map_flash_registers(struct flashchip *flash)
 	return 0;
 }
 
-struct flashchip *probe_flash(struct flashchip *flash, int force)
+struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 {
 	volatile uint8_t *bios;
-	unsigned long flash_baseaddr, size;
+	struct flashchip *flash;
+	unsigned long flash_baseaddr = 0, size;
 
-	while (flash->name != NULL) {
-		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0) {
-			flash++;
+	for (flash = first_flash; flash && flash->name; flash++) {
+		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0)
 			continue;
-		}
 		printf_debug("Probing for %s %s, %d KB: ",
 			     flash->vendor, flash->name, flash->total_size);
 		if (!flash->probe && !force) {
 			printf_debug("failed! flashrom has no probe function for this flash chip.\n");
-			flash++;
 			continue;
 		}
 
 		size = flash->total_size * 1024;
-
-#ifdef TS5300
-		// FIXME: Wrong place for this decision
-		// FIXME: This should be autodetected. It is trivial.
-		flash_baseaddr = 0x9400000;
-#else
-		flash_baseaddr = (0xffffffff - size + 1);
-#endif
 
 		/* If getpagesize() > size -> 
 		 * "Can't mmap memory using /dev/mem: Invalid argument"
@@ -142,6 +132,14 @@ struct flashchip *probe_flash(struct flashchip *flash, int force)
 			size = getpagesize();
 		}
 
+#ifdef TS5300
+		// FIXME: Wrong place for this decision
+		// FIXME: This should be autodetected. It is trivial.
+		flash_baseaddr = 0x9400000;
+#else
+		flash_baseaddr = (0xffffffff - size + 1);
+#endif
+
 		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
 			    fd_mem, (off_t) flash_baseaddr);
 		if (bios == MAP_FAILED) {
@@ -150,18 +148,25 @@ struct flashchip *probe_flash(struct flashchip *flash, int force)
 		}
 		flash->virtual_memory = bios;
 
-		if (force || flash->probe(flash) == 1) {
-			printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
-			       flash->vendor, flash->name, flash->total_size,
-			       flash_baseaddr);
-			return flash;
-		}
-		munmap((void *)bios, size);
+		if (force)
+			break;
 
-		flash++;
+		if (flash->probe(flash) != 1)
+			goto notfound;
+
+		if (first_flash == flashchips || flash->model_id != GENERIC_DEVICE_ID)
+			break;
+
+notfound:
+		munmap((void *)bios, size);
 	}
 
-	return NULL;
+	if (!flash || !flash->name)
+		return NULL;
+
+	printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
+	       flash->vendor, flash->name, flash->total_size, flash_baseaddr);
+	return flash;
 }
 
 int verify_flash(struct flashchip *flash, uint8_t *buf)

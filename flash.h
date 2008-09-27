@@ -119,6 +119,8 @@ extern struct flashchip flashchips[];
 #define AMIC_ID			0x7F37	/* AMIC */
 #define AMIC_ID_NOPREFIX	0x37	/* AMIC */
 #define AMIC_A25L40P		0x2013
+#define AMIC_A29002B		0x0d
+#define AMIC_A29002T		0x8c
 #define AMIC_A29040B		0x86
 #define AMIC_A49LF040A		0x9d
 
@@ -370,9 +372,17 @@ void print_supported_boards(void);
 /* chipset_enable.c */
 int chipset_flash_enable(void);
 void print_supported_chipsets(void);
-extern int ich7_detected;
-extern int ich9_detected;
-extern void *ich_spibar;
+
+typedef enum {
+	BUS_TYPE_LPC,
+	BUS_TYPE_ICH7_SPI,
+	BUS_TYPE_ICH9_SPI,
+	BUS_TYPE_IT87XX_SPI,
+	BUS_TYPE_VIA_SPI
+} flashbus_t;
+
+extern flashbus_t flashbus;
+extern void *spibar;
 
 /* Physical memory mapping device */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
@@ -402,6 +412,7 @@ extern char *lb_part, *lb_vendor;
 
 /* spi.c */
 int probe_spi_rdid(struct flashchip *flash);
+int probe_spi_rdid4(struct flashchip *flash);
 int probe_spi_res(struct flashchip *flash);
 int spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 void spi_write_enable();
@@ -412,7 +423,6 @@ int spi_chip_read(struct flashchip *flash, uint8_t *buf);
 uint8_t spi_read_status_register();
 void spi_disable_blockprotect(void);
 void spi_byte_program(int address, uint8_t byte);
-void spi_page_program(int block, uint8_t *buf, uint8_t *bios);
 void spi_nbyte_read(int address, uint8_t *bytes, int len);
 
 /* 82802ab.c */
@@ -425,6 +435,11 @@ int probe_29f040b(struct flashchip *flash);
 int erase_29f040b(struct flashchip *flash);
 int write_29f040b(struct flashchip *flash, uint8_t *buf);
 
+/* en29f002a.c */
+int probe_en29f002a(struct flashchip *flash);
+int erase_en29f002a(struct flashchip *flash);
+int write_en29f002a(struct flashchip *flash, uint8_t *buf);
+
 /* ichspi.c */
 int ich_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int ich_spi_read(struct flashchip *flash, uint8_t * buf);
@@ -436,7 +451,6 @@ int it87xx_probe_spi_flash(const char *name);
 int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf);
 int it8716f_spi_chip_write(struct flashchip *flash, uint8_t *buf);
-void it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios);
 
 /* jedec.c */
 uint8_t oddparity(uint8_t val);
@@ -507,6 +521,11 @@ int write_49lfxxxc(struct flashchip *flash, uint8_t *buf);
 int probe_sst_fwhub(struct flashchip *flash);
 int erase_sst_fwhub(struct flashchip *flash);
 int write_sst_fwhub(struct flashchip *flash, uint8_t *buf);
+
+/* w39v040c.c */
+int probe_w39v040c(struct flashchip *flash);
+int erase_w39v040c(struct flashchip *flash);
+int write_w39v040c(struct flashchip *flash, uint8_t *buf);
 
 /* w39V080fa.c */
 int probe_winbond_fwhub(struct flashchip *flash);
