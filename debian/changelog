@@ -1,3 +1,9 @@
+flashrom (0.0+r3734-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Uwe Hermann <uwe@debian.org>  Sat, 08 Nov 2008 01:38:08 +0100
+
 flashrom (0.0+r3613-1) unstable; urgency=low
 
   * New upstream release.
