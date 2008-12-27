@@ -1,4 +1,453 @@
 ------------------------------------------------------------------------
+r3834 | uwe | 2008-12-22 17:42:59 +0100 (Mon, 22 Dec 2008) | 8 lines
+
+If you pass a bogus layout file to the -l option flashrom will segfault.
+Fix that by throwing an error instead.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r3833 | uwe | 2008-12-22 17:40:45 +0100 (Mon, 22 Dec 2008) | 11 lines
+
+Add another board-enable line for the Kontron 986LCD-M/mITX.
+
+There seem to be at least two versions of the board out there, and the
+subsystem IDs changed between the versions.
+
+Patch successfully tested on hardware.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r3830 | stuge | 2008-12-22 15:12:08 +0100 (Mon, 22 Dec 2008) | 5 lines
+
+flashrom: Initialize ICH SPI opcodes also for ICH9 and later.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3814 | stuge | 2008-12-15 03:32:11 +0100 (Mon, 15 Dec 2008) | 16 lines
+
+* add a generic preop-opcode-pair table.
+
+* rename ich_check_opcodes to ich_init_opcodes.
+
+* let ich_init_opcodes do not need to access flashchip structure:
+  . move the definition of struct preop_opcode_pair to a better place
+  . remove preop_opcode_pairs from 'struct flashchip'
+  . modify ich_init_opcodes and generate_opcodes so that they do not access the flashchip structure
+
+* call ich_init_opcodes during chipset enable. Now OPCODES generation mechanism works.
+
+* fix a coding style mistake.
+
+Signed-off-by: FENG yu ning <fengyuning1984@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3809 | hailfinger | 2008-12-10 11:32:05 +0100 (Wed, 10 Dec 2008) | 8 lines
+
+Add 28 flash chips of the MX29 series to the flashrom ID table and
+support the MX29LV040C.
+
+MX29LV040C probe and read support tested by khetzal on IRC.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r3806 | hailfinger | 2008-12-09 00:51:45 +0100 (Tue, 09 Dec 2008) | 5 lines
+
+Kill obsolete and misplaced comment.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3805 | stepan | 2008-12-08 19:16:58 +0100 (Mon, 08 Dec 2008) | 7 lines
+
+Generates OPCODES struct from the ICH7/ICH9/VIA chipset if its SPI
+configuration is locked down.
+
+Signed-off-by: FENG yu ning <fengyuning1984@gmail.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3804 | stepan | 2008-12-08 19:15:10 +0100 (Mon, 08 Dec 2008) | 6 lines
+
+Breaks chip info into multiple lines.
+
+Signed-off-by: FENG yu ning <fengyuning1984@gmail.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3803 | stuge | 2008-12-06 02:37:09 +0100 (Sat, 06 Dec 2008) | 16 lines
+
+flashrom: Display test status in -L chip listing
+
+Looks like this:
+
+Supported flash chips:          Tested OK operations:   Known BAD operations:
+
+AMD Am29F002(N)BB                                       
+AMD Am29F002(N)BT               PROBE READ ERASE WRITE  
+AMD Am29F016D                                           
+AMD Am29F040B                   PROBE READ ERASE WRITE  
+AMD Am29LV040B                                          
+Atmel AT45CS1282                                        READ 
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r3799 | stuge | 2008-12-05 12:58:43 +0100 (Fri, 05 Dec 2008) | 9 lines
+
+flashrom: Add AMD SB700 flash enable
+
+This patch adds SB700 support to flashrom. The code for enabling the flash
+rom is the same as for SB600. It was tested (read, write, verify) with an
+ASUS M3A-H/HDMI which contains a Macronix MX25L8005.
+
+Signed-off-by: Niels Ole Salscheider <niels_ole@salscheider-online.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3798 | stuge | 2008-12-05 12:56:57 +0100 (Fri, 05 Dec 2008) | 7 lines
+
+flashrom: Fix compilation of r3797 with gcc-4.3.2
+
+Thanks to Niels Ole Salscheider for the problem report.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3797 | stuge | 2008-12-05 03:22:30 +0100 (Fri, 05 Dec 2008) | 7 lines
+
+flashrom: Check if erase succeeds and exit with error on failure.
+
+flashrom used to exit 0 even if erase failed. Not anymore.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3793 | hailfinger | 2008-12-04 01:58:10 +0100 (Thu, 04 Dec 2008) | 28 lines
+
+Add RDID/REMS IDs for the following flash chips:
+
+SST_25VF512A_REMS
+SST_25VF010_REMS
+SST_25VF020_REMS
+SST_25VF040_REMS
+SST_25VF040B_REMS
+SST_25VF080_REMS
+SST_25VF080B_REMS
+SST_25VF032B_REMS
+SST_26VF016
+SST_26VF032
+W_25X16
+W_25X32
+W_25X64
+
+Straight from the data sheets.
+
+The REMS IDs help in case the RDID opcode is unavailable (due to opcode
+lockdown) or unsupported by the chip.
+
+Some day, we need to pair probe functions together with IDs. Multiple
+pairs can exist per chip and duplicating chip definitions does not
+really make sense.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3792 | stuge | 2008-12-04 00:36:48 +0100 (Thu, 04 Dec 2008) | 7 lines
+
+flashrom: gcc thinks base could be used uninitialized, so shut it up.
+
+Bug from r3791.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3791 | stuge | 2008-12-03 22:39:56 +0100 (Wed, 03 Dec 2008) | 8 lines
+
+flashrom: Fix bug in r3790
+
+If flashbase was set before probe_flash() it would only ever be used once, for
+the very first flash chip probe.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3790 | stuge | 2008-12-03 22:24:40 +0100 (Wed, 03 Dec 2008) | 8 lines
+
+Replace #ifdefs for sc520 systems by run time probing.
+
+fixes #109
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3782 | stepan | 2008-11-29 16:07:15 +0100 (Sat, 29 Nov 2008) | 7 lines
+
+Copyright update by Jason Wang for freshly written sb600 code.
+
+Signed-off-by:  Jason Wang<Qingpei.wang@amd.com>
+Reviewed-by:    Joe, Bao <Zheng.Bao@amd.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r3781 | hailfinger | 2008-11-29 00:47:55 +0100 (Sat, 29 Nov 2008) | 5 lines
+
+Declare special commands to support the Atmel AT25F512A.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3780 | hailfinger | 2008-11-29 00:45:27 +0100 (Sat, 29 Nov 2008) | 7 lines
+
+If a chip has any TEST_BAD_* flag set, we don't even list the
+unsupported functions, giving the user the impression that the
+unsupported functions are tested.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3779 | uwe | 2008-11-28 22:36:51 +0100 (Fri, 28 Nov 2008) | 9 lines
+
+Add support for the AMD/ATI SB600 southbridge SPI functionality.
+
+This has been tested by Uwe Hermann on an RS690/SB600 board.
+
+Signed-off-by: Jason Wang <Qingpei.Wang@amd.com>
+Reviewed-by: Joe Bao <zheng.bao@amd.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3776 | hailfinger | 2008-11-28 06:40:27 +0100 (Fri, 28 Nov 2008) | 8 lines
+
+Add SST25VF080B flash chip support.
+This is the first chip which uses the infrastructure for alternative
+erase commands, namely spi_chip_erase_60_c7().
+
+Signed-off-by:  Jason Wang <Qingpei.Wang@amd.com>
+Reviewed-by:   Joe Bao <zheng.bao@amd.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3775 | hailfinger | 2008-11-28 02:25:00 +0100 (Fri, 28 Nov 2008) | 22 lines
+
+Flashrom already has the following probe functions:
+- probe_spi_rdid with opcode 0x9f, usually 3 bytes ID
+- probe_spi_res with opcode 0xab, usually 1 byte ID
+We are missing the following probe function:
+- probe_spi_rems with opcode 0x90, usually 2 bytes ID
+
+RDID provides best specifity (manufacturer, device class and device) and
+RES is supported by quite a few old chips. However, RES only returns one
+byte and there are multiple flash chips with different sizes on the
+market and all of them have the same RES ID.
+REMS is from the same age as RES, but it provides a manufacturer and a
+device ID. It is therefore on par with the probing for parallel flash
+chips and specific enough.
+
+The order in which chips should be detected is as follows:
+1. RDID
+2. REMS
+3. RES
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3774 | hailfinger | 2008-11-27 23:48:48 +0100 (Thu, 27 Nov 2008) | 16 lines
+
+The existing check in probe_spi_res() was right for SPI controllers
+which support all commands, but may not exist.
+For controllers which support only a subset of commands, it will fail in
+unexpected ways. Even if a command is supported by the controller, it
+may be unavailable if the controller is locked down.
+
+The new logic checks if RDID could be issued and its return values made
+sense (not 0xff 0xff 0xff). In that case, RES probing is not performed.
+Otherwise, we try RES.
+There is one drawback: If RDID returned unexpected values, we don't
+issue a RES probe. However, in that case we should try to match RDID
+anyway.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG yu ning <fengyuning1984@gmail.com>
+
+------------------------------------------------------------------------
+r3769 | stuge | 2008-11-24 21:23:23 +0100 (Mon, 24 Nov 2008) | 7 lines
+
+Add support for 32Mbit SPI flash SST25VF032B. Tested on gigabyte m57sli.
+
+File util/flashrom/flash.h already had correct ID for that part.
+
+Signed-off-by: Tero O Peippola <xeropp@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3758 | hailfinger | 2008-11-18 01:43:14 +0100 (Tue, 18 Nov 2008) | 9 lines
+
+Currently flashrom assumes every vendor BIOS shares our view about which
+SPI opcodes should be placed in which location. Move to a less
+optimistic implementation and actually use the generic SPI read
+functions. They're useful for abstracting exactly this stuff and that
+makes them the preferred choice.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3757 | hailfinger | 2008-11-18 01:41:02 +0100 (Tue, 18 Nov 2008) | 20 lines
+
+Check for failed SPI command execution in flashrom. Although SPI itself
+does not have a mechanism to signal command failure, the SPI host may be
+unable to send a given command over the wire due to security or hardware
+limitations. The current code ignores these mechanisms completely and
+simply assumes almost every command succeeds. Complain if SPI command
+execution fails.
+
+Since locked down Intel chipsets (like the one we had problems with
+earlier) only allow a small subset of commands, find the common subset
+of commands between the chipset and the ROM in the chip erase case. That
+is accomplished by the new spi_chip_erase_60_c7() which can be used for
+chips supporting both 0x60 and 0xc7 chip erase commands.
+
+Both parts of the patch address problems seen in the real world. The
+increased verbosity for the error case will help us diagnose and address
+problems better.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Otherwise: Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3756 | hailfinger | 2008-11-18 01:36:26 +0100 (Tue, 18 Nov 2008) | 22 lines
+
+Implement read support for the following Atmel chips:
+AT25DF021
+AT25DF041A
+AT25DF081
+AT25DF161
+AT25DF321A
+AT25DF641
+AT25F512B
+AT25FS010
+AT25FS040
+AT26DF041
+AT26DF081A
+AT26DF161
+AT26DF161A
+AT26DF321
+AT26F004
+
+I double-checked the data sheets and am confident this will work.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r3755 | mraudsepp | 2008-11-17 16:31:56 +0100 (Mon, 17 Nov 2008) | 6 lines
+
+flashrom: SST39VF020 TEST_OK_ PROBE READ ERASE WRITE
+
+Tested fully on a ThinCan DBE61A
+
+Signed-off-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+Acked-by: Mart Raudsepp <mart.raudsepp@artecdesign.ee>
+------------------------------------------------------------------------
+r3754 | hailfinger | 2008-11-15 14:55:43 +0100 (Sat, 15 Nov 2008) | 58 lines
+
+The AT25 and AT26 series SPI chips from Atmel are plain EEPROMs.
+The AT45 series SPI chips are DataFlash EEPROMs which means they have
+odd (non-power-of-two) sector sizes, but some of the DataFlash chips can
+be configured or ordered with power-of-two sector sizes.
+
+Add probe support for the following Atmel SPI chips:
+AT25DF021
+AT25DF041A
+AT25DF081
+AT25DF161
+AT25DF321A
+AT25DF641
+AT25F512B
+AT25FS010
+AT25FS040
+AT26DF041
+AT26DF081A
+AT26DF161
+AT26DF161A
+AT26DF321
+AT26F004
+AT45CS1282
+AT45DB011D
+AT45DB021D
+AT45DB041D
+AT45DB081D
+AT45DB161D
+AT45DB321C
+AT45DB321D
+AT45DB642D
+
+Add an explanation why the following chips can't be probed:
+AT45BR3214B
+AT45D011
+AT45D021A
+AT45D041A
+AT45D081A
+AT45D161
+AT45DB011
+AT45DB011B
+AT45DB021A
+AT45DB021B
+AT45DB041A
+AT45DB081A
+AT45DB161
+AT45DB161B
+AT45DB321
+AT45DB321B
+AT45DB642
+
+Add the ID, but no probing function for this chip:
+AT25F512A
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested-by: Jesse Brandeburg <jesse.brandeburg@intel.com>
+Tested-by: Andriy Gapon <avg@icyb.net.ua>
+Acked-by: Myles Watson <mylesgw@gmail.com>
+
+------------------------------------------------------------------------
+r3736 | stuge | 2008-11-08 02:39:12 +0100 (Sat, 08 Nov 2008) | 7 lines
+
+flashrom: SST39SF040 TEST_OK_ PROBE READ ERASE WRITE
+
+Per report from Mario Rogen. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
 r3731 | hailfinger | 2008-11-05 23:54:36 +0100 (Wed, 05 Nov 2008) | 6 lines
 
 The ST M25P16 chip has been confirmed to work fine for probe, read,

@@ -11,7 +11,7 @@ STRIP	= strip
 INSTALL = /usr/bin/install
 PREFIX  = /usr/local
 #CFLAGS  = -O2 -g -Wall -Werror
-CFLAGS  = -Os -Wall -Werror # -DTS5300
+CFLAGS  = -Os -Wall -Werror
 OS_ARCH	= $(shell uname)
 ifeq ($(OS_ARCH), SunOS)
 LDFLAGS = -lpci -lz
@@ -29,7 +29,7 @@ OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
 	w49f002u.o 82802ab.o pm49fl00x.o sst49lf040.o en29f002a.o \
 	sst49lfxxxc.o sst_fwhub.o layout.o cbtable.o flashchips.o \
 	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o it87spi.o \
-	ichspi.o w39v040c.o
+	ichspi.o w39v040c.o sb600spi.o
 
 all: pciutils dep $(PROGRAM)
 

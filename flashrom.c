@@ -105,7 +105,7 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 {
 	volatile uint8_t *bios;
 	struct flashchip *flash;
-	unsigned long flash_baseaddr = 0, size;
+	unsigned long base = 0, size;
 
 	for (flash = first_flash; flash && flash->name; flash++) {
 		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0)
@@ -133,16 +133,10 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			 */
 			size = getpagesize();
 		}
-#ifdef TS5300
-		// FIXME: Wrong place for this decision
-		// FIXME: This should be autodetected. It is trivial.
-		flash_baseaddr = 0x9400000;
-#else
-		flash_baseaddr = (0xffffffff - size + 1);
-#endif
 
+		base = flashbase ? flashbase : (0xffffffff - size + 1);
 		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    fd_mem, (off_t) flash_baseaddr);
+			    fd_mem, (off_t) base);
 		if (bios == MAP_FAILED) {
 			perror("Can't mmap memory using " MEM_DEV);
 			exit(1);
@@ -167,7 +161,8 @@ notfound:
 		return NULL;
 
 	printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
-	       flash->vendor, flash->name, flash->total_size, flash_baseaddr);
+	       flash->vendor, flash->name, flash->total_size, base);
+	flashbase = base;
 	return flash;
 }
 
@@ -210,14 +205,61 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	return 0;
 }
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define POS_PRINT(x) do { pos += strlen(x); printf(x); } while (0)
+
 void print_supported_chips(void)
 {
-	int i;
+	int okcol = 0, pos = 0;
+	struct flashchip *f;
 
-	printf("Supported ROM chips:\n\n");
+	for (f = flashchips; f->name != NULL; f++) {
+		if (GENERIC_DEVICE_ID == f->model_id)
+			continue;
+		okcol = MAX(okcol, strlen(f->vendor) + 1 + strlen(f->name));
+	}
+	okcol = (okcol + 7) & ~7;
 
-	for (i = 0; flashchips[i].name != NULL; i++)
-		printf("%s %s\n", flashchips[i].vendor, flashchips[i].name);
+	POS_PRINT("Supported flash chips:");
+	while (pos < okcol) {
+		printf("\t");
+		pos += 8 - (pos % 8);
+	}
+	printf("Tested OK operations:\tKnown BAD operations:\n\n");
+
+	for (f = flashchips; f->name != NULL; f++) {
+		printf("%s %s", f->vendor, f->name);
+		pos = strlen(f->vendor) + 1 + strlen(f->name);
+		while (pos < okcol) {
+			printf("\t");
+			pos += 8 - (pos % 8);
+		}
+		if ((f->tested & TEST_OK_MASK)) {
+			if ((f->tested & TEST_OK_PROBE))
+				POS_PRINT("PROBE ");
+			if ((f->tested & TEST_OK_READ))
+				POS_PRINT("READ ");
+			if ((f->tested & TEST_OK_ERASE))
+				POS_PRINT("ERASE ");
+			if ((f->tested & TEST_OK_WRITE))
+				POS_PRINT("WRITE");
+		}
+		while (pos < okcol + 24) {
+			printf("\t");
+			pos += 8 - (pos % 8);
+		}
+		if ((f->tested & TEST_BAD_MASK)) {
+			if ((f->tested & TEST_BAD_PROBE))
+				printf("PROBE ");
+			if ((f->tested & TEST_BAD_READ))
+				printf("READ ");
+			if ((f->tested & TEST_BAD_ERASE))
+				printf("ERASE ");
+			if ((f->tested & TEST_BAD_WRITE))
+				printf("WRITE");
+		}
+		printf("\n");
+	}
 }
 
 void usage(const char *name)
@@ -255,6 +297,7 @@ int main(int argc, char *argv[])
 {
 	uint8_t *buf;
 	unsigned long size;
+	uint32_t erasedbytes;
 	FILE *image;
 	/* Probe for up to three flash chips. */
 	struct flashchip *flash, *flashes[3];
@@ -463,7 +506,7 @@ int main(int argc, char *argv[])
 				perror(filename);
 				exit(1);
 			}
-			printf("Force reading flash...");
+			printf("Force reading flash... ");
 			if (!flashes[0]->read)
 				memcpy(buf, (const char *)flashes[0]->virtual_memory, size);
 			else
@@ -476,7 +519,7 @@ int main(int argc, char *argv[])
 
 			fwrite(buf, sizeof(char), size, image);
 			fclose(image);
-			printf("done\n");
+			printf("done.\n");
 			free(buf);
 			exit(0);
 		}
@@ -499,15 +542,19 @@ int main(int argc, char *argv[])
 			if (flash->tested & TEST_BAD_WRITE)
 				printf(" WRITE");
 			printf("\n");
-		} else {
+		}
+		if ((!(flash->tested & TEST_BAD_PROBE) && !(flash->tested & TEST_OK_PROBE)) ||
+		    (!(flash->tested & TEST_BAD_READ) && !(flash->tested & TEST_OK_READ)) ||
+		    (!(flash->tested & TEST_BAD_ERASE) && !(flash->tested & TEST_OK_ERASE)) ||
+		    (!(flash->tested & TEST_BAD_WRITE) && !(flash->tested & TEST_OK_WRITE))) {
 			printf("This flash part has status UNTESTED for operations:");
-			if (!(flash->tested & TEST_OK_PROBE))
+			if (!(flash->tested & TEST_BAD_PROBE) && !(flash->tested & TEST_OK_PROBE))
 				printf(" PROBE");
-			if (!(flash->tested & TEST_OK_READ))
+			if (!(flash->tested & TEST_BAD_READ) && !(flash->tested & TEST_OK_READ))
 				printf(" READ");
-			if (!(flash->tested & TEST_OK_ERASE))
+			if (!(flash->tested & TEST_BAD_ERASE) && !(flash->tested & TEST_OK_ERASE))
 				printf(" ERASE");
-			if (!(flash->tested & TEST_OK_WRITE))
+			if (!(flash->tested & TEST_BAD_WRITE) && !(flash->tested & TEST_OK_WRITE))
 				printf(" WRITE");
 			printf("\n");
 		}
@@ -533,19 +580,32 @@ int main(int argc, char *argv[])
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
-		printf("Erasing flash chip.\n");
-		if (!flash->erase) {
-			fprintf(stderr, "Error: flashrom has no erase function for this flash chip.\n");
+		printf("Erasing flash chip... ");
+		if (NULL == flash->erase) {
+			printf("FAILED!\n");
+			fprintf(stderr, "ERROR: flashrom has no erase function for this flash chip.\n");
 			return 1;
 		}
 		flash->erase(flash);
-		exit(0);
+		if (NULL == flash->read)
+			memcpy(buf, (const char *)flash->virtual_memory, size);
+		else
+			flash->read(flash, buf);
+		for (erasedbytes = 0; erasedbytes <= size; erasedbytes++)
+			if (0xff != buf[erasedbytes]) {
+				printf("FAILED!\n");
+				fprintf(stderr, "ERROR at 0x%08x: Expected=0xff, Read=0x%02x\n",
+					erasedbytes, buf[erasedbytes]);
+				return 1;
+			}
+		printf("SUCCESS.\n");
+		return 0;
 	} else if (read_it) {
 		if ((image = fopen(filename, "w")) == NULL) {
 			perror(filename);
 			exit(1);
 		}
-		printf("Reading Flash...");
+		printf("Reading flash... ");
 		if (flash->read == NULL)
 			memcpy(buf, (const char *)flash->virtual_memory, size);
 		else
@@ -557,7 +617,7 @@ int main(int argc, char *argv[])
 
 		fwrite(buf, sizeof(char), size, image);
 		fclose(image);
-		printf("done\n");
+		printf("done.\n");
 	} else {
 		struct stat image_stat;
 

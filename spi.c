@@ -42,6 +42,8 @@ int spi_command(unsigned int writecnt, unsigned int readcnt,
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
 		return ich_spi_command(writecnt, readcnt, writearr, readarr);
+	case BUS_TYPE_SB600_SPI:
+		return sb600_spi_command(writecnt, readcnt, writearr, readarr);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -61,6 +63,16 @@ static int spi_rdid(unsigned char *readarr, int bytes)
 	return 0;
 }
 
+static int spi_rems(unsigned char *readarr)
+{
+	const unsigned char cmd[JEDEC_REMS_OUTSIZE] = { JEDEC_REMS, 0, 0, 0 };
+
+	if (spi_command(sizeof(cmd), JEDEC_REMS_INSIZE, cmd, readarr))
+		return 1;
+	printf_debug("REMS returned %02x %02x.\n", readarr[0], readarr[1]);
+	return 0;
+}
+
 static int spi_res(unsigned char *readarr)
 {
 	const unsigned char cmd[JEDEC_RES_OUTSIZE] = { JEDEC_RES, 0, 0, 0 };
@@ -71,20 +83,20 @@ static int spi_res(unsigned char *readarr)
 	return 0;
 }
 
-void spi_write_enable()
+int spi_write_enable()
 {
 	const unsigned char cmd[JEDEC_WREN_OUTSIZE] = { JEDEC_WREN };
 
 	/* Send WREN (Write Enable) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	return spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
-void spi_write_disable()
+int spi_write_disable()
 {
 	const unsigned char cmd[JEDEC_WRDI_OUTSIZE] = { JEDEC_WRDI };
 
 	/* Send WRDI (Write Disable) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	return spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
@@ -147,10 +159,42 @@ int probe_spi_rdid4(struct flashchip *flash)
 	case BUS_TYPE_ICH7_SPI:
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
+	case BUS_TYPE_SB600_SPI:
 		return probe_spi_rdid_generic(flash, 4);
 	default:
 		printf_debug("4b ID not supported on this SPI controller\n");
 	}
+
+	return 0;
+}
+
+int probe_spi_rems(struct flashchip *flash)
+{
+	unsigned char readarr[JEDEC_REMS_INSIZE];
+	uint32_t manuf_id, model_id;
+
+	if (spi_rems(readarr))
+		return 0;
+
+	manuf_id = readarr[0];
+	model_id = readarr[1];
+
+	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, manuf_id,
+		     model_id);
+
+	if (manuf_id == flash->manufacture_id && model_id == flash->model_id) {
+		/* Print the status register to tell the
+		 * user about possible write protection.
+		 */
+		spi_prettyprint_status_register(flash);
+
+		return 1;
+	}
+
+	/* Test if this is a pure vendor match. */
+	if (manuf_id == flash->manufacture_id &&
+	    GENERIC_DEVICE_ID == flash->model_id)
+		return 1;
 
 	return 0;
 }
@@ -160,13 +204,11 @@ int probe_spi_res(struct flashchip *flash)
 	unsigned char readarr[3];
 	uint32_t model_id;
 
-	if (spi_rdid(readarr, 3))
-		/* We couldn't issue RDID, it's pointless to try RES. */
-		return 0;
-
-	/* Check if RDID returns 0xff 0xff 0xff, then we use RES. */
-	if ((readarr[0] != 0xff) || (readarr[1] != 0xff) ||
-	    (readarr[2] != 0xff))
+	/* Check if RDID was successful and did not return 0xff 0xff 0xff.
+	 * In that case, RES is pointless.
+	 */
+	if (!spi_rdid(readarr, 3) && ((readarr[0] != 0xff) ||
+	    (readarr[1] != 0xff) || (readarr[2] != 0xff)))
 		return 0;
 
 	if (spi_res(readarr))
@@ -190,7 +232,13 @@ uint8_t spi_read_status_register()
 	unsigned char readarr[JEDEC_RDSR_INSIZE];
 
 	/* Read Status Register */
-	spi_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
+	if (flashbus == BUS_TYPE_SB600_SPI) {
+		/* SB600 uses a different way to read status register. */
+		return sb600_read_status_register();
+	} else {
+		spi_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
+	}
+
 	return readarr[0];
 }
 
@@ -274,14 +322,28 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 int spi_chip_erase_60(struct flashchip *flash)
 {
 	const unsigned char cmd[JEDEC_CE_60_OUTSIZE] = {JEDEC_CE_60};
+	int result;
 	
-	spi_disable_blockprotect();
-	spi_write_enable();
+	result = spi_disable_blockprotect();
+	if (result) {
+		printf_debug("spi_disable_blockprotect failed\n");
+		return result;
+	}
+	result = spi_write_enable();
+	if (result) {
+		printf_debug("spi_write_enable failed\n");
+		return result;
+	}
 	/* Send CE (Chip Erase) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	result = spi_command(sizeof(cmd), 0, cmd, NULL);
+	if (result) {
+		printf_debug("spi_chip_erase_60 failed sending erase\n");
+		return result;
+	}
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 1-85 s, so wait in 1 s steps.
 	 */
+	/* FIXME: We assume spi_read_status_register will never fail. */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		sleep(1);
 	return 0;
@@ -290,17 +352,42 @@ int spi_chip_erase_60(struct flashchip *flash)
 int spi_chip_erase_c7(struct flashchip *flash)
 {
 	const unsigned char cmd[JEDEC_CE_C7_OUTSIZE] = { JEDEC_CE_C7 };
+	int result;
 
-	spi_disable_blockprotect();
-	spi_write_enable();
+	result = spi_disable_blockprotect();
+	if (result) {
+		printf_debug("spi_disable_blockprotect failed\n");
+		return result;
+	}
+	result = spi_write_enable();
+	if (result) {
+		printf_debug("spi_write_enable failed\n");
+		return result;
+	}
 	/* Send CE (Chip Erase) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	result = spi_command(sizeof(cmd), 0, cmd, NULL);
+	if (result) {
+		printf_debug("spi_chip_erase_60 failed sending erase\n");
+		return result;
+	}
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 1-85 s, so wait in 1 s steps.
 	 */
+	/* FIXME: We assume spi_read_status_register will never fail. */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		sleep(1);
 	return 0;
+}
+
+int spi_chip_erase_60_c7(struct flashchip *flash)
+{
+	int result;
+	result = spi_chip_erase_60(flash);
+	if (result) {
+		printf_debug("spi_chip_erase_60 failed, trying c7\n");
+		result = spi_chip_erase_c7(flash);
+	}
+	return result;
 }
 
 int spi_block_erase_52(const struct flashchip *flash, unsigned long addr)
@@ -386,17 +473,25 @@ int spi_sector_erase(const struct flashchip *flash, unsigned long addr)
 	return 0;
 }
 
+int spi_write_status_enable()
+{
+	const unsigned char cmd[JEDEC_EWSR_OUTSIZE] = { JEDEC_EWSR };
+
+	/* Send EWSR (Enable Write Status Register). */
+	return spi_command(JEDEC_EWSR_OUTSIZE, JEDEC_EWSR_INSIZE, cmd, NULL);
+}
+
 /*
  * This is according the SST25VF016 datasheet, who knows it is more
  * generic that this...
  */
-void spi_write_status_register(int status)
+int spi_write_status_register(int status)
 {
 	const unsigned char cmd[JEDEC_WRSR_OUTSIZE] =
 	    { JEDEC_WRSR, (unsigned char)status };
 
 	/* Send WRSR (Write Status Register) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	return spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 void spi_byte_program(int address, uint8_t byte)
@@ -413,20 +508,30 @@ void spi_byte_program(int address, uint8_t byte)
 	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
-void spi_disable_blockprotect(void)
+int spi_disable_blockprotect(void)
 {
 	uint8_t status;
+	int result;
 
 	status = spi_read_status_register();
 	/* If there is block protection in effect, unprotect it first. */
 	if ((status & 0x3c) != 0) {
 		printf_debug("Some block protection in effect, disabling\n");
-		spi_write_enable();
-		spi_write_status_register(status & ~0x3c);
+		result = spi_write_status_enable();
+		if (result) {
+			printf_debug("spi_write_status_enable failed\n");
+			return result;
+		}
+		result = spi_write_status_register(status & ~0x3c);
+		if (result) {
+			printf_debug("spi_write_status_register failed\n");
+			return result;
+		}
 	}
+	return 0;
 }
 
-void spi_nbyte_read(int address, uint8_t *bytes, int len)
+int spi_nbyte_read(int address, uint8_t *bytes, int len)
 {
 	const unsigned char cmd[JEDEC_READ_OUTSIZE] = {
 		JEDEC_READ,
@@ -436,7 +541,7 @@ void spi_nbyte_read(int address, uint8_t *bytes, int len)
 	};
 
 	/* Send Read */
-	spi_command(sizeof(cmd), len, cmd, bytes);
+	return spi_command(sizeof(cmd), len, cmd, bytes);
 }
 
 int spi_chip_read(struct flashchip *flash, uint8_t *buf)
@@ -444,6 +549,8 @@ int spi_chip_read(struct flashchip *flash, uint8_t *buf)
 	switch (flashbus) {
 	case BUS_TYPE_IT87XX_SPI:
 		return it8716f_spi_chip_read(flash, buf);
+	case BUS_TYPE_SB600_SPI:
+		return sb600_spi_read(flash, buf);
 	case BUS_TYPE_ICH7_SPI:
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
@@ -462,6 +569,8 @@ int spi_chip_write(struct flashchip *flash, uint8_t *buf)
 	switch (flashbus) {
 	case BUS_TYPE_IT87XX_SPI:
 		return it8716f_spi_chip_write(flash, buf);
+	case BUS_TYPE_SB600_SPI:
+		return sb600_spi_write(flash, buf);
 	case BUS_TYPE_ICH7_SPI:
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:

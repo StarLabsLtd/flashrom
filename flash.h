@@ -95,6 +95,7 @@ struct flashchip {
 #define TEST_BAD_READ	(1<<5)
 #define TEST_BAD_ERASE	(1<<6)
 #define TEST_BAD_WRITE	(1<<7)
+#define TEST_BAD_PREW	(TEST_BAD_PROBE|TEST_BAD_READ|TEST_BAD_ERASE|TEST_BAD_WRITE)
 #define TEST_BAD_MASK	0xf0
 
 extern struct flashchip flashchips[];
@@ -106,7 +107,7 @@ extern struct flashchip flashchips[];
  *
  * All LPC/FWH parts (parallel flash) have 8-bit device IDs if there is no
  * continuation code.
- * All SPI parts have 16-bit device IDs.
+ * SPI parts have 16-bit device IDs if they support RDID.
  */
 
 #define GENERIC_DEVICE_ID	0xffff	/* Only match the vendor ID */
@@ -139,13 +140,45 @@ extern struct flashchip flashchips[];
 #define AT_25DF321		0x4700	/* also 26DF321 */
 #define AT_25DF321A		0x4701
 #define AT_25DF641		0x4800
+#define AT_25F512A		0x65 /* Needs special RDID. AT25F512A_RDID 15 1d */
+#define AT_25F512B		0x6500
+#define AT_25FS010		0x6601
+#define AT_25FS040		0x6604
 #define AT_26DF041		0x4400
 #define AT_26DF081		0x4500	/* guessed, no datasheet available */
 #define AT_26DF081A		0x4501
 #define AT_26DF161		0x4600
 #define AT_26DF161A		0x4601
+#define AT_26DF321		0x4700	/* also 25DF321 */
+#define AT_26F004		0x0400
 #define AT_29C040A		0xA4
 #define AT_29C020		0xDA
+#define AT_45BR3214B		/* No ID available */
+#define AT_45CS1282		0x2920
+#define AT_45D011		/* No ID available */
+#define AT_45D021A		/* No ID available */
+#define AT_45D041A		/* No ID available */
+#define AT_45D081A		/* No ID available */
+#define AT_45D161		/* No ID available */
+#define AT_45DB011		/* No ID available */
+#define AT_45DB011B		/* No ID available */
+#define AT_45DB011D		0x2200
+#define AT_45DB021A		/* No ID available */
+#define AT_45DB021B		/* No ID available */
+#define AT_45DB021D		0x2300
+#define AT_45DB041A		/* No ID available */
+#define AT_45DB041D		0x2400
+#define AT_45DB081A		/* No ID available */
+#define AT_45DB081D		0x2500
+#define AT_45DB161		/* No ID available */
+#define AT_45DB161B		/* No ID available */
+#define AT_45DB161D		0x2600
+#define AT_45DB321		/* No ID available */
+#define AT_45DB321B		/* No ID available */
+#define AT_45DB321C		0x2700
+#define AT_45DB321D		0x2701 /* Buggy data sheet */
+#define AT_45DB642		/* No ID available */
+#define AT_45DB642D		0x2800
 #define AT_49F002N		0x07	/* for AT49F002(N)  */
 #define AT_49F002NT		0x08	/* for AT49F002(N)T */
 
@@ -215,6 +248,34 @@ extern struct flashchip flashchips[];
 #define MX_25L3235D		0x2416
 #define MX_29F002B		0x34
 #define MX_29F002T		0xB0
+#define MX_29LV002CB		0x5A
+#define MX_29LV002CT		0x59
+#define MX_29LV004CB		0xB6
+#define MX_29LV004CT		0xB5
+#define MX_29LV008CB		0x37
+#define MX_29LV008CT		0x3E
+#define MX_29F040C		0xA4
+#define MX_29F200CB		0x57
+#define MX_29F200CT		0x51
+#define MX_29F400CB		0xAB
+#define MX_29F400CT		0x23
+#define MX_29LV040C		0x4F
+#define MX_29LV128DB		0x7A
+#define MX_29LV128DT		0x7E
+#define MX_29LV160DB		0x49	/* Same as MX29LV161DB/MX29LV160CB */
+#define MX_29LV160DT		0xC4	/* Same as MX29LV161DT/MX29LV160CT */
+#define MX_29LV320DB		0xA8	/* Same as MX29LV321DB */
+#define MX_29LV320DT		0xA7	/* Same as MX29LV321DT */
+#define MX_29LV400CB		0xBA
+#define MX_29LV400CT		0xB9
+#define MX_29LV800CB		0x5B
+#define MX_29LV800CT		0xDA
+#define MX_29LV640DB		0xCB	/* Same as MX29LV640EB */
+#define MX_29LV640DT		0xC9	/* Same as MX29LV640ET */
+#define MX_29SL402CB		0xF1
+#define MX_29SL402CT		0x70
+#define MX_29SL800CB		0x6B	/* Same as MX29SL802CB */
+#define MX_29SL800CT		0xEA	/* Same as MX29SL802CT */
 
 /*
  * Programmable Micro Corp is listed in JEP106W in bank 2, so it should
@@ -257,10 +318,20 @@ extern struct flashchip flashchips[];
 #define SST_25WF010		0x2502
 #define SST_25WF020		0x2503
 #define SST_25WF040		0x2504
+#define SST_25VF512A_REMS	0x48	/* REMS or RES opcode */
+#define SST_25VF010_REMS	0x49	/* REMS or RES opcode */
+#define SST_25VF020_REMS	0x43	/* REMS or RES opcode */
+#define SST_25VF040_REMS	0x44	/* REMS or RES opcode */
+#define SST_25VF040B		0x258D
+#define SST_25VF040B_REMS	0x8D	/* REMS or RES opcode */
+#define SST_25VF080_REMS	0x80	/* REMS or RES opcode */
+#define SST_25VF080B		0x258E
+#define SST_25VF080B_REMS	0x8E	/* REMS or RES opcode */
 #define SST_25VF016B		0x2541
 #define SST_25VF032B		0x254A
-#define SST_25VF040B		0x258D
-#define SST_25VF080B		0x258E
+#define SST_25VF032B_REMS	0x4A	/* REMS or RES opcode */
+#define SST_26VF016		0x2601
+#define SST_26VF032		0x2602
 #define SST_27SF512		0xA4
 #define SST_27SF010		0xA5
 #define SST_27SF020		0xA6
@@ -345,6 +416,9 @@ extern struct flashchip flashchips[];
 #define W_25X20			0x3012
 #define W_25X40			0x3013
 #define W_25X80			0x3014
+#define W_25X16			0x3015
+#define W_25X32			0x3016
+#define W_25X64			0x3017
 #define W_29C011		0xC1
 #define W_29C020C		0x45
 #define W_29C040P		0x46
@@ -377,11 +451,14 @@ void print_supported_boards(void);
 int chipset_flash_enable(void);
 void print_supported_chipsets(void);
 
+extern unsigned long flashbase;
+
 typedef enum {
 	BUS_TYPE_LPC,
 	BUS_TYPE_ICH7_SPI,
 	BUS_TYPE_ICH9_SPI,
 	BUS_TYPE_IT87XX_SPI,
+	BUS_TYPE_SB600_SPI,
 	BUS_TYPE_VIA_SPI
 } flashbus_t;
 
@@ -417,22 +494,24 @@ extern char *lb_part, *lb_vendor;
 /* spi.c */
 int probe_spi_rdid(struct flashchip *flash);
 int probe_spi_rdid4(struct flashchip *flash);
+int probe_spi_rems(struct flashchip *flash);
 int probe_spi_res(struct flashchip *flash);
 int spi_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr);
-void spi_write_enable();
-void spi_write_disable();
+int spi_write_enable();
+int spi_write_disable();
 int spi_chip_erase_60(struct flashchip *flash);
 int spi_chip_erase_c7(struct flashchip *flash);
+int spi_chip_erase_60_c7(struct flashchip *flash);
 int spi_chip_erase_d8(struct flashchip *flash);
 int spi_block_erase_52(const struct flashchip *flash, unsigned long addr);
 int spi_block_erase_d8(const struct flashchip *flash, unsigned long addr);
 int spi_chip_write(struct flashchip *flash, uint8_t *buf);
 int spi_chip_read(struct flashchip *flash, uint8_t *buf);
 uint8_t spi_read_status_register();
-void spi_disable_blockprotect(void);
+int spi_disable_blockprotect(void);
 void spi_byte_program(int address, uint8_t byte);
-void spi_nbyte_read(int address, uint8_t *bytes, int len);
+int spi_nbyte_read(int address, uint8_t *bytes, int len);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -450,6 +529,7 @@ int erase_en29f002a(struct flashchip *flash);
 int write_en29f002a(struct flashchip *flash, uint8_t *buf);
 
 /* ichspi.c */
+int ich_init_opcodes();
 int ich_spi_command(unsigned int writecnt, unsigned int readcnt,
 		    const unsigned char *writearr, unsigned char *readarr);
 int ich_spi_read(struct flashchip *flash, uint8_t * buf);
@@ -462,6 +542,14 @@ int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
 			const unsigned char *writearr, unsigned char *readarr);
 int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf);
 int it8716f_spi_chip_write(struct flashchip *flash, uint8_t *buf);
+
+/* sb600spi.c */
+int sb600_spi_command(unsigned int writecnt, unsigned int readcnt,
+		      const unsigned char *writearr, unsigned char *readarr);
+int sb600_spi_read(struct flashchip *flash, uint8_t *buf);
+int sb600_spi_write(struct flashchip *flash, uint8_t *buf);
+uint8_t sb600_read_status_register(void);
+extern uint8_t volatile *sb600_spibar;
 
 /* jedec.c */
 uint8_t oddparity(uint8_t val);

@@ -35,6 +35,8 @@
 #include <unistd.h>
 #include "flash.h"
 
+unsigned long flashbase = 0;
+
 /**
  * flashrom defaults to LPC flash devices. If a known SPI controller is found
  * and the SPI strappings are set, this will be overwritten by the probing code.
@@ -44,6 +46,8 @@
 
 flashbus_t flashbus = BUS_TYPE_LPC;
 void *spibar = NULL;
+
+extern int ichspi_lock;
 
 static int enable_flash_ali_m1533(struct pci_dev *dev, const char *name)
 {
@@ -333,7 +337,9 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		printf_debug("\n");
 		if ((*(uint16_t *) spibar) & (1 << 15)) {
 			printf("WARNING: SPI Configuration Lockdown activated.\n");
+			ichspi_lock = 1;
 		}
+		ich_init_opcodes();
 		break;
 	case BUS_TYPE_ICH9_SPI:
 		tmp2 = *(uint16_t *) (spibar + 0);
@@ -378,6 +384,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 			     *(uint32_t *) (spibar + 0xA0)); ICH10 only? */
 		printf_debug("0xB0: 0x%08x (FDOC)\n",
 			     *(uint32_t *) (spibar + 0xB0));
+		ich_init_opcodes();
 		break;
 	default:
 		/* Nothing */
@@ -647,20 +654,35 @@ static int enable_flash_amd8111(struct pci_dev *dev, const char *name)
 
 static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 {
-	uint32_t old, new;
+	uint32_t tmp, low_bits, num;
 	uint8_t reg;
 
-	/* Clear ROM Protect 0-3 */
-	for (reg = 0x50; reg < 0x60; reg += 4) {
-		old = pci_read_long(dev, reg);
-		new = old & 0xFFFFFFFC;
-		if (new != old) {
-			pci_write_byte(dev, reg, new);
-			if (pci_read_long(dev, reg) != new) {
-				printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x50, new, name);
-			}
-		}
+	low_bits = tmp = pci_read_long(dev, 0xa0);
+	low_bits &= ~0xffffc000; /* for mmap aligning requirements */
+	low_bits &= 0xfffffff0;	/* remove low 4 bits */
+	tmp &= 0xffffc000;
+	printf_debug("SPI base address is at 0x%x\n", tmp + low_bits);
+
+	sb600_spibar = mmap(0, 0x4000, PROT_READ | PROT_WRITE, MAP_SHARED,
+			    fd_mem, (off_t)tmp);
+	if (sb600_spibar == MAP_FAILED) {
+		perror("Can't mmap memory using " MEM_DEV);
+		exit(1);
 	}
+	sb600_spibar += low_bits;
+
+	/* Clear ROM protect 0-3. */
+	for (reg = 0x50; reg < 0x60; reg += 4) {
+		num = pci_read_long(dev, reg);
+		num &= 0xfffffffc;
+		pci_write_byte(dev, reg, num);
+	}
+
+	flashbus = BUS_TYPE_SB600_SPI;
+
+	/* Enable SPI ROM in SB600 PM register. */
+	OUTB(0x8f, 0xcd6);
+	OUTB(0x0e, 0xcd7);
 
 	return 0;
 }
@@ -782,6 +804,59 @@ static int enable_flash_ht1000(struct pci_dev *dev, const char *name)
 	return 0;
 }
 
+/**
+ * Usually on the x86 architectures (and on other PC-like platforms like some
+ * Alphas or Itanium) the system flash is mapped right below 4G. On the AMD
+ * Elan SC520 only a small piece of the system flash is mapped there, but the
+ * complete flash is mapped somewhere below 1G. The position can be determined
+ * by the BOOTCS PAR register.
+ */
+static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
+{
+	int i, bootcs_found = 0;
+	uint32_t parx = 0;
+	void *mmcr;
+
+	/* 1. Map MMCR */
+	mmcr = mmap(0, getpagesize(), PROT_WRITE | PROT_READ,
+			MAP_SHARED, fd_mem, (off_t)0xFFFEF000);
+
+	if (mmcr == MAP_FAILED) {
+		perror("Can't mmap Elan SC520 specific registers using " MEM_DEV);
+		exit(1);
+	}
+
+	/* 2. Scan PAR0 (0x88) - PAR15 (0xc4) for
+	 *    BOOTCS region (PARx[31:29] = 100b)e
+	 */
+	for (i = 0x88; i <= 0xc4; i += 4) {
+		parx = *(volatile uint32_t *)(mmcr + i);
+		if ((parx >> 29) == 4) {
+			bootcs_found = 1;
+			break; /* BOOTCS found */
+		}
+	}
+
+	/* 3. PARx[25] = 1b --> flashbase[29:16] = PARx[13:0]
+	 *    PARx[25] = 0b --> flashbase[29:12] = PARx[17:0]
+	 */
+	if (bootcs_found) {
+		if (parx & (1 << 25)) {
+			parx &= (1 << 14) - 1; /* Mask [13:0] */
+			flashbase = parx << 16;
+		} else {
+			parx &= (1 << 18) - 1; /* Mask [17:0] */
+			flashbase = parx << 12;
+		}
+	} else {
+		printf("AMD Elan SC520 detected, but no BOOTCS. Assuming flash at 4G\n");
+	}
+
+	/* 4. Clean up */
+	munmap (mmcr, getpagesize());
+	return 0;
+}
+
 typedef struct penable {
 	uint16_t vendor, device;
 	const char *name;
@@ -840,6 +915,7 @@ static const FLASH_ENABLE enables[] = {
 	{0x1022, 0x2080, "AMD CS5536",		enable_flash_cs5536},
 	{0x1022, 0x7468, "AMD8111",		enable_flash_amd8111},
 	{0x1002, 0x438D, "ATI(AMD) SB600",	enable_flash_sb600},
+	{0x1002, 0x439d, "ATI(AMD) SB700",	enable_flash_sb600},
 	{0x10B9, 0x1533, "ALi M1533",		enable_flash_ali_m1533},
 	{0x10de, 0x0050, "NVIDIA CK804",	enable_flash_ck804}, /* LPC */
 	{0x10de, 0x0051, "NVIDIA CK804",	enable_flash_ck804}, /* Pro */
@@ -860,6 +936,7 @@ static const FLASH_ENABLE enables[] = {
 	{0x10de, 0x0548, "NVIDIA MCP67",	enable_flash_mcp55},
 	{0x1002, 0x4377, "ATI SB400",		enable_flash_sb400},
 	{0x1166, 0x0205, "Broadcom HT-1000",	enable_flash_ht1000},
+	{0x1022, 0x3000, "AMD Elan SC520",	get_flashbase_sc520},
 };
 
 void print_supported_chipsets(void)
