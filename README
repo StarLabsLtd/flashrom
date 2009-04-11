@@ -1,8 +1,8 @@
 -------------------------------------------------------------------------------
-Flashrom README
+flashrom README
 -------------------------------------------------------------------------------
 
-Flashrom is a utility for reading, writing, and erasing flash ROM chips.
+flashrom is a utility for reading, writing, and erasing flash ROM chips.
 It's often used to flash BIOS/coreboot/firmware images.
 
 It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, and
@@ -22,43 +22,23 @@ To build the flashrom utility you need to install the following packages:
 * zlib-devel / zlib1g-dev
 
 
-Usage
------
+Usage / Options
+---------------
 
- $ flashrom [-rwvEVfLhR] [-c chipname] [-s exclude_start] [-e exclude_end]
-            [-m [vendor:]part] [-l file.layout] [-i imagename] [file]
-   -r | --read:                      read flash and save into file
-   -w | --write:                     write file into flash (default when
-                                     file is specified)
-   -v | --verify:                    verify flash against file
-   -E | --erase:                     erase flash device
-   -V | --verbose:                   more verbose output
-   -c | --chip <chipname>:           probe only for specified flash chip
-   -s | --estart <addr>:             exclude start position
-   -e | --eend <addr>:               exclude end postion
-   -m | --mainboard <[vendor:]part>: override mainboard settings
-   -f | --force:                     force write without checking image
-   -l | --layout <file.layout>:      read rom layout from file
-   -i | --image <name>:              only flash image name from flash layout
-   -L | --list-supported:            print supported devices
-   -h | --help:                      print this help text
-   -R | --version:                   print the version (release)
-
- If no file is specified, then all that happens
- is that flash info is dumped and the flash chip is set to writable.
+Please see the flashrom(8) manpage.
 
 
 Exit status
 -----------
 
-Flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
+flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
 (/dev/xsvc on Solaris) can not be opened and with 3 if a call to mmap() fails.
 
 
 coreboot Table and Mainboard Identification
 --------------------------------------------
 
-Flashrom reads the coreboot table to determine the current mainboard. If no
+flashrom reads the coreboot table to determine the current mainboard. If no
 coreboot table could be read or if you want to override these values, you can
 specify -m, e.g.:
 
@@ -72,7 +52,7 @@ coreboot table is found.
 ROM Layout Support
 ------------------
 
-Flashrom supports ROM layouts. This allows you to flash certain parts of
+flashrom supports ROM layouts. This allows you to flash certain parts of
 the flash chip only. A ROM layout file looks like follows:
 
   00000000:00008fff gfxrom

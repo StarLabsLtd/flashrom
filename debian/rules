@@ -7,7 +7,7 @@ include /usr/share/cdbs/1/rules/simple-patchsys.mk
 
 DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
 LDFLAGS += -lpci
-CFLAGS += -D'FLASHROM_VERSION=\"4092\"'
+CFLAGS += -D'FLASHROM_VERSION=\"0.9+r446\"'
 
 # Upstream ChangeLog generated via 'LC_ALL=C svn log > ChangeLog'.
 DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog

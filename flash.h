@@ -34,7 +34,7 @@
 #define __DARWIN__
 #endif
 
-#if defined(__FreeBSD__)
+#if defined(__FreeBSD__) || defined(__DragonFly__)
   #include <machine/cpufunc.h>
   #define off64_t off_t
   #define lseek64 lseek
@@ -283,8 +283,9 @@ extern struct flashchip flashchips[];
 #define MX_25L1605		0x2015	/* MX25L1605{,A,D} */
 #define MX_25L3205		0x2016	/* MX25L3205{,A} */
 #define MX_25L6405		0x2017	/* MX25L3205{,D} */
+#define MX_25L12805		0x2018	/* MX25L12805 */
 #define MX_25L1635D		0x2415
-#define MX_25L3235D		0x2416
+#define MX_25L3235D		0x5E16	/* MX25L3225D/MX25L3235D/MX25L3237D */
 #define MX_29F002B		0x34
 #define MX_29F002T		0xB0
 #define MX_29LV002CB		0x5A
@@ -511,15 +512,13 @@ typedef enum {
 extern flashbus_t flashbus;
 extern void *spibar;
 
-/* debug.c */
-extern int verbose;
-#define printf_debug(x...) { if (verbose) printf(x); }
-
 /* physmap.c */
 void *physmap(const char *descr, unsigned long phys_addr, size_t len);
 void physunmap(void *virt_addr, size_t len);
 
 /* flashrom.c */
+extern int verbose;
+#define printf_debug(x...) { if (verbose) printf(x); }
 void map_flash_registers(struct flashchip *flash);
 
 /* layout.c */
@@ -528,7 +527,7 @@ int read_romlayout(char *name);
 int find_romentry(char *name);
 int handle_romentries(uint8_t *buffer, uint8_t *content);
 
-/* lbtable.c */
+/* cbtable.c */
 int coreboot_init(void);
 extern char *lb_part, *lb_vendor;
 
