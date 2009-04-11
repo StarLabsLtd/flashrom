@@ -37,32 +37,32 @@ int probe_w29ee011(struct flashchip *flash)
 	}
 
 	/* Issue JEDEC Product ID Entry command */
-	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	chip_writeb(0xAA, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	chip_writeb(0x55, bios + 0x2AAA);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0x80;
+	chip_writeb(0x80, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	chip_writeb(0xAA, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	chip_writeb(0x55, bios + 0x2AAA);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0x60;
+	chip_writeb(0x60, bios + 0x5555);
 	myusec_delay(10);
 
 	/* Read product ID */
-	id1 = *(volatile uint8_t *)bios;
-	id2 = *(volatile uint8_t *)(bios + 0x01);
+	id1 = chip_readb(bios);
+	id2 = chip_readb(bios + 0x01);
 
 	/* Issue JEDEC Product ID Exit command */
-	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	chip_writeb(0xAA, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	chip_writeb(0x55, bios + 0x2AAA);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
+	chip_writeb(0xF0, bios + 0x5555);
 	myusec_delay(10);
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
 		return 1;

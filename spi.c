@@ -44,6 +44,8 @@ int spi_command(unsigned int writecnt, unsigned int readcnt,
 		return ich_spi_command(writecnt, readcnt, writearr, readarr);
 	case BUS_TYPE_SB600_SPI:
 		return sb600_spi_command(writecnt, readcnt, writearr, readarr);
+	case BUS_TYPE_WBSIO_SPI:
+		return wbsio_spi_command(writecnt, readcnt, writearr, readarr);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -126,7 +128,7 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 		model_id = (readarr[1] << 8) | readarr[2];
 	}
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, manuf_id,
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, manuf_id,
 		     model_id);
 
 	if (manuf_id == flash->manufacture_id && model_id == flash->model_id) {
@@ -160,6 +162,7 @@ int probe_spi_rdid4(struct flashchip *flash)
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
 	case BUS_TYPE_SB600_SPI:
+	case BUS_TYPE_WBSIO_SPI:
 		return probe_spi_rdid_generic(flash, 4);
 	default:
 		printf_debug("4b ID not supported on this SPI controller\n");
@@ -229,7 +232,7 @@ int probe_spi_res(struct flashchip *flash)
 uint8_t spi_read_status_register()
 {
 	const unsigned char cmd[JEDEC_RDSR_OUTSIZE] = { JEDEC_RDSR };
-	unsigned char readarr[JEDEC_RDSR_INSIZE];
+	unsigned char readarr[2]; /* JEDEC_RDSR_INSIZE=1 but wbsio needs 2 */
 
 	/* Read Status Register */
 	if (flashbus == BUS_TYPE_SB600_SPI) {
@@ -296,6 +299,24 @@ void spi_prettyprint_status_register_sst25vf016(uint8_t status)
 		     bpt[(status & 0x1c) >> 2]);
 }
 
+void spi_prettyprint_status_register_sst25vf040b(uint8_t status)
+{
+	const char *bpt[] = {
+		"none",
+		"0x70000-0x7ffff",
+		"0x60000-0x7ffff",
+		"0x40000-0x7ffff",
+		"all blocks", "all blocks", "all blocks", "all blocks"
+	};
+	printf_debug("Chip status register: Block Protect Write Disable "
+		"(BPL) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	printf_debug("Chip status register: Auto Address Increment Programming "
+		"(AAI) is %sset\n", (status & (1 << 6)) ? "" : "not ");
+	spi_prettyprint_status_register_common(status);
+	printf_debug("Resulting block protection : %s\n",
+		bpt[(status & 0x3c) >> 2]);
+}
+
 void spi_prettyprint_status_register(struct flashchip *flash)
 {
 	uint8_t status;
@@ -313,8 +334,15 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 			spi_prettyprint_status_register_st_m25p(status);
 		break;
 	case SST_ID:
-		if (flash->model_id == SST_25VF016B)
+		switch (flash->model_id) {
+		case 0x2541:
 			spi_prettyprint_status_register_sst25vf016(status);
+			break;
+		case 0x8d:
+		case 0x258d:
+			spi_prettyprint_status_register_sst25vf040b(status);
+			break;
+		}
 		break;
 	}
 }
@@ -555,6 +583,8 @@ int spi_chip_read(struct flashchip *flash, uint8_t *buf)
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
 		return ich_spi_read(flash, buf);
+	case BUS_TYPE_WBSIO_SPI:
+		return wbsio_spi_read(flash, buf);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -575,6 +605,8 @@ int spi_chip_write(struct flashchip *flash, uint8_t *buf)
 	case BUS_TYPE_ICH9_SPI:
 	case BUS_TYPE_VIA_SPI:
 		return ich_spi_write(flash, buf);
+	case BUS_TYPE_WBSIO_SPI:
+		return wbsio_spi_write(flash, buf);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -582,4 +614,30 @@ int spi_chip_write(struct flashchip *flash, uint8_t *buf)
 	}
 
 	return 1;
+}
+
+int spi_aai_write(struct flashchip *flash, uint8_t *buf) {
+	uint32_t pos = 2, size = flash->total_size * 1024;
+	unsigned char w[6] = {0xad, 0, 0, 0, buf[0], buf[1]};
+	switch (flashbus) {
+		case BUS_TYPE_WBSIO_SPI:
+			fprintf(stderr, "%s: impossible with Winbond SPI masters, degrading to byte program\n", __func__);
+			return spi_chip_write(flash, buf);
+		default:
+			break;
+	}
+	flash->erase(flash);
+	spi_write_enable();
+	spi_command(6, 0, w, NULL);
+	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+		myusec_delay(5); /* SST25VF040B Tbp is max 10us */
+	while (pos < size) {
+		w[1] = buf[pos++];
+		w[2] = buf[pos++];
+		spi_command(3, 0, w, NULL);
+		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+			myusec_delay(5); /* SST25VF040B Tbp is max 10us */
+	}
+	spi_write_disable();
+	return 0;
 }

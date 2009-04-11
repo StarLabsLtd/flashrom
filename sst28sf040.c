@@ -32,37 +32,35 @@
 
 static __inline__ void protect_28sf040(volatile uint8_t *bios)
 {
-	/* ask compiler not to optimize this */
-	volatile uint8_t tmp;
+	uint8_t tmp;
 
-	tmp = *(volatile uint8_t *)(bios + 0x1823);
-	tmp = *(volatile uint8_t *)(bios + 0x1820);
-	tmp = *(volatile uint8_t *)(bios + 0x1822);
-	tmp = *(volatile uint8_t *)(bios + 0x0418);
-	tmp = *(volatile uint8_t *)(bios + 0x041B);
-	tmp = *(volatile uint8_t *)(bios + 0x0419);
-	tmp = *(volatile uint8_t *)(bios + 0x040A);
+	tmp = chip_readb(bios + 0x1823);
+	tmp = chip_readb(bios + 0x1820);
+	tmp = chip_readb(bios + 0x1822);
+	tmp = chip_readb(bios + 0x0418);
+	tmp = chip_readb(bios + 0x041B);
+	tmp = chip_readb(bios + 0x0419);
+	tmp = chip_readb(bios + 0x040A);
 }
 
 static __inline__ void unprotect_28sf040(volatile uint8_t *bios)
 {
-	/* ask compiler not to optimize this */
-	volatile uint8_t tmp;
+	uint8_t tmp;
 
-	tmp = *(volatile uint8_t *)(bios + 0x1823);
-	tmp = *(volatile uint8_t *)(bios + 0x1820);
-	tmp = *(volatile uint8_t *)(bios + 0x1822);
-	tmp = *(volatile uint8_t *)(bios + 0x0418);
-	tmp = *(volatile uint8_t *)(bios + 0x041B);
-	tmp = *(volatile uint8_t *)(bios + 0x0419);
-	tmp = *(volatile uint8_t *)(bios + 0x041A);
+	tmp = chip_readb(bios + 0x1823);
+	tmp = chip_readb(bios + 0x1820);
+	tmp = chip_readb(bios + 0x1822);
+	tmp = chip_readb(bios + 0x0418);
+	tmp = chip_readb(bios + 0x041B);
+	tmp = chip_readb(bios + 0x0419);
+	tmp = chip_readb(bios + 0x041A);
 }
 
 static __inline__ int erase_sector_28sf040(volatile uint8_t *bios,
 					   unsigned long address)
 {
-	*bios = AUTO_PG_ERASE1;
-	*(bios + address) = AUTO_PG_ERASE2;
+	chip_writeb(AUTO_PG_ERASE1, bios);
+	chip_writeb(AUTO_PG_ERASE2, bios + address);
 
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
@@ -85,8 +83,8 @@ static __inline__ int write_sector_28sf040(volatile uint8_t *bios,
 			continue;
 		}
 		/*issue AUTO PROGRAM command */
-		*dst = AUTO_PGRM;
-		*dst++ = *src++;
+		chip_writeb(AUTO_PGRM, dst);
+		chip_writeb(*src++, dst++);
 
 		/* wait for Toggle bit ready */
 		toggle_ready_jedec(bios);
@@ -100,19 +98,19 @@ int probe_28sf040(struct flashchip *flash)
 	volatile uint8_t *bios = flash->virtual_memory;
 	uint8_t id1, id2;
 
-	*bios = RESET;
+	chip_writeb(RESET, bios);
 	myusec_delay(10);
 
-	*bios = READ_ID;
+	chip_writeb(READ_ID, bios);
 	myusec_delay(10);
-	id1 = *(volatile uint8_t *)bios;
+	id1 = chip_readb(bios);
 	myusec_delay(10);
-	id2 = *(volatile uint8_t *)(bios + 0x01);
+	id2 = chip_readb(bios + 0x01);
 
-	*bios = RESET;
+	chip_writeb(RESET, bios);
 	myusec_delay(10);
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
 		return 1;
 
@@ -124,8 +122,8 @@ int erase_28sf040(struct flashchip *flash)
 	volatile uint8_t *bios = flash->virtual_memory;
 
 	unprotect_28sf040(bios);
-	*bios = CHIP_ERASE;
-	*bios = CHIP_ERASE;
+	chip_writeb(CHIP_ERASE, bios);
+	chip_writeb(CHIP_ERASE, bios);
 	protect_28sf040(bios);
 
 	myusec_delay(10);

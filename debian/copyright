@@ -9,43 +9,162 @@ Upstream Authors:
 
    Various coreboot developers
 
-Copyright:
+-------------------------------------------------------------------------------
 
-   Copyright (C) 2000 Ronald G. Minnich <rminnich@gmail.com>
-   Copyright (C) 2000 Silicon Integrated System Corporation
-   Copyright (C) 2002 Linux Networx
-   Copyright (C) 2002 Steven James <pyro@linuxlabs.com>
-   Copyright (C) 2003 Niki W. Waibel <niki.waibel@gmx.net>
-   Copyright (C) 2004 Tyan Corporation
-   Copyright (C) 2005-2007 coresystems GmbH
-   Copyright (C) 2006 Giampiero Giancipoli <gianci@email.it>
-   Copyright (C) 2006 Uwe Hermann <uwe@hermann-uwe.de>
-   Copyright (C) 2007-2008 Carl-Daniel Hailfinger
-   Copyright (C) 2007 Luc Verhaegen <libv@skynet.be>
-   Copyright (C) 2007 Markus Boas <ryven@ryven.de>
-   Copyright (C) 2008 Ronald Hoogenboom <ronald@zonnet.nl>
-
-License:
-
-   [Note: Some files are GPL-v2, some are GPLv2-or-later!]
-
-   This package is free software; you can redistribute it and/or modify
-   it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
-   (at your option) any later version.
-
-   This package is distributed in the hope that it will be useful,
-   but WITHOUT ANY WARRANTY; without even the implied warranty of
-   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-   GNU General Public License for more details.
-
-   You should have received a copy of the GNU General Public License
-   along with this package; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+Files: *
+Copyright: © 2000 Silicon Integrated System Corporation
+License: GPL-2+
 
 On Debian systems, the complete text of the GNU General
-Public License can be found in `/usr/share/common-licenses/GPL-2'.
+Public License can be found in `/usr/share/common-licenses/GPL'.
 
-The Debian packaging is (C) 2006-2008, Uwe Hermann <uwe@debian.org> and
-is licensed under the GPL (version 2 or later), see above.
+-------------------------------------------------------------------------------
+
+Files: board_enable.c
+Copyright: © 2005-2007 coresystems GmbH <stepan@coresystems.de>
+           © 2006 Uwe Hermann <uwe@hermann-uwe.de>
+           © 2007-2008 Luc Verhaegen <libv@skynet.be>
+           © 2007 Carl-Daniel Hailfinger
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: cbtable.c
+Copyright: © 2002 Steven James <pyro@linuxlabs.com>
+           © 2002 Linux Networx
+           © 2006-2009 coresystems GmbH
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: chipset_enable.c
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2005-2007 coresystems GmbH <stepan@coresystems.de>
+           © 2006 Uwe Hermann <uwe@hermann-uwe.de>
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: en29f002a.c
+Copyright: © 2007 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: flashchips.c
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2004 Tyan Corp
+           © 2005-2008 coresystems GmbH <stepan@openbios.org>
+           © 2006-2009 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: flash.h
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2000 Ronald G. Minnich <rminnich@gmail.com>
+           © 2005-2007 coresystems GmbH <stepan@coresystems.de>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: flashrom.c
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2004 Tyan Corp <yhlu@tyan.com>
+           © 2005-2008 coresystems GmbH
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: ichspi.c
+Copyright: © 2008 Stefan Wildemann <stefan.wildemann@kontron.com>
+           © 2008 Claus Gindhart <claus.gindhart@kontron.com>
+           © 2008 Dominik Geyer <dominik.geyer@kontron.com>
+           © 2008 coresystems GmbH <info@coresystems.de>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: it87spi.c
+Copyright: © 2007, 2008 Carl-Daniel Hailfinger
+           © 2008 Ronald Hoogenboom <ronald@zonnet.nl>
+           © 2008 coresystems GmbH
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: jedec.c
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2006 Giampiero Giancipoli <gianci@email.it>
+           © 2006 coresystems GmbH <info@coresystems.de>
+           © 2007 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: layout.c, w39v080fa.c
+Copyright: © 2005-2008 coresystems GmbH
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: m29f002.c, physmap.c, w39v040c.c, wbsio_spi.c
+Copyright: © 2008-2009 Peter Stuge <peter@stuge.se>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: pm49fl00x.c
+Copyright: © 2004 Tyan Corporation
+           © 2007 Nikolay Petukhov <nikolay.petukhov@gmail.com>
+           © 2007 Reinder E.N. de Haan <lb_reha@mveas.com>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: sb600spi.c
+Copyright: © 2008 Wang Qingpei <Qingpei.Wang@amd.com>
+           © 2008 Joe Bao <Zheng.Bao@amd.com>
+           © Advanced Micro Devices, Inc
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: spi.c
+Copyright: © 2007, 2008 Carl-Daniel Hailfinger
+           © 2008 coresystems GmbH
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: spi.h
+Copyright: © 2007, 2008 Carl-Daniel Hailfinger
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
+Files: sst28sf040.c, sst49lfxxxc.c
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2005-2007 coresystems GmbH <stepan@openbios.org>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: stm50flw0x0x.c
+Copyright: © 2008 Claus Gindhart <claus.gindhart@kontron.com>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: w29ee011.c
+Copyright: © 2007 Markus Boas <ryven@ryven.de>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: debian/*
+Copyright: © 2006-2009 Uwe Hermann <uwe@debian.org>
+License: PD
+   The packaging done by Uwe Hermann <uwe@debian.org> is hereby
+   released as public domain.
 

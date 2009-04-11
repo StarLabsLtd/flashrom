@@ -30,7 +30,11 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#ifdef __FreeBSD__
+#if (defined(__MACH__) && defined(__APPLE__))
+#define __DARWIN__
+#endif
+
+#if defined(__FreeBSD__)
   #include <machine/cpufunc.h>
   #define off64_t off_t
   #define lseek64 lseek
@@ -41,6 +45,11 @@
   #define INW(x) __extension__ ({ u_int tmp = (x); inw(tmp); })
   #define INL(x) __extension__ ({ u_int tmp = (x); inl(tmp); })
 #else
+#if defined(__DARWIN__)
+    #include <DirectIO/darwinio.h>
+    #define off64_t off_t
+    #define lseek64 lseek
+#endif
   #define OUTB outb
   #define OUTW outw
   #define OUTL outl
@@ -48,6 +57,36 @@
   #define INW  inw
   #define INL  inl
 #endif
+
+static inline void chip_writeb(uint8_t b, volatile void *addr)
+{
+	*(volatile uint8_t *) addr = b;
+}
+
+static inline void chip_writew(uint16_t b, volatile void *addr)
+{
+	*(volatile uint16_t *) addr = b;
+}
+
+static inline void chip_writel(uint32_t b, volatile void *addr)
+{
+	*(volatile uint32_t *) addr = b;
+}
+
+static inline uint8_t chip_readb(const volatile void *addr)
+{
+	return *(volatile uint8_t *) addr;
+}
+
+static inline uint16_t chip_readw(const volatile void *addr)
+{
+	return *(volatile uint16_t *) addr;
+}
+
+static inline uint32_t chip_readl(const volatile void *addr)
+{
+	return *(volatile uint32_t *) addr;
+}
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -356,6 +395,7 @@ extern struct flashchip flashchips[];
 #define SST_39VF040		0xD7
 #define SST_49LF040B		0x50
 #define SST_49LF040		0x51
+#define SST_49LF020		0x61
 #define SST_49LF020A		0x52
 #define SST_49LF080A		0x5B
 #define SST_49LF002A		0x57
@@ -444,6 +484,11 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
 
 /* board_enable.c */
+void w836xx_ext_enter(uint16_t port);
+void w836xx_ext_leave(uint16_t port);
+unsigned char wbsio_read(uint16_t index, uint8_t reg);
+void wbsio_write(uint16_t index, uint8_t reg, uint8_t data);
+void wbsio_mask(uint16_t index, uint8_t reg, uint8_t data, uint8_t mask);
 int board_flash_enable(const char *vendor, const char *part);
 void print_supported_boards(void);
 
@@ -459,27 +504,23 @@ typedef enum {
 	BUS_TYPE_ICH9_SPI,
 	BUS_TYPE_IT87XX_SPI,
 	BUS_TYPE_SB600_SPI,
-	BUS_TYPE_VIA_SPI
+	BUS_TYPE_VIA_SPI,
+	BUS_TYPE_WBSIO_SPI
 } flashbus_t;
 
 extern flashbus_t flashbus;
 extern void *spibar;
 
-/* Physical memory mapping device */
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
-#  define MEM_DEV "/dev/xsvc"
-#else
-#  define MEM_DEV "/dev/mem"
-#endif
-
-extern int fd_mem;
-
 /* debug.c */
 extern int verbose;
 #define printf_debug(x...) { if (verbose) printf(x); }
 
+/* physmap.c */
+void *physmap(const char *descr, unsigned long phys_addr, size_t len);
+void physunmap(void *virt_addr, size_t len);
+
 /* flashrom.c */
-int map_flash_registers(struct flashchip *flash);
+void map_flash_registers(struct flashchip *flash);
 
 /* layout.c */
 int show_id(uint8_t *bios, int size, int force);
@@ -512,6 +553,7 @@ uint8_t spi_read_status_register();
 int spi_disable_blockprotect(void);
 void spi_byte_program(int address, uint8_t byte);
 int spi_nbyte_read(int address, uint8_t *bytes, int len);
+int spi_aai_write(struct flashchip *flash, uint8_t *buf);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -566,6 +608,11 @@ int erase_sector_jedec(volatile uint8_t *bios, unsigned int page);
 int erase_block_jedec(volatile uint8_t *bios, unsigned int page);
 int write_sector_jedec(volatile uint8_t *bios, uint8_t *src,
 		       volatile uint8_t *dst, unsigned int page_size);
+
+/* m29f002.c */
+int erase_m29f002(struct flashchip *flash);
+int write_m29f002t(struct flashchip *flash, uint8_t *buf);
+int write_m29f002b(struct flashchip *flash, uint8_t *buf);
 
 /* m29f400bt.c */
 int probe_m29f400bt(struct flashchip *flash);
@@ -636,6 +683,12 @@ int probe_w29ee011(struct flashchip *flash);
 
 /* w49f002u.c */
 int write_49f002(struct flashchip *flash, uint8_t *buf);
+
+/* wbsio_spi.c */
+int wbsio_check_for_spi(const char *name);
+int wbsio_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int wbsio_spi_read(struct flashchip *flash, uint8_t *buf);
+int wbsio_spi_write(struct flashchip *flash, uint8_t *buf);
 
 /* stm50flw0x0x.c */
 int probe_stm50flw0x0x(struct flashchip *flash);

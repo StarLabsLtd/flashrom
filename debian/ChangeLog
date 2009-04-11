@@ -1,4 +1,723 @@
 ------------------------------------------------------------------------
+r4092 | uwe | 2009-04-11 15:59:00 +0200 (Sat, 11 Apr 2009) | 6 lines
+
+Mention a few more flash chip packages in README/manpage.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r4089 | uwe | 2009-04-10 16:49:14 +0200 (Fri, 10 Apr 2009) | 6 lines
+
+Fix typo.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r4088 | uwe | 2009-04-10 16:41:29 +0200 (Fri, 10 Apr 2009) | 13 lines
+
+Various manpage / README fixes:
+
+ - Improve description a bit, especially wrt chip packages and
+   protocols.
+
+ - Add some missing parameters to manpage option descriptions.
+
+ - Remove long obsolete DoC support note.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r4086 | rminnich | 2009-04-09 16:28:36 +0200 (Thu, 09 Apr 2009) | 7 lines
+
+Fixed the typo should indeed be a 0x2e.
+Tested on an iWILL DK8-HTX board.
+
+Signed-off-by: Mondrian nuessle <nuessle@uni-hd.de>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+
+------------------------------------------------------------------------
+r4031 | stuge | 2009-03-30 15:20:01 +0200 (Mon, 30 Mar 2009) | 9 lines
+
+flashrom: Board enable support for HP DL145 G3.
+
+This is a BCM5785 based machine, WP# and TLB# need to be deasserted using
+GPIO 2 and 5 from the PM registers of the southbridge.
+This is very similar to the x3455 implementation.
+
+Signed-off-by: Mondrian Nuessle <nuessle@uni-hd.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r4020 | hailfinger | 2009-03-19 13:18:13 +0100 (Thu, 19 Mar 2009) | 6 lines
+
+Move the Atmel AT45 comments about block and page sizes from the end of
+the struct to the individual struct members to improve readability.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r4012 | stepan | 2009-03-17 15:39:25 +0100 (Tue, 17 Mar 2009) | 19 lines
+
+This patch adds "high coreboot table support" to coreboot version 2.
+
+Some bootloaders seem to overwrite memory starting at 0x600, thus destroying
+the coreboot table integrity, rendering the table useless.
+
+By moving the table to the high tables area (if it's activated), this problem
+is fixed.
+
+In order to move the table, a 40 bytes mini coreboot table with a single sub
+table is placed at 0x500/0x530 that points to the real coreboot table. This is
+comparable to the ACPI RSDT or the MP floating table.
+
+This patch also adds "table forward" support to flashrom and nvramtool.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+
+------------------------------------------------------------------------
+r3984 | hailfinger | 2009-03-06 23:26:00 +0100 (Fri, 06 Mar 2009) | 9 lines
+
+FreeBSD definitions of (read|write)[bwl] collide with our own. Before we
+attempt trickery, we can simply rename the accessor functions.
+
+Patch created with the help of Coccinelle.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <idwer_v@hotmail.com>
+Acked-by: Patrick Georgi <patrick@georgi-clan.de>
+
+------------------------------------------------------------------------
+r3973 | hailfinger | 2009-03-06 01:40:25 +0100 (Fri, 06 Mar 2009) | 110 lines
+
+During the conversion of flash chip accesses to helper functions, I
+spotted assignments to volatile variables which were neither placed
+inside the mmapped ROM area nor were they counters.
+Due to the use of accessor functions, volatile usage can be reduced
+significantly because the accessor functions take care of actually
+performing the reads/writes correctly.
+
+The following semantic patch spotted them (linebreak in python string
+for readability reasons, please remove before usage):
+@r exists@
+expression b;
+typedef uint8_t;
+volatile uint8_t a;
+position p1;
+@@
+ a@p1 = readb(b);
+
+@script:python@
+p1 << r.p1;
+a << r.a;
+b << r.b;
+@@
+print "* file: %s line %s has assignment to unnecessarily volatile
+variable: %s = readb(%s);" % (p1[0].file, p1[0].line, a, b)
+
+Result was:
+HANDLING: sst28sf040.c
+* file: sst28sf040.c line 44 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 43 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 42 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 41 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 40 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 39 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 38 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 58 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 57 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 56 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 55 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 54 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 53 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+* file: sst28sf040.c line 52 has assignment to unnecessarily volatile
+variable: tmp = readb(TODO: Binary);
+
+The following semantic patch uses the spatch builtin match printing
+functionality by prepending a "*" to the line with the pattern:
+@@
+expression b;
+typedef uint8_t;
+volatile uint8_t a;
+@@
+* a = readb(b);
+
+Result is:
+HANDLING: sst28sf040.c
+diff =
+--- sst28sf040.c        2009-03-06 01:04:49.000000000 +0100
+@@ -35,13 +35,6 @@ static __inline__ void protect_28sf040(v
+        /* ask compiler not to optimize this */
+        volatile uint8_t tmp;
+ 
+-       tmp = readb(bios + 0x1823);
+-       tmp = readb(bios + 0x1820);
+-       tmp = readb(bios + 0x1822);
+-       tmp = readb(bios + 0x0418);
+-       tmp = readb(bios + 0x041B);
+-       tmp = readb(bios + 0x0419);
+-       tmp = readb(bios + 0x040A);
+ }
+ 
+ static __inline__ void unprotect_28sf040(volatile uint8_t *bios)
+@@ -49,13 +42,6 @@ static __inline__ void unprotect_28sf040
+        /* ask compiler not to optimize this */
+        volatile uint8_t tmp;
+ 
+-       tmp = readb(bios + 0x1823);
+-       tmp = readb(bios + 0x1820);
+-       tmp = readb(bios + 0x1822);
+-       tmp = readb(bios + 0x0418);
+-       tmp = readb(bios + 0x041B);
+-       tmp = readb(bios + 0x0419);
+-       tmp = readb(bios + 0x041A);
+ }
+ 
+ static __inline__ int erase_sector_28sf040(volatile uint8_t *bios,
+
+It's arguably a bit easier to read if you get used to the leading "-"
+for matching lines.
+
+This patch was enabled by Coccinelle:
+http://www.emn.fr/x-info/coccinelle/
+
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Joseph Smith <joe@settoplinux.org>
+-- 
+http://www.hailfinger.org/
+
+------------------------------------------------------------------------
+r3971 | hailfinger | 2009-03-05 20:24:22 +0100 (Thu, 05 Mar 2009) | 50 lines
+
+flashrom: Use helper functions to access flash chips.
+
+Right now we perform direct pointer manipulation without any abstraction
+to read from and write to memory mapped flash chips. That makes it
+impossible to drive any flasher which does not mmap the whole chip.
+
+Using helper functions readb() and writeb() allows a driver for external
+flash programmers like Paraflasher to replace readb and writeb with
+calls to its own chip access routines.
+
+This patch has the additional advantage of removing lots of unnecessary
+casts to volatile uint8_t * and now-superfluous parentheses which caused
+poor readability.
+
+I used the semantic patcher Coccinelle to create this patch. The
+semantic patch follows:
+@@
+expression a;
+typedef uint8_t;
+volatile uint8_t *b;
+@@
+- *(b) = (a);
++ writeb(a, b);
+@@
+volatile uint8_t *b;
+@@
+- *(b)
++ readb(b)
+@@
+type T;
+T b;
+@@
+(
+ readb
+|
+ writeb
+)
+ (...,
+- (T)
+- (b)
++ b
+ )
+
+In contrast to a sed script, the semantic patch performs type checking
+before converting anything.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG Yu Ning <fengyuning1984@gmail.com>
+Tested-by: Joe Julian
+
+------------------------------------------------------------------------
+r3958 | stuge | 2009-02-25 09:07:33 +0100 (Wed, 25 Feb 2009) | 5 lines
+
+flashrom: Add SST25VF040.REMS with TEST_OK_ PROBE READ
+
+Signed-off-by: Zheng Bao <zheng.bao@amd.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3956 | stuge | 2009-02-22 22:07:28 +0100 (Sun, 22 Feb 2009) | 7 lines
+
+flashrom: SST29EE020A TEST_OK_ PROBE READ ERASE WRITE
+
+Report by Holger Mickler. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3932 | stuge | 2009-02-09 21:26:14 +0100 (Mon, 09 Feb 2009) | 11 lines
+
+flashrom: Fix broken flash chip base address logic
+
+Elan SC520 requries us to deal with flash chip base addresses at locations
+other than top of 4GB. The logic for that was incorrectly triggered also when
+a board had more than one flash chip. This patch will honor flashbase only when
+probing for the first flash chip on the board, and look at top of 4GB for later
+chips.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Myles Watson <mylesgw@gmail.com>
+
+------------------------------------------------------------------------
+r3927 | stuge | 2009-02-02 23:55:26 +0100 (Mon, 02 Feb 2009) | 5 lines
+
+flashrom: MSI MS-7046 board enable
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: David Tiemann <davidtiemann@gmail.com>
+
+------------------------------------------------------------------------
+r3926 | ruik | 2009-02-01 19:40:50 +0100 (Sun, 01 Feb 2009) | 7 lines
+
+ Following patch fixes VIA SPI (VT8237S). It needs to have opcodes
+ initialized same way as ICH7.
+
+ Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+ Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r3923 | hailfinger | 2009-01-28 01:27:54 +0100 (Wed, 28 Jan 2009) | 5 lines
+
+Factor out read and erase functions from flashrom main().
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3919 | stuge | 2009-01-26 16:29:27 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Add VT8237A PCI ID
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3918 | stuge | 2009-01-26 16:19:43 +0100 (Mon, 26 Jan 2009) | 7 lines
+
+flashrom: Fix one dead increment and one dead assignment as found by clang.
+
+Thanks Patrick!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3917 | stuge | 2009-01-26 07:42:02 +0100 (Mon, 26 Jan 2009) | 7 lines
+
+flashrom: Driver for ST M29F002T/NT/B. T/NT TEST_OK_ PROBE READ ERASE WRITE
+
+Test report from Julia. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Julia Longtin <juri@solarnetone.org>
+
+------------------------------------------------------------------------
+r3916 | stuge | 2009-01-26 05:48:01 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Fix copypaste error in r3913.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3913 | stuge | 2009-01-26 04:37:40 +0100 (Mon, 26 Jan 2009) | 11 lines
+
+flashrom: SST25VF040B using 0x90 identification and AAI write.
+
+SST AAI is Auto Address Increment writing, a streamed write to the flash chip
+where the first write command sets a starting address and following commands
+simply append data. Unfortunately not supported by Winbond SPI masters.
+
+From July 2008.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3912 | stuge | 2009-01-26 04:23:50 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Decode SST25VF040B status register, also from July 2008.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3911 | stuge | 2009-01-26 04:12:44 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Intel Desktop Board D201GLY
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3910 | stuge | 2009-01-26 04:08:45 +0100 (Mon, 26 Jan 2009) | 8 lines
+
+flashrom: Winbond SuperIO SPI driver.
+
+Developed and tested to work on Intel D201GLY in July 2008.
+Tested by a helpful person on IRC whose name I've since forgotten. Sorry!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r3909 | stuge | 2009-01-26 03:34:51 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Export Winbond SuperIO register access functions in board_enable.c.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3908 | stuge | 2009-01-26 03:20:56 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Document exit() codes introduced in r3907.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r3907 | stuge | 2009-01-26 03:04:19 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: exit(2) on /dev/mem open() failure and exit(3) on mmap() failure.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r3906 | stuge | 2009-01-26 02:33:02 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Add license header to physmap.c so everyone is happy. :)
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3905 | stuge | 2009-01-26 02:23:31 +0100 (Mon, 26 Jan 2009) | 9 lines
+
+flashrom: Darwin / Mac OS X
+
+Through DirectIO from coresystems GmbH we now support Darwin/Mac OS X.
+DirectIO is available at http://www.coresystems.de/en/directio
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3904 | stuge | 2009-01-26 02:16:09 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Small cleanup in Makefile.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3903 | stuge | 2009-01-26 02:10:48 +0100 (Mon, 26 Jan 2009) | 6 lines
+
+flashrom: Abstract mmap() in physmap.c and only open /dev/mem on the first physmap() call.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3901 | stuge | 2009-01-26 01:39:57 +0100 (Mon, 26 Jan 2009) | 7 lines
+
+flashrom: Change flashrom.c:map_flash_registers() from int to void.
+
+The function exit()s on failure, and no callers check the return value.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3900 | stuge | 2009-01-26 01:19:36 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Forgot some things in r3899.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3899 | stuge | 2009-01-26 01:15:56 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Little readability improvement in cbtable.c:coreboot_init()
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3898 | stuge | 2009-01-26 01:07:25 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Change FreeBSD #ifdef into #if defined()
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3897 | stuge | 2009-01-26 00:59:30 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Make Makefile a bit more portable. Shell echo doesn't always know -n.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3896 | stuge | 2009-01-26 00:55:12 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Add dry Am29F080B Am29LV081B SST39VF080 definitions per data sheets.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3895 | stuge | 2009-01-26 00:52:45 +0100 (Mon, 26 Jan 2009) | 5 lines
+
+flashrom: Beautify flash chip ID verbose printout a little, always use %02x.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3894 | stuge | 2009-01-25 21:41:51 +0100 (Sun, 25 Jan 2009) | 7 lines
+
+flashrom: Fix stupid off-by-one error in erase verification.
+
+As reported by Jody McIntyre. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3893 | stuge | 2009-01-25 00:01:08 +0100 (Sun, 25 Jan 2009) | 7 lines
+
+flashrom: ST M50FW080 TEST_OK_ PROBE READ ERASE WRITE
+
+Report by Jody McIntyre. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3892 | stuge | 2009-01-24 02:32:40 +0100 (Sat, 24 Jan 2009) | 7 lines
+
+flashrom: SST25VF080B TEST_OK_PROBE
+
+Report by Scaldov M.V. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3890 | stuge | 2009-01-23 06:23:06 +0100 (Fri, 23 Jan 2009) | 5 lines
+
+flashrom: Check all mmap() calls and print helpful Linux error message.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3889 | stuge | 2009-01-22 23:53:59 +0100 (Thu, 22 Jan 2009) | 7 lines
+
+flashrom: Provide some hints for the user in case /dev/mem mmap fails.
+
+resolves #121
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3869 | stuge | 2009-01-18 07:39:32 +0100 (Sun, 18 Jan 2009) | 6 lines
+
+flashrom: Fix ICH9 locking register address and add important debug output.
+
+Signed-off-by: FENG yu ning <fengyuning1984@gmail.com>
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: FENG yu ning <fengyuning1984@gmail.com>
+
+------------------------------------------------------------------------
+r3862 | stuge | 2009-01-15 03:13:18 +0100 (Thu, 15 Jan 2009) | 5 lines
+
+flashrom: Add ICH opcode debugging.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3861 | hailfinger | 2009-01-15 01:48:24 +0100 (Thu, 15 Jan 2009) | 16 lines
+
+Similarly to flashchips array, this patch intends to make the table
+board_pciid_enables more readable.
+
+Signed-off-by: Stephan Guilloux <stephan.guilloux@free.fr>
+
+> What real problem does this solve?
+
+1. Next time someone adds a new struct member, we avoid mistakes of
+ordering of initializers
+2. we avoid mistakes in the first place.
+
+The .x = y stuff was added for a (good) reason, I think this is an
+improvement.
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3860 | stuge | 2009-01-13 15:32:27 +0100 (Tue, 13 Jan 2009) | 5 lines
+
+flashrom: Always print address when verification fails, not only with -V.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3859 | stuge | 2009-01-12 22:31:14 +0100 (Mon, 12 Jan 2009) | 9 lines
+
+flashrom: Board enable for GIGABYTE GA-MA78G-DS3H
+
+This board has 2x MX25L8005 flash chips behind an IT8718F LPC->SPI bridge.
+The board uses GIGABYTE's patented BIOS failover technology, and at this point
+we do not know how to control which of the two chips flashrom actually hits.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Yul Rottmann <yulrottmann@bitel.net>
+
+------------------------------------------------------------------------
+r3858 | stuge | 2009-01-12 22:28:03 +0100 (Mon, 12 Jan 2009) | 5 lines
+
+flashrom: IT8718F works just like IT8716F.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Yul Rottmann <yulrottmann@bitel.net>
+
+------------------------------------------------------------------------
+r3857 | stuge | 2009-01-12 22:00:35 +0100 (Mon, 12 Jan 2009) | 7 lines
+
+flashrom: Check return value of fscanf()/fwrite()/fread()
+
+Fix build error on distros with warn_unused_result attributes in glibc.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Yul Rottmann <yulrottmann@bitel.net>
+
+------------------------------------------------------------------------
+r3855 | stuge | 2009-01-11 04:31:02 +0100 (Sun, 11 Jan 2009) | 7 lines
+
+flashrom: Update usage in README
+
+Mimicked from flashrom.c
+
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3853 | hailfinger | 2009-01-08 17:53:13 +0100 (Thu, 08 Jan 2009) | 11 lines
+
+Add erase and write functions to the following chip definitions:
+
+AT25DF021 AT25DF041A AT25DF081 AT25DF161 AT25DF321 AT25DF321A AT25DF641
+AT25F512B AT25FS010 AT25FS040 AT26DF081A AT26DF161 AT26DF161A AT26DF321
+AT26F004
+
+Straight from the data sheets, untested because I lack the hardware.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r3852 | hailfinger | 2009-01-08 05:56:59 +0100 (Thu, 08 Jan 2009) | 12 lines
+
+The flashrom man page has incomplete author/copyright sections and an
+incorrect license section.
+- Remove the copyright listings and refer the reader to the source
+  files.
+- Update the author list to those which have copyright messages in the
+source files.
+- Correct the license from GPL v2+ to (GPL v2, with some files under
+  later versions as well)
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r3851 | hailfinger | 2009-01-08 04:40:17 +0100 (Thu, 08 Jan 2009) | 9 lines
+
+This patch improves machine parseability and human readability of
+flashchips.c over what's currently in flashrom HEAD.
+The explicit initialization makes sure any future struct flashchip
+reordering is not needed. (Except for the case where we need arrays
+of some of the struct members.)
+
+Signed-off-by: Stephan Guilloux <mailto:stephan.guilloux@free.fr>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r3850 | uwe | 2009-01-07 13:35:09 +0100 (Wed, 07 Jan 2009) | 6 lines
+
+Add SST49LF020 support.
+
+Signed-off-by: Sven Schnelle <svens@stackframe.org>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3849 | uwe | 2009-01-07 13:15:46 +0100 (Wed, 07 Jan 2009) | 6 lines
+
+Add AMD-768 chipset support.
+
+Signed-off-by: Sven Schnelle <svens@stackframe.org>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r3848 | uwe | 2009-01-07 13:11:13 +0100 (Wed, 07 Jan 2009) | 6 lines
+
+Add i631x LPC support.
+
+Signed-off-by: Sven Schnelle <svens@stackframe.org>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
 r3834 | uwe | 2008-12-22 17:42:59 +0100 (Mon, 22 Dec 2008) | 8 lines
 
 If you pass a bogus layout file to the -l option flashrom will segfault.

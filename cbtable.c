@@ -4,7 +4,7 @@
  * Copyright (C) 2002 Steven James <pyro@linuxlabs.com>
  * Copyright (C) 2002 Linux Networx
  * (Written by Eric Biederman <ebiederman@lnxi.com> for Linux Networx)
- * Copyright (C) 2006-2007 coresystems GmbH
+ * Copyright (C) 2006-2009 coresystems GmbH
  * (Written by Stefan Reinauer <stepan@coresystems.de> for coresystems GmbH)
  *
  * This program is free software; you can redistribute it and/or modify
@@ -124,7 +124,7 @@ static struct lb_header *find_lb_table(void *base, unsigned long start,
 				head->table_checksum);
 			continue;
 		}
-		fprintf(stdout, "Found coreboot table at 0x%08lx.\n", addr);
+		printf_debug("Found coreboot table at 0x%08lx.\n", addr);
 		return head;
 
 	};
@@ -181,38 +181,54 @@ static void search_lb_records(struct lb_record *rec, struct lb_record *last,
 	}
 }
 
+#define BYTES_TO_MAP (1024*1024)
 int coreboot_init(void)
 {
-	uint8_t *low_1MB;
+	uint8_t *table_area;
+	unsigned long addr, start;
 	struct lb_header *lb_table;
 	struct lb_record *rec, *last;
 
-	low_1MB = mmap(0, 1024 * 1024, PROT_READ, MAP_SHARED, fd_mem,
-		       0x00000000);
-	if (low_1MB == MAP_FAILED) {
-		perror("Can't mmap memory using " MEM_DEV);
-		exit(-2);
-	}
-	lb_table = 0;
+#ifdef __DARWIN__
+	/* This is a hack. DirectIO fails to map physical address 0x00000000.
+	 * Why?
+	 */
+	start = 0x400;
+#else
+	start = 0x0;
+#endif
+	table_area = physmap("low megabyte", start, BYTES_TO_MAP);
+
+	lb_table = find_lb_table(table_area, 0x00000, 0x1000);
 	if (!lb_table)
-		lb_table = find_lb_table(low_1MB, 0x00000, 0x1000);
-	if (!lb_table)
-		lb_table = find_lb_table(low_1MB, 0xf0000, 1024 * 1024);
+		lb_table = find_lb_table(table_area, 0xf0000, BYTES_TO_MAP);
 	if (lb_table) {
-		unsigned long addr;
-		addr = ((char *)lb_table) - ((char *)low_1MB);
-		printf_debug("Coreboot table found at %p.\n", lb_table);
-		rec = (struct lb_record *)(((char *)lb_table) + lb_table->header_bytes);
-		last = (struct lb_record *)(((char *)rec) + lb_table->table_bytes);
-		printf_debug("Coreboot header(%d) checksum: %04x table(%d) checksum: %04x entries: %d\n",
-		     lb_table->header_bytes, lb_table->header_checksum,
-		     lb_table->table_bytes, lb_table->table_checksum,
-		     lb_table->table_entries);
-		search_lb_records(rec, last, addr + lb_table->header_bytes);
-	} else {
+		struct lb_forward *forward = (struct lb_forward *)
+			(((char *)lb_table) + lb_table->header_bytes);
+		if (forward->tag == LB_TAG_FORWARD) {
+			start = forward->forward;
+			start &= ~(getpagesize()-1);
+			physunmap(table_area, BYTES_TO_MAP);
+			table_area = physmap("high tables", start, BYTES_TO_MAP);
+			lb_table = find_lb_table(table_area, 0x00000, 0x1000);
+		}
+	}
+
+	if (!lb_table) {
 		printf("No coreboot table found.\n");
 		return -1;
 	}
+
+	addr = ((char *)lb_table) - ((char *)table_area) + start;
+	fprintf(stdout, "coreboot table found at 0x%lx.\n", 
+		(unsigned long)lb_table - (unsigned long)table_area + start);
+	rec = (struct lb_record *)(((char *)lb_table) + lb_table->header_bytes);
+	last = (struct lb_record *)(((char *)rec) + lb_table->table_bytes);
+	printf_debug("coreboot header(%d) checksum: %04x table(%d) checksum: %04x entries: %d\n",
+	     lb_table->header_bytes, lb_table->header_checksum,
+	     lb_table->table_bytes, lb_table->table_checksum,
+	     lb_table->table_entries);
+	search_lb_records(rec, last, addr + lb_table->header_bytes);
 
 	return 0;
 }

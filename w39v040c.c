@@ -26,25 +26,25 @@ int probe_w39v040c(struct flashchip *flash)
 	volatile uint8_t *bios = flash->virtual_memory;
 	uint8_t id1, id2, lock;
 
-	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	chip_writeb(0xAA, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	chip_writeb(0x55, bios + 0x2AAA);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0x90;
+	chip_writeb(0x90, bios + 0x5555);
 	myusec_delay(10);
 
-	id1 = *(volatile uint8_t *)bios;
-	id2 = *(volatile uint8_t *)(bios + 1);
-	lock = *(volatile uint8_t *)(bios + 0xfff2);
+	id1 = chip_readb(bios);
+	id2 = chip_readb(bios + 1);
+	lock = chip_readb(bios + 0xfff2);
 
-	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	chip_writeb(0xAA, bios + 0x5555);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	chip_writeb(0x55, bios + 0x2AAA);
 	myusec_delay(10);
-	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
+	chip_writeb(0xF0, bios + 0x5555);
 	myusec_delay(40);
 
-	printf_debug("%s: id1 0x%x, id2 0x%x", __func__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x", __func__, id1, id2);
 	if (!oddparity(id1))
 		printf_debug(", id1 parity violation");
 	printf_debug("\n");
