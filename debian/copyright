@@ -45,8 +45,8 @@ License: GPL-2
 
 -------------------------------------------------------------------------------
 
-Files: en29f002a.c
-Copyright: © 2007 Carl-Daniel Hailfinger
+Files: dummyflasher.c, en29f002a.c, internal.c
+Copyright: © 2007-2009 Carl-Daniel Hailfinger
 License: GPL-2+
 
 -------------------------------------------------------------------------------
@@ -72,6 +72,7 @@ Files: flashrom.c
 Copyright: © 2000 Silicon Integrated System Corporation
            © 2004 Tyan Corp <yhlu@tyan.com>
            © 2005-2008 coresystems GmbH
+	   © 2008,2009 Carl-Daniel Hailfinger
 License: GPL-2+
 
 -------------------------------------------------------------------------------
@@ -102,15 +103,33 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
-Files: layout.c, w39v080fa.c
+Files: layout.c
 Copyright: © 2005-2008 coresystems GmbH
 License: GPL-2
 
 -------------------------------------------------------------------------------
 
-Files: m29f002.c, physmap.c, w39v040c.c, wbsio_spi.c
+Files: w39v080fa.c
+Copyright: © 2008 coresystems GmbH
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: m29f002.c, w39v040c.c
 Copyright: © 2008-2009 Peter Stuge <peter@stuge.se>
 License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: nic3com.c, pcidev.c
+Copyright: © 2009 Uwe Hermann <uwe@hermann-uwe.de>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: physmap.c, wbsio_spi.c
+Copyright: © 2008-2009 Peter Stuge <peter@stuge.se>
+License: GPL-2
 
 -------------------------------------------------------------------------------
 
@@ -122,10 +141,16 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
+Files: satasii.c
+Copyright: © 2009 Rudolf Marek <r.marek@assembler.cz>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
 Files: sb600spi.c
 Copyright: © 2008 Wang Qingpei <Qingpei.Wang@amd.com>
            © 2008 Joe Bao <Zheng.Bao@amd.com>
-           © Advanced Micro Devices, Inc
+           © 2008 Advanced Micro Devices, Inc
 License: GPL-2+
 
 -------------------------------------------------------------------------------

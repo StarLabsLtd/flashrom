@@ -23,9 +23,6 @@
  * Contains the ITE IT87* SPI specific routines
  */
 
-#include <stdio.h>
-#include <pci/pci.h>
-#include <stdint.h>
 #include <string.h>
 #include "flash.h"
 #include "spi.h"
@@ -196,11 +193,14 @@ int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
 }
 
 /* Page size is usually 256 bytes */
-static void it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
+static int it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
 {
 	int i;
+	int result;
 
-	spi_write_enable();
+	result = spi_write_enable();
+	if (result)
+		return result;
 	OUTB(0x06, it8716f_flashport + 1);
 	OUTB(((2 + (fast_spi ? 1 : 0)) << 4), it8716f_flashport);
 	for (i = 0; i < 256; i++) {
@@ -212,22 +212,28 @@ static void it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		usleep(1000);
+	return 0;
 }
 
 /*
- * IT8716F only allows maximum of 512 kb SPI mapped to LPC memory cycles
  * Program chip using firmware cycle byte programming. (SLOW!)
+ * This is for chips which can only handle one byte writes
+ * and for chips where memory mapped programming is impossible due to
+ * size constraints in IT87* (over 512 kB)
  */
-int it8716f_over512k_spi_chip_write(struct flashchip *flash, uint8_t *buf)
+int it8716f_spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 {
 	int total_size = 1024 * flash->total_size;
 	int i;
+	int result;
 
 	fast_spi = 0;
 
 	spi_disable_blockprotect();
 	for (i = 0; i < total_size; i++) {
-		spi_write_enable();
+		result = spi_write_enable();
+		if (result)
+			return result;
 		spi_byte_program(i, buf[i]);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 			myusec_delay(10);
@@ -262,13 +268,17 @@ int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf)
 	return 0;
 }
 
-int it8716f_spi_chip_write(struct flashchip *flash, uint8_t *buf)
+int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
 {
 	int total_size = 1024 * flash->total_size;
 	int i;
 
+	/*
+	 * IT8716F only allows maximum of 512 kb SPI chip size for memory
+	 * mapped access.
+	 */
 	if (total_size > 512 * 1024) {
-		it8716f_over512k_spi_chip_write(flash, buf);
+		it8716f_spi_chip_write_1(flash, buf);
 	} else {
 		for (i = 0; i < total_size / 256; i++) {
 			it8716f_spi_page_program(i, buf,

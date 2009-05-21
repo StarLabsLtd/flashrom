@@ -1,4 +1,1341 @@
 ------------------------------------------------------------------------
+r544 | uwe | 2009-05-22 15:18:38 +0200 (Fri, 22 May 2009) | 6 lines
+
+Add website section (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r543 | oxygene | 2009-05-22 13:37:27 +0200 (Fri, 22 May 2009) | 22 lines
+
+A bunch of output beautifications and improvements, as well as doc
+fixes:
+
+ - Update manpage, we now report supported boards via -L.
+ 
+ - Add some missing escaping for '-' characters in the manpage.
+
+ - Shorten some of the really long device names, so that -L output looks
+   nicer.
+   
+ - Display a "table header" for all entries/columns in -L output.
+ 
+ - Make -L output tabular for all lists for better readability.
+ 
+ - Do not print "unknown XXXX SPI chip" entries in -L output.
+ 
+ - And random other cosmetics...
+ 
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Patrick Georgi <patrick.georgi@coresystems.de>
+
+------------------------------------------------------------------------
+r542 | uwe | 2009-05-21 19:11:25 +0200 (Thu, 21 May 2009) | 23 lines
+
+Mark the following boards as 'known-good' (write/erase works):
+
+ - ASUS P5B-Deluxe (reported by Andrew Paprocki)
+ - ASUS P6T Deluxe V2 (reported by Aldrik Dunbar)
+ - GIGABYTE GA-6ZMA (reported by Urja Rannikko)
+ - Intel EP80759 (reported by Stephan GUILLOUX)
+ - MSI MS-7345 (P35 Neo2-FIR) (reported by Onno)
+ - MSI MS-7168 (Orion) (reported by ubuntosaure)
+ - Supermicro H8QC8 (reported by Victor Zele)
+ 
+Mark the following boards as 'known-bad' (they likely require a write-enable):
+
+ - Abit IS-10 (reported by deejkuba)
+ - ASUS P5B (reported by Henning Fleddermann)
+ - ASUS P5BV-M (reported by Bernhard M. Wiedemann)
+ - Boser HS-6637 (reported by Mark Robinson)
+ 
+Also, mark the Winbond W39V040A as fully tested (report by ubuntosaure).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r541 | uwe | 2009-05-21 17:59:58 +0200 (Thu, 21 May 2009) | 8 lines
+
+Make an extra MANDIR variable for easier overriding (trivial).
+
+Thanks Heinz Wiesinger <HMWiesinger@liwjatan.at> for the report.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r540 | uwe | 2009-05-21 17:55:46 +0200 (Thu, 21 May 2009) | 11 lines
+
+Improve flashrom test report text a bit:
+
+ - Mention that we'd like to have -V output for all operations
+   which were tested by the user.
+
+ - Mention that we'd like to know the exact mainboard vendor/name.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r539 | uwe | 2009-05-21 02:29:50 +0200 (Thu, 21 May 2009) | 6 lines
+
+Fix typo (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r538 | uwe | 2009-05-21 01:27:16 +0200 (Thu, 21 May 2009) | 8 lines
+
+Mark the Macronix MX29F002T as working (trivial).
+
+I tested all operations on hardware.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r537 | uwe | 2009-05-20 19:09:43 +0200 (Wed, 20 May 2009) | 6 lines
+
+The Silicon Image PCI0680 has bit 26 marked as reserved, so don't use it.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r536 | uwe | 2009-05-19 23:03:31 +0200 (Tue, 19 May 2009) | 22 lines
+
+Mark the Silicon Image PCI0680 Ultra ATA-133 controller as working.
+
+I tested identify, read, write, erase, verify successfully, HOWEVER,
+this will only work (at least on my card) after de-soldering the
+soldered-on PLCC32 one-time programmable (OTP) chip (Holtek HT27C010)
+and soldering on a (re-)programmable flash ROM chip or a socket.
+
+Example:
+
+http://www.coreboot.org/File:Sii_controller1.jpg
+http://www.coreboot.org/File:Sii_controller2.jpg
+
+The OTP chip which came on my card does not react to the standard JEDEC
+identify/read/write/erase commands anymore, so if all other such PCI0680
+controllers which are around also have the same OTP chip (that's not
+necessarily the case), they cannot be used as "external programmer" in
+flashrom without the above mentioned modifications.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r535 | uwe | 2009-05-19 16:14:21 +0200 (Tue, 19 May 2009) | 6 lines
+
+Documentation improvements and small code/whitespace fixes (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r534 | uwe | 2009-05-19 00:27:53 +0200 (Tue, 19 May 2009) | 13 lines
+
+Add detection support and write-enable for the GIGABYTE GA-MA78GM-S2H.
+Thanks Michael Heimann for reporting.
+
+The board was misidentified as a GIGABYTE GA-MA78G-DS3H though, as the
+old PCI IDs and subsystem IDs of match. Thus, use differing ones for
+both boards, which is not so easy. The only usable-looking difference
+is in the SATA controller subsystem IDs. This should allow us to
+properly detect both boards.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r533 | uwe | 2009-05-18 23:56:16 +0200 (Mon, 18 May 2009) | 6 lines
+
+Drop duplicate Tyan S2498 (Tomcat K7M) entry in the board list (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r532 | uwe | 2009-05-18 17:31:10 +0200 (Mon, 18 May 2009) | 7 lines
+
+Add Tyan S2891/S2892/S2895 as supported without special write-enables
+being required. Thanks Myles Watson <mylesgw@gmail.com> for the report.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r531 | uwe | 2009-05-18 01:12:17 +0200 (Mon, 18 May 2009) | 7 lines
+
+Factor out fallback_map/unmap, most external programmers don't need
+and special handling here (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r530 | uwe | 2009-05-18 00:58:41 +0200 (Mon, 18 May 2009) | 6 lines
+
+Rename sata_sii.c to satasii.c for consistency (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r529 | uwe | 2009-05-18 00:57:34 +0200 (Mon, 18 May 2009) | 17 lines
+
+Various smaller flashrom improvements:
+
+ - Document new 'satasii' programmer in -L output and manpage.
+
+ - Drop PCI_IO_BASE_ADDRESS, pci.h has such #defines already.
+
+ - Beautify flashrom output and make it more consistent.
+ 
+ - Same for the 'make' output (reordered some $CC parameters).
+   Build-tested on i386, shouldn't break any builds, I think.
+
+ - Some variable renaming and other cosmetic fixes.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r528 | ruik | 2009-05-17 21:46:43 +0200 (Sun, 17 May 2009) | 12 lines
+
+This patch adds support for BIOS flashing on the all SiliconImage SATA
+controllers. It was easy because
+
+1) flashrom has now nice API
+2) documentation is public on the web site
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+Don't forget to add a files. Because I do.
+
+
+------------------------------------------------------------------------
+r527 | ruik | 2009-05-17 21:39:27 +0200 (Sun, 17 May 2009) | 10 lines
+
+This patch adds support for BIOS flashing on the all SiliconImage SATA
+controllers. It was easy because
+
+1) flashrom has now nice API
+2) documentation is public on the web site
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r526 | ruik | 2009-05-17 20:24:24 +0200 (Sun, 17 May 2009) | 5 lines
+
+Fix a quilt introduced bug in patch.
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Self-acked-by: Rudolf Marek <r.marek@assembler.cz>
+
+------------------------------------------------------------------------
+r525 | ruik | 2009-05-17 19:02:07 +0200 (Sun, 17 May 2009) | 16 lines
+
+[PATCH] flashrom add PMC 39F010
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+[PATCH] tested SST39VF010
+
+Self-ack is fine for test reports.
+
+Rudolf Marek wrote:
+> > Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+
+Acked-by: Peter Stuge <peter@stuge.se>
+
+
+------------------------------------------------------------------------
+r524 | hailfinger | 2009-05-17 17:49:24 +0200 (Sun, 17 May 2009) | 56 lines
+
+Use accessor functions for MMIO. Some MMIO accesses used volatile,
+others didn't (and risked non-execution of side effects) and even with
+volatile, some accesses looked dubious.
+
+Since the MMIO accessor functions and the onboard flash accessor
+functions are functionally identical (but have different signatures),
+make the flash accessors wrappers for the MMIO accessors.
+
+For some of the conversions, I used Coccinelle. Semantic patch follows:
+
+@@
+typedef uint8_t;
+expression a;
+volatile uint8_t *b;
+@@
+- b[a]
++ *(b + a)
+@@
+expression a;
+volatile uint8_t *b;
+@@
+- *(b) |= (a);
++ *(b) = *(b) | (a);
+@@
+expression a;
+volatile uint8_t *b;
+@@
+- *(b) = (a);
++ mmio_writeb(a, b);
+@@
+volatile uint8_t *b;
+@@
+- *(b)
++ mmio_readb(b)
+@@
+type T;
+T b;
+@@
+(
+ mmio_readb
+|
+ mmio_writeb
+)
+ (...,
+- (T)
+- (b)
++ b
+ )
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+Uwe tested read, write, erase with this patch on a random board to make
+sure nothing breaks.
+
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r523 | uwe | 2009-05-17 01:42:17 +0200 (Sun, 17 May 2009) | 13 lines
+
+List all boards which are:
+
+ - Supported out of the box (no flash enables required)
+
+ - Verifiably not yet working (unknown flash enable)
+
+Also, move some structs to flash.h in preparation for later wiki
+output support.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r522 | uwe | 2009-05-17 00:36:00 +0200 (Sun, 17 May 2009) | 9 lines
+
+Eliminate all 'inline's from the flashrom code. They serve pretty
+much no purpose, compilers can optimize pretty much all of what we
+might mark as inline anyway, _and_ inlines are not enforced in any
+way by the compiler either. They're totally unneeded. Kill them.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r521 | uwe | 2009-05-17 00:05:42 +0200 (Sun, 17 May 2009) | 8 lines
+
+Drop unused/duplicated #includes and some dead code (trivial).
+
+Build-tested on 32bit x86.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r520 | uwe | 2009-05-16 23:39:19 +0200 (Sat, 16 May 2009) | 12 lines
+
+Add proper workaround for 3COM 3C90xB cards, which need special fixups
+(the 3C90xC ones don't). This is tested on hardware.
+
+Also, add initial support for the Atmel AT29C010A chip (which I inserted
+in a 3COM 3C90xB card for testing). It can be detected, read works, erase
+works, but write will need some additional code (will post in another
+patch later).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r519 | hailfinger | 2009-05-16 23:22:56 +0200 (Sat, 16 May 2009) | 17 lines
+
+Use chipaddr instead of volatile uint8_t * because when we access
+chips in external flashers, they are not accessed via pointers at all.
+
+Benefits:
+This allows us to differentiate between volatile machine memory accesses
+and flash chip accesses.
+It also enforces usage of chip_{read,write}[bwl] to access flash chips,
+so nobody will unintentionally use pointers to access chips anymore.
+Some unneeded casts are removed as well.
+Grepping for chip operations and machine memory operations doesn't yield
+any false positives anymore.
+
+Compile tested on 32 bit and 64 bit Linux.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r518 | uwe | 2009-05-16 03:30:48 +0200 (Sat, 16 May 2009) | 11 lines
+
+Older libpci versions (e.g. 2.2.8, as it's default on current FreeBSD 7.2)
+don't properly fill the base_addr[0] struct member, so revert back to
+an explicit pci_read_long() call, otherwise detection of PCI devices and
+their base address will fail with strange error messages.
+
+Thanks Idwer Vollering <vidwer@gmail.com> for reporting and testing.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r517 | hailfinger | 2009-05-16 03:23:55 +0200 (Sat, 16 May 2009) | 9 lines
+
+Add generic 16 bit and 32 bit chip read/write emulation to the external
+flasher infrastructure. The emulation works by splitting 32 bit accesses
+into 16 bit accesses and 16 bit accesses into to 8 bit accesses.
+That way, external flashers can mix and match the amount of emulation
+they need.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r516 | hailfinger | 2009-05-16 01:36:23 +0200 (Sat, 16 May 2009) | 9 lines
+
+Uwe tested the recent SB600 SPI commit and notified me of one unexpected
+problem. It seems some boards do not use SPI_HOLD at all. Take that into
+account when trying to figure out if SPI is available.
+
+Print the SB600 ROM strap override register status for better debugging.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r515 | uwe | 2009-05-15 19:02:34 +0200 (Fri, 15 May 2009) | 14 lines
+
+Refactor parts of the 3COM NIC code.
+
+Move the reusable PCI specific parts into pcidev.c, they'll be usable
+for other NIC code (Realtek, VIA, ...) and also for SATA/IDE controller
+cards as external programmers (for every PCI device which can program
+EEPROMs basically).
+
+Also add print_supported_pcidevs() to show the supported PCI devices
+(currently only NICs, soon more) in the 'flashrom -L' output.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r514 | hailfinger | 2009-05-15 02:56:22 +0200 (Fri, 15 May 2009) | 17 lines
+
+Until the ICH SPI driver can handle preopcodes as standalone opcodes, we
+should handle such special opcode failure gracefully on ICH and
+compatible chipsets.
+
+This fixes status register writes on almost all ICH+VIA SPI masters.
+
+The fix is almost identical to r484, but this time it affects the EWSR
+(Enable Write Status Register) opcode instead of the WREN (Write Enable)
+opcode.
+
+With the differentiated return codes introduced in r500, the workaround
+is more precise this time. The old WREN workaround was updated as well.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG Yu Ning <fengyuning1984@gmail.com>
+Acked-by: Cristi Magherusan <cristi.magherusan@net.utcluj.ro>
+
+------------------------------------------------------------------------
+r513 | uwe | 2009-05-15 00:58:21 +0200 (Fri, 15 May 2009) | 40 lines
+
+Make the nic3com code check how many supported NICs are found. If we find
+multiple ones, abort with a message to the user, suggesting to use the
+
+  flashrom -p nic3com=bb:dd.f
+
+syntax. If exactly one supported NIC is found, use it. If none is found,
+abort with an error.
+
+Print the bb:dd.f numbers for all supported NICs we find, so the user
+doesn't have to poke around in lspci output to find the desired bb:dd.f.
+
+Also, drop one pci_read_long() in favor of using the already existing
+base_addr[0] struct field.
+
+Drop the BAR in user messages, it's not really useful for us. Instead,
+explain the BDF syntax a bit more verbosely.
+
+While I'm at it, update the manpage some more to mention and fully document
+the external programmer support we have (or will have soon).
+
+The patch is tested on hardware:
+
+$ flashrom -p nic3com
+flashrom v0.9.0-r512
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200, BDF 05:04.0)
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200, BDF 05:03.0)
+Error: Multiple supported NICs found. Please use 'flashrom -p nic3com=bb:dd.f'
+to explicitly select the card with the given BDF (PCI bus, device, function).
+
+$ flashrom -p nic3com=05:04.0
+flashrom v0.9.0-r512
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200, BDF 05:04.0)
+Calibrating delay loop... OK.
+Found chip "Atmel AT49BV512" (64 KB) at physical address 0xffff0000.
+No operations were specified.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r512 | hailfinger | 2009-05-14 23:41:10 +0200 (Thu, 14 May 2009) | 5 lines
+
+Fix compilation of nic3com on 64bit.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r511 | uwe | 2009-05-14 22:41:57 +0200 (Thu, 14 May 2009) | 7 lines
+
+Factor out portable iopl()-style code into a global function
+which all programmers can use, add missing close() call (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r510 | uwe | 2009-05-14 20:57:26 +0200 (Thu, 14 May 2009) | 9 lines
+
+3COM: Add support for users to specify a certain NIC via PCI bus:slot.func
+notation, in case there are multiple NICs in one system.
+
+Usage: flashrom -p nic3com=bb:ss.f
+
+Signed-off-by: Christian Ruppert <spooky85@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r509 | uwe | 2009-05-14 16:51:14 +0200 (Thu, 14 May 2009) | 8 lines
+
+Cosmetics and eliminate unneeded vars as per IRC discussion (trivial).
+
+Build-tested and 'make PREFIX=/tmp/foo install' tested by me.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r508 | hailfinger | 2009-05-14 16:17:07 +0200 (Thu, 14 May 2009) | 5 lines
+
+Improve makefile structure a bit.
+
+Signed-off-by: Christian Ruppert <spooky85@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r507 | hailfinger | 2009-05-14 14:59:36 +0200 (Thu, 14 May 2009) | 13 lines
+
+Add a dummy SPI controller driver, similar to the dummy LPC/FWH/Parallel
+flasher driver.
+Does not support reading or writing the fake chip yet.
+
+flashrom --programmer dummy
+also enables the dummy SPI controller driver.
+
+Testing the dummy SPI driver revealed a RDID debug printing bug in the
+SPI core. Fix that as well.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r506 | stuge | 2009-05-14 14:41:00 +0200 (Thu, 14 May 2009) | 7 lines
+
+Fix spelling error in comment
+
+Author: raijin
+
+Signed-off-by: Daniel McLellan <daniel.mclellan@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r505 | hailfinger | 2009-05-14 00:51:27 +0200 (Thu, 14 May 2009) | 24 lines
+
+Generic status register prettyprinting for SST25*. Even if we don't tell
+the user about the areas the block locking bits correspond to, printing
+a detailed list of which lock bits are set is a definite improvement.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+Sample output:
+[...]
+Probing for SST SST25VF032B, 4096 KB: RDID returned bf 25 4a.
+probe_spi_rdid_generic: id1 0xbf, id2 0x254a
+Chip status register is 1c
+Chip status register: Block Protect Write Disable (BPL) is not set
+Chip status register: Auto Address Increment Programming (AAI) is not
+set
+Chip status register: Bit 5 / Block Protect 3 (BP3) is not set
+Chip status register: Bit 4 / Block Protect 2 (BP2) is set
+Chip status register: Bit 3 / Block Protect 1 (BP1) is set
+Chip status register: Bit 2 / Block Protect 0 (BP0) is set
+Chip status register: Write Enable Latch (WEL) is not set
+Chip status register: Write In Progress (WIP/BUSY) is not set
+Found chip "SST SST25VF032B" (4096 KB) at physical address 0xffc00000.
+
+Acked-by: Cristi Magherusan <cristi.magherusan@net.utcluj.ro>
+
+------------------------------------------------------------------------
+r504 | hailfinger | 2009-05-14 00:19:12 +0200 (Thu, 14 May 2009) | 8 lines
+
+SST25 chips do not support page program, only byte program.
+
+Downgrade the chips from 256-byte writes to 1-byte writes. This fixes
+writing to them on ICH/VIA SPI masters.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG Yu Ning <fengyuning1984@gmail.com>
+
+------------------------------------------------------------------------
+r503 | stuge | 2009-05-14 00:18:35 +0200 (Thu, 14 May 2009) | 7 lines
+
+Winbond W39V040A TEST_OK_ PROBE READ
+
+Thanks to Mateusz for testing and reporting!
+
+Signed-off-by: Mateusz Murawski <matowy@tlen.pl>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r502 | uwe | 2009-05-13 17:57:38 +0200 (Wed, 13 May 2009) | 9 lines
+
+Mark SST 39VF512 as fully tested.
+
+Tested with 3COM 3C905C: EtherLink 10/100 PCI (TX)
+http://www.coreboot.org/pipermail/coreboot/2009-May/048163.html
+
+Signed-off-by: Mateusz Murawski <matowy@tlen.pl>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r501 | uwe | 2009-05-13 14:01:57 +0200 (Wed, 13 May 2009) | 6 lines
+
+Fix nic3com.c build issues on *BSD (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r500 | hailfinger | 2009-05-13 13:40:08 +0200 (Wed, 13 May 2009) | 19 lines
+
+There are various reasons why a SPI command can fail. Among others, I
+have seen the following problems:
+- The SPI opcode is not supported by the controller. ICH-style
+controllers exhibit this if SPI config is locked down.
+- The address in in a prohibited area. This can happen on ICH for any
+access (BBAR) and for writes in chipset write protected areas.
+- There is no SPI controller.
+
+Introduce separate error codes for unsupported opcode and prohibited
+address.
+
+Add the ability to adjust REMS and RES addresses to the minium supported
+read address with the help of spi_get_valid_read_addr(). That function
+needs to call SPI controller specific functions like reading BBAR on
+ICH.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r499 | uwe | 2009-05-13 13:36:06 +0200 (Wed, 13 May 2009) | 54 lines
+
+Add support for 3COM NICs as "external programmer" and Atmel AT49BV512.
+
+This allows flashrom to identify, read, write, erase and verify flash chips
+on (some) 3COM network cards. The patch uses the external programmer
+infrastructure, the network card is basically treated as an external
+flash programmer.
+
+Usage:
+
+$ ./flashrom -p nic3com
+flashrom v0.9.0-r498
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200), addr = 0xa400
+Calibrating delay loop... OK.
+Found chip "Atmel AT49BV512" (64 KB) at physical address 0xffff0000.
+No operations were specified.
+
+$ ./flashrom -p nic3com -E
+flashrom v0.9.0-r498
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200), addr = 0xa400
+Calibrating delay loop... OK.
+Found chip "Atmel AT49BV512" (64 KB) at physical address 0xffff0000.
+Erasing flash chip... SUCCESS.
+
+$ ./flashrom -p nic3com -wv backup.bin
+flashrom v0.9.0-r498
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200), addr = 0xa400
+Calibrating delay loop... OK.
+Found chip "Atmel AT49BV512" (64 KB) at physical address 0xffff0000.
+Flash image seems to be a legacy BIOS. Disabling checks.
+Programming page: 1023 at address: 0x0000ffc0
+Verifying flash... VERIFIED.
+
+$ ./flashrom -p nic3com -r backup.bin
+flashrom v0.9.0-r498
+Found NIC "3COM 3C905C: EtherLink 10/100 PCI (TX)" (10b7:9200), addr = 0xa400
+Calibrating delay loop... OK.
+Found chip "Atmel AT49BV512" (64 KB) at physical address 0xffff0000.
+Reading flash... done.
+
+I have tested this on actual hardware (see PCI IDs above) and all
+operations worked fine.
+
+Support for other 3COM cards will follow (I added some more which should
+be supportable by this code, but they're untested so far), as well as
+support for NICs from other vendors.
+
+The patch also adds support for the Atmel AT49BV512 which is soldered
+onto the 3COM NIC I used for testing.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Mateusz Murawski <matowy@tlen.pl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r498 | hailfinger | 2009-05-12 17:38:55 +0200 (Tue, 12 May 2009) | 44 lines
+
+Use helper functions chip_{read,write}[bwl] to access flash chips.
+
+The semantic patch I used in r418 to make the original conversion to
+accessor functions was missing one isomorphism:
+a[b] <=> *(a+b)
+
+The semantic patcher Coccinelle was used to create this patch. Semantic
+patch follows:
+@@
+typedef uint8_t;
+expression a;
+volatile uint8_t *b;
+@@
+- b[a]
++ *(b + a)
+@@
+expression a;
+volatile uint8_t *b;
+@@
+- *(b) = (a);
++ chip_writeb(a, b);
+@@
+volatile uint8_t *b;
+@@
+- *(b)
++ chip_readb(b)
+@@
+type T;
+T b;
+@@
+(
+ chip_readb
+|
+ chip_writeb
+)
+ (...,
+- (T)
+- (b)
++ b
+ )
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r497 | uwe | 2009-05-12 16:06:04 +0200 (Tue, 12 May 2009) | 7 lines
+
+The write_39sf020() and write_49f002() functions are identical except
+for whitespace differences, so drop one of them.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r496 | hailfinger | 2009-05-11 22:04:30 +0200 (Mon, 11 May 2009) | 8 lines
+
+Rename the STM50FLW register variable flash_addr used for block write
+protect handling. All other chips call it wrprotect which is less
+confusing.
+As a side benefit, flash_addr is now a name usable for other stuff.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+------------------------------------------------------------------------
+r495 | hailfinger | 2009-05-11 17:46:43 +0200 (Mon, 11 May 2009) | 9 lines
+
+Print dummy programmer messages only if verbose mode is selected.
+Print the return value of dummy_chip_read[bwl].
+Align entries in programmer_table.
+
+This is a cosmetic patch and has no effect on code flow.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+------------------------------------------------------------------------
+r494 | hailfinger | 2009-05-11 16:40:31 +0200 (Mon, 11 May 2009) | 19 lines
+
+When flashrom JEDEC code sends the ID command to the chip, it expects to
+see IDs in the default flash location. However, sometimes the chip does
+not react to the ID command, either because it doesn't understand the
+command or because the command never reached it.
+One way to detect this is to compare ID output with flash chip contents
+for the same location. If they are identical, there is a high chance
+you're not actually seeing ID output. Warn the user in that case.
+
+This patch helps a lot when a chip is not recognized and we want to
+check if the probe responses are real IDs or just random flash chip
+contents.
+
+This should probably be added to all probe functions, but probe_jedec is
+called for all sizes and thus flashrom will check this condition at
+least once per size, making sure we can cross-match the warning.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG Yu Ning <fengyuning1984@gmail.com>
+
+------------------------------------------------------------------------
+r493 | hailfinger | 2009-05-11 16:13:25 +0200 (Mon, 11 May 2009) | 12 lines
+
+Flash mapping/unmapping was performed without an abstraction layer, so
+even the dummy flasher caused memory mappings to be set up.
+Add map/unmap functions to the external flasher abstraction.
+
+Fix a possible scribble-over-low-memory corner case which fortunately
+never triggered so far.
+
+With this patch, --programmer dummy works fine as non-root.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r492 | hailfinger | 2009-05-11 16:01:17 +0200 (Mon, 11 May 2009) | 12 lines
+
+Add lock bit handling (printing, setting and checking) to SST FWH chips
+and abort any writes to locked sectors.
+Verbose mode gives you all the info. Normal mode only tells you of
+unlocking failed, but gives enough details to debug.
+
+Add a comment about flash register placement to flashrom.c.
+
+Thanks to Uwe for testing multiple iterations of this patch.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r491 | hailfinger | 2009-05-10 16:11:07 +0200 (Sun, 10 May 2009) | 25 lines
+
+Create a SB600 SPI detection heuristic.
+
+I know that the data sheets say we can't read the ROM straps, but
+creative interpretation of the data sheets yielded a heuristic which
+should work pretty well.
+
+NOTE: If you test this, make sure you power down and _unplug_ the
+machine for a few minutes before you boot and run flashrom with this
+patch.
+If the machine is not unplugged for some time, the test will yield
+incorrect results.
+If you run a slightly older flashrom version than svn HEAD, the test
+will yield incorrect results.
+If you run any flashrom version (except svn HEAD plus this patch) after
+poweron, the test will yield incorrect results.
+
+Explanation:
+Older flashrom versions unconditionally write to registers which are
+used for this heuristic. These registers are in the S5 power domain, so
+even powering down does not clear them, you really have to unplug the
+machine and remove the battery if this is a laptop.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r490 | uwe | 2009-05-09 16:26:04 +0200 (Sat, 09 May 2009) | 6 lines
+
+Add support for EPoX EP-8K5A2 and separate out common VT823x board enable code.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r489 | hailfinger | 2009-05-09 09:32:30 +0200 (Sat, 09 May 2009) | 5 lines
+
+Kill one superfluous variable and improve code readability.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r488 | hailfinger | 2009-05-09 09:27:23 +0200 (Sat, 09 May 2009) | 16 lines
+
+Fix Elan SC520 handling.
+
+flashbase is a variable which should never be set outside chipset code.
+It is only used to calculate the base address of the flash space at
+exactly one location in the code.
+
+Setting flashbase during probe caused subsequent probes to fail unless
+special handling code was used. We had such code and it caused every
+probe except the first to fail on Elan SC520.
+
+Remove the superfluous flashbase assignment and simplify the rest of the
+code.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+------------------------------------------------------------------------
+r487 | hailfinger | 2009-05-09 09:24:23 +0200 (Sat, 09 May 2009) | 13 lines
+
+Trim default ICH SPI delay from 1000 to 10 microseconds. Since many
+commands take around 10 microseconds to complete, it is totally
+pointless to wait for 1000 microseconds before checking the status
+again.
+
+This patch is tested and reduced write time on ICH7 with SST25VF080B
+from over one hour to 62 seconds.
+
+Thanks to Ali Nadalizadeh for testing!
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Myles Watson <mylesgw@gmail.com>
+
+------------------------------------------------------------------------
+r486 | hailfinger | 2009-05-09 04:34:18 +0200 (Sat, 09 May 2009) | 10 lines
+
+Convert all flashchips.c entries with SPI programing to the 256-byte
+version by default.
+
+Change the flashchips entry for SST SST25VF080B to 1-byte writing.
+
+Tested-by: Ali Nadalizadeh.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r485 | hailfinger | 2009-05-09 04:30:21 +0200 (Sat, 09 May 2009) | 15 lines
+
+Chips like the SST SST25VF080B can only handle single byte writes
+outside AAI mode.
+
+Change SPI architecture to handle 1-byte chunk chip writing differently
+from 256-byte chunk chip writing.
+
+Annotate SPI chip write functions with _256 or _1 suffix denoting the
+number of bytes they write at maximum.
+
+The 1-byte chunk writing is cut-n-pasted to different SPI drivers right
+now. A later patch can move them to the generic spi_chip_write_1.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r484 | hailfinger | 2009-05-09 04:09:45 +0200 (Sat, 09 May 2009) | 11 lines
+
+Until the ICH SPI driver can handle preopcodes as standalone opcodes, we
+should handle such special opcode failure gracefully on ICH and
+compatible chipsets.
+
+This fixes chip erase on almost all ICH+VIA SPI masters.
+
+Thanks to Ali Nadalizadeh for helping track down this bug!
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r483 | hailfinger | 2009-05-09 02:54:55 +0200 (Sat, 09 May 2009) | 10 lines
+
+Add a dummy external flasher which just prints each operation.
+
+Usage:
+flashrom --programmer dummy
+
+This is a great way to test flashrom without root access.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r482 | uwe | 2009-05-09 02:47:04 +0200 (Sat, 09 May 2009) | 7 lines
+
+Split vendor name and board name into two fields as preparation
+for wiki output of supported stuff.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r481 | hailfinger | 2009-05-09 02:27:07 +0200 (Sat, 09 May 2009) | 5 lines
+
+Add --programmer to help text and man page.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r477 | uwe | 2009-05-08 19:50:51 +0200 (Fri, 08 May 2009) | 6 lines
+
+Make chipset list alphabetically ordered as the other lists.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r476 | hailfinger | 2009-05-08 19:43:22 +0200 (Fri, 08 May 2009) | 14 lines
+
+Add external flasher support:
+- Read/write accesses through function pointers
+- Command line parameter for internal/external flasher
+- Board and chipset setup moved to internal init function
+- Shutdown stuff moved to internal shutdown function
+
+As a side benefit, this will allow us to undo chipset write enable
+during shutdown.
+
+Tested by Uwe on real hardware.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r475 | hailfinger | 2009-05-08 19:15:15 +0200 (Fri, 08 May 2009) | 5 lines
+
+Re-add a line which got deleted in r473 by accident.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r474 | uwe | 2009-05-08 18:23:34 +0200 (Fri, 08 May 2009) | 8 lines
+
+Keep list of boards alphabetically sorted. This is (among other things)
+useful/required for the -L output and the upcoming wiki-syntax output of
+supported boards.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r473 | hailfinger | 2009-05-08 14:49:03 +0200 (Fri, 08 May 2009) | 11 lines
+
+Flashrom assumes that the flash chip contents are available via mmap if
+no read function is defined. This special case is handled in lots of
+places all over the code.
+
+Remove the special case and use the read_memmapped function. Not only
+does this allow us to fix a read bug in flashrom I recently uncovered on
+ICH SPI, it also allows us to add support for Paraflasher to flashrom.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r472 | uwe | 2009-05-07 15:24:49 +0200 (Thu, 07 May 2009) | 10 lines
+
+Store and display chipset test status (not only chip status).
+The list of tested chipsets is synced from the wiki.
+
+Also, split the chipset vendor and name into two fields for easier
+wiki-syntax output later.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r471 | hailfinger | 2009-05-07 02:59:53 +0200 (Thu, 07 May 2009) | 7 lines
+
+Always print the flashrom version as first output line.
+
+Suggested by Peter Stuge.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r470 | hailfinger | 2009-05-06 23:54:22 +0200 (Wed, 06 May 2009) | 8 lines
+
+ASD chips may exist, but all available docs suggest they are just
+rebranded Winbond chips with Winbond IDs.
+The ASD vendor/chip IDs in flash.h are very likely just misinterpreted
+LHA headers.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r469 | stuge | 2009-05-06 17:05:39 +0200 (Wed, 06 May 2009) | 5 lines
+
+Clarify error message in enable_flash_sb600() a little.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r468 | hailfinger | 2009-05-06 15:59:44 +0200 (Wed, 06 May 2009) | 9 lines
+
+Improve SST25 status register routines:
+- Using a 4-bit index into an array with 8 elements leads to
+out-of-bounds accesses. Use proper bit masking to fix this.
+- Factor out common SST25 status register printing.
+- Use the common SST25 status register printing for SST25VF080B.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r467 | hailfinger | 2009-05-06 15:51:44 +0200 (Wed, 06 May 2009) | 6 lines
+
+Revert r466 because it introduced a bug:
+If unprotect succeeded, it will print "SB600 unprotect failed".
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r466 | stuge | 2009-05-06 15:43:26 +0200 (Wed, 06 May 2009) | 5 lines
+
+Cleanup redundant condition and clarify message a little.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r465 | stuge | 2009-05-06 15:38:55 +0200 (Wed, 06 May 2009) | 5 lines
+
+Touch up some error messages in enable_flash_cs5536().
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r464 | hailfinger | 2009-05-06 02:35:31 +0200 (Wed, 06 May 2009) | 6 lines
+
+Clean up the SB400 chipset enable code. Use pci_dev_find() instead of
+setting up a filter and iterating over PCI devices.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r463 | hailfinger | 2009-05-06 00:50:07 +0200 (Wed, 06 May 2009) | 13 lines
+
+Rewrite the SB600 chipset enable function:
+- Check for read/write protected regions first.
+- Region protection is write-once according to the data sheets. Check if
+the write succeeded. Don't write if the region is not protected.
+- Verbose region protection dumping.
+- Improve readability of BAR mapping code.
+- Align BAR mapping to a page boundary (4k) instead of a 16k boundary.
+
+This patch prepares the code for a SPI detection heuristic.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r462 | myles | 2009-05-05 23:08:36 +0200 (Tue, 05 May 2009) | 6 lines
+
+Here is a fix for chipset_enable.c when there is not /dev/cpu. Open
+fails so there is no reason to lseek in. Actually this is a trivial fix
+for a bad return value from open.
+
+Signed-off-by: Bertrand Jacquin <beber@meleeweb.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+------------------------------------------------------------------------
+r461 | stuge | 2009-05-05 18:34:53 +0200 (Tue, 05 May 2009) | 7 lines
+
+SST25VF080B TEST_OK_ ERASE WRITE
+
+As reported by A. Spamlover. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r460 | uwe | 2009-05-05 18:15:46 +0200 (Tue, 05 May 2009) | 7 lines
+
+Some cosmetics in README and manpage. Also, move more stuff to the manpage
+where it belongs (this also eliminates some duplicated contents).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r459 | hailfinger | 2009-05-05 00:33:50 +0200 (Tue, 05 May 2009) | 10 lines
+
+Force enabling SPI mode for SB600 is a bad idea and leads to hangs.
+
+Only access LPC ROM if we boot via LPC ROM. Only access SPI ROM if we
+boot via SPI ROM.
+The code to force enable SPI is commented out in case someone wants to
+reenable it for a particular board with LPC and SPI flash.
+
+Signed-off-by: Zheng Bao <zheng.bao@amd.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r458 | stuge | 2009-05-04 23:03:59 +0200 (Mon, 04 May 2009) | 7 lines
+
+SST25VF080B TEST_OK_READ
+
+Per report from from Henning Fleddermann. Thanks!
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r457 | hailfinger | 2009-05-04 14:29:59 +0200 (Mon, 04 May 2009) | 5 lines
+
+Onwards with development. Re-add the svn revision to the version string.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r454 | hailfinger | 2009-05-04 14:18:10 +0200 (Mon, 04 May 2009) | 5 lines
+
+flashrom 0.9.0
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r453 | stuge | 2009-05-04 01:33:05 +0200 (Mon, 04 May 2009) | 6 lines
+
+Complement the README file with build instructions for the platforms it
+currently compiles on.
+
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r452 | hailfinger | 2009-05-01 18:34:32 +0200 (Fri, 01 May 2009) | 8 lines
+
+Fix compilation on Solaris and tell people how to compile flashrom on
+Solaris, Darwin/Mac OS X and DragonFly BSD.
+
+Thanks to Joerg Schilling and Patrick Georgi for the Solaris part.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r451 | stuge | 2009-05-01 16:52:50 +0200 (Fri, 01 May 2009) | 5 lines
+
+Mention that flashrom can also verify flash contents.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r450 | stuge | 2009-05-01 16:49:49 +0200 (Fri, 01 May 2009) | 5 lines
+
+Fix usage to show that vendor: is optional in the -m parameter.
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Peter Stuge <peter@stuge.se>
+
+------------------------------------------------------------------------
+r449 | hailfinger | 2009-05-01 14:22:17 +0200 (Fri, 01 May 2009) | 7 lines
+
+Some functions take no arguments. Make that explicit in the associated
+prototypes.
+This avoids a warning on some compilers and is a correctness issue.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r448 | hailfinger | 2009-05-01 13:00:39 +0200 (Fri, 01 May 2009) | 8 lines
+
+Add Li-Ta (Ollie) Lo to the author list.
+He started flashrom back in 2000.
+
+Thanks to Ron for pointing this out.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r447 | hailfinger | 2009-05-01 12:53:49 +0200 (Fri, 01 May 2009) | 7 lines
+
+Since the command line interface for flashrom will change for 1.0
+(all-caps or no-caps for short options, exclude range syntax, etc.) we
+should tell users in the man page and the usage message about this.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
 r446 | stuge | 2009-04-30 01:22:33 +0200 (Thu, 30 Apr 2009) | 7 lines
 
 flashrom: Macronix MX25L1605 TEST_OK_ PROBE READ ERASE WRITE

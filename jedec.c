@@ -21,8 +21,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <stdio.h>
-#include <stdint.h>
 #include "flash.h"
 
 #define MAX_REFLASH_TRIES 0x10
@@ -35,7 +33,7 @@ uint8_t oddparity(uint8_t val)
 	return (val ^ (val >> 1)) & 0x1;
 }
 
-void toggle_ready_jedec(volatile uint8_t *dst)
+void toggle_ready_jedec(chipaddr dst)
 {
 	unsigned int i = 0;
 	uint8_t tmp1, tmp2;
@@ -51,7 +49,7 @@ void toggle_ready_jedec(volatile uint8_t *dst)
 	}
 }
 
-void data_polling_jedec(volatile uint8_t *dst, uint8_t data)
+void data_polling_jedec(chipaddr dst, uint8_t data)
 {
 	unsigned int i = 0;
 	uint8_t tmp;
@@ -66,7 +64,7 @@ void data_polling_jedec(volatile uint8_t *dst, uint8_t data)
 	}
 }
 
-void unprotect_jedec(volatile uint8_t *bios)
+void unprotect_jedec(chipaddr bios)
 {
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
@@ -78,7 +76,7 @@ void unprotect_jedec(volatile uint8_t *bios)
 	usleep(200);
 }
 
-void protect_jedec(volatile uint8_t *bios)
+void protect_jedec(chipaddr bios)
 {
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
@@ -89,9 +87,10 @@ void protect_jedec(volatile uint8_t *bios)
 
 int probe_jedec(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 	uint8_t id1, id2;
 	uint32_t largeid1, largeid2;
+	uint32_t flashcontent1, flashcontent2;
 
 	/* Issue JEDEC Product ID Entry command */
 	chip_writeb(0xAA, bios + 0x5555);
@@ -133,6 +132,26 @@ int probe_jedec(struct flashchip *flash)
 	printf_debug("%s: id1 0x%02x, id2 0x%02x", __FUNCTION__, largeid1, largeid2);
 	if (!oddparity(id1))
 		printf_debug(", id1 parity violation");
+
+	/* Read the product ID location again. We should now see normal flash contents. */
+	flashcontent1 = chip_readb(bios);
+	flashcontent2 = chip_readb(bios + 0x01);
+
+	/* Check if it is a continuation ID, this should be a while loop. */
+	if (flashcontent1 == 0x7F) {
+		flashcontent1 <<= 8;
+		flashcontent1 |= chip_readb(bios + 0x100);
+	}
+	if (flashcontent2 == 0x7F) {
+		flashcontent2 <<= 8;
+		flashcontent2 |= chip_readb(bios + 0x101);
+	}
+
+	if (largeid1 == flashcontent1)
+		printf_debug(", id1 is normal flash content");
+	if (largeid2 == flashcontent2)
+		printf_debug(", id2 is normal flash content");
+
 	printf_debug("\n");
 	if (largeid1 == flash->manufacture_id && largeid2 == flash->model_id)
 		return 1;
@@ -140,7 +159,7 @@ int probe_jedec(struct flashchip *flash)
 	return 0;
 }
 
-int erase_sector_jedec(volatile uint8_t *bios, unsigned int page)
+int erase_sector_jedec(chipaddr bios, unsigned int page)
 {
 	/*  Issue the Sector Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
@@ -163,7 +182,7 @@ int erase_sector_jedec(volatile uint8_t *bios, unsigned int page)
 	return 0;
 }
 
-int erase_block_jedec(volatile uint8_t *bios, unsigned int block)
+int erase_block_jedec(chipaddr bios, unsigned int block)
 {
 	/*  Issue the Sector Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
@@ -188,7 +207,7 @@ int erase_block_jedec(volatile uint8_t *bios, unsigned int block)
 
 int erase_chip_jedec(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	/*  Issue the JEDEC Chip Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
@@ -210,11 +229,11 @@ int erase_chip_jedec(struct flashchip *flash)
 	return 0;
 }
 
-int write_page_write_jedec(volatile uint8_t *bios, uint8_t *src,
-			   volatile uint8_t *dst, int page_size)
+int write_page_write_jedec(chipaddr bios, uint8_t *src,
+			   chipaddr dst, int page_size)
 {
 	int i, tried = 0, start_index = 0, ok;
-	volatile uint8_t *d = dst;
+	chipaddr d = dst;
 	uint8_t *s = src;
 
 retry:
@@ -251,14 +270,14 @@ retry:
 		goto retry;
 	}
 	if (!ok) {
-		fprintf(stderr, " page %d failed!\n",
-			(unsigned int)(d - bios) / page_size);
+		fprintf(stderr, " page 0x%lx failed!\n",
+			(d - bios) / page_size);
 	}
 	return !ok;
 }
 
-int write_byte_program_jedec(volatile uint8_t *bios, uint8_t *src,
-			     volatile uint8_t *dst)
+int write_byte_program_jedec(chipaddr bios, uint8_t *src,
+			     chipaddr dst)
 {
 	int tried = 0, ok = 1;
 
@@ -287,8 +306,8 @@ retry:
 	return !ok;
 }
 
-int write_sector_jedec(volatile uint8_t *bios, uint8_t *src,
-		       volatile uint8_t *dst, unsigned int page_size)
+int write_sector_jedec(chipaddr bios, uint8_t *src,
+		       chipaddr dst, unsigned int page_size)
 {
 	int i;
 
@@ -305,13 +324,13 @@ int write_jedec(struct flashchip *flash, uint8_t *buf)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	erase_chip_jedec(flash);
 	// dumb check if erase was successful.
 	for (i = 0; i < total_size; i++) {
-		if (bios[i] != (uint8_t) 0xff) {
-			printf("ERASE FAILED @%d, val %02x!\n", i, bios[i]);
+		if (chip_readb(bios + i) != 0xff) {
+			printf("ERASE FAILED @%d, val %02x!\n", i, chip_readb(bios + i));
 			return -1;
 		}
 	}

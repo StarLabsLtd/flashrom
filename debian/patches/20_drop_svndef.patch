@@ -1,14 +1,11 @@
---- Makefile.orig	2008-02-21 02:55:10.000000000 +0100
-+++ Makefile	2008-02-21 02:55:18.000000000 +0100
-@@ -28,11 +28,6 @@
+--- Makefile.orig	2009-05-21 21:40:04.000000000 +0200
++++ Makefile	2009-05-21 21:42:18.000000000 +0200
+@@ -40,8 +40,6 @@
  
- all: pciutils dep $(PROGRAM)
- 
--# Set the flashrom version string from the highest revision number
--# of the checked out flashrom files.
--SVNDEF := -D'FLASHROM_VERSION="$(shell svnversion -cn . \
+ # Set the flashrom version string from the highest revision number
+ # of the checked out flashrom files.
+-SVNDEF := -D'FLASHROM_VERSION="0.9.0-r$(shell svnversion -cn . \
 -          | sed -e "s/.*://" -e "s/\([0-9]*\).*/\1/")"'
--
+ 
  $(PROGRAM): $(OBJS)
- 	$(CC) -o $(PROGRAM) $(OBJS) $(LDFLAGS)
- 	$(STRIP) $(STRIP_ARGS) $(PROGRAM)
+ 	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(LIBS)

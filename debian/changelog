@@ -1,3 +1,11 @@
+flashrom (0.9+r544-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches/10_makefile.patch: Drop, no longer needed.
+  * debian/copyright: Update.
+
+ -- Uwe Hermann <uwe@debian.org>  Thu, 21 May 2009 21:34:03 +0200
+
 flashrom (0.9+r446-1) unstable; urgency=low
 
   * New upstream release.

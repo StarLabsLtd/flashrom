@@ -9,9 +9,12 @@ Homepage: http://coreboot.org/Flashrom
 Package: flashrom
 Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 netbsd-alpha netbsd-i386
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Utility for reading, writing, and erasing BIOS/ROM/flash chips
- Flashrom is a utility for reading, writing, and erasing flash ROM chips.
- It's often used to flash BIOS/coreboot/firmware images.
+Description: Identify, read, write, erasing, and verify BIOS/ROM/flash chips
+ flashrom is a tool for identifying, reading, writing, verifying and erasing
+ flash chips. It's often used to flash BIOS/EFI/coreboot/firmware images
+ in-system using a supported mainboard, but it also supports flashing of
+ network cards (NICs), SATA controller cards, and other external devices which
+ can program flash chips.
  .
  It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, and
  TSOP40 chips, which use various protocols such as LPC, FWH, parallel flash,

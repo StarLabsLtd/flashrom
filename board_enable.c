@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2005-2007 coresystems GmbH <stepan@coresystems.de>
  * Copyright (C) 2006 Uwe Hermann <uwe@hermann-uwe.de>
- * Copyright (C) 2007-2008 Luc Verhaegen <libv@skynet.be>
+ * Copyright (C) 2007-2009 Luc Verhaegen <libv@skynet.be>
  * Copyright (C) 2007 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,9 +24,6 @@
  * Contains the board specific flash enables.
  */
 
-#include <stdio.h>
-#include <pci/pci.h>
-#include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
 #include "flash.h"
@@ -152,20 +149,43 @@ static int w83627thf_gpio4_4_raise_4e(const char *name)
 }
 
 /**
- * Suited for VIAs EPIA M and MII, and maybe other CLE266 based EPIAs.
- *
- * We don't need to do this when using coreboot, GPIO15 is never lowered there.
+ * w83627: Enable MEMW# and set ROM size to max.
  */
-static int board_via_epia_m(const char *name)
+static void w836xx_memw_enable(uint16_t index)
 {
-	struct pci_dev *dev;
-	uint16_t base;
+	w836xx_ext_enter(index);
+	if (!(wbsio_read(index, 0x24) & 0x02)) {	/* Flash ROM enabled? */
+		/* Enable MEMW# and set ROM size select to max. (4M). */
+		wbsio_mask(index, 0x24, 0x28, 0x28);
+	}
+	w836xx_ext_leave(index);
+}
+
+/**
+ * Common routine for several VT823x based boards.
+ */
+static void vt823x_set_all_writes_to_lpc(struct pci_dev *dev)
+{
 	uint8_t val;
 
-	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
-	if (!dev) {
-		fprintf(stderr, "\nERROR: VT8235 ISA bridge not found.\n");
-		return -1;
+	/* All memory cycles, not just ROM ones, go to LPC. */
+	val = pci_read_byte(dev, 0x59);
+	val &= ~0x80;
+	pci_write_byte(dev, 0x59, val);
+}
+
+/**
+ * VT823x: Set one of the GPIO pins.
+ */
+static void vt823x_gpio_set(struct pci_dev *dev, uint8_t gpio, int raise)
+{
+	uint16_t base;
+	uint8_t val, bit;
+
+	if ((gpio < 12) || (gpio > 15)) {
+		fprintf(stderr, "\nERROR: "
+			"VT823x GPIO%02d is not implemented.\n", gpio);
+		return;
 	}
 
 	/* GPIO12-15 -> output */
@@ -173,13 +193,37 @@ static int board_via_epia_m(const char *name)
 	val |= 0x10;
 	pci_write_byte(dev, 0xE4, val);
 
-	/* Get Power Management IO address. */
-	base = pci_read_word(dev, 0x88) & 0xFF80;
+	/* Now raise/drop the GPIO line itself. */
+	bit = 0x01 << (gpio - 8);
 
-	/* Enable GPIO15 which is connected to write protect. */
+	/* We need the I/O Base Address for this board's flash enable. */
+	base = pci_read_word(dev, 0x88) & 0xff80;
+
 	val = INB(base + 0x4D);
-	val |= 0x80;
+	if (raise)
+		val |= bit;
+	else
+		val &= ~bit;
 	OUTB(val, base + 0x4D);
+}
+
+/**
+ * Suited for VIAs EPIA M and MII, and maybe other CLE266 based EPIAs.
+ *
+ * We don't need to do this when using coreboot, GPIO15 is never lowered there.
+ */
+static int board_via_epia_m(const char *name)
+{
+	struct pci_dev *dev;
+
+	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
+	if (!dev) {
+		fprintf(stderr, "\nERROR: VT8235 ISA bridge not found.\n");
+		return -1;
+	}
+
+	/* GPIO15 is connected to write protect. */
+	vt823x_gpio_set(dev, 15, 1);
 
 	return 0;
 }
@@ -187,12 +231,11 @@ static int board_via_epia_m(const char *name)
 /**
  * Suited for:
  *   - ASUS A7V8X-MX SE and A7V400-MX: AMD K7 + VIA KM400A + VT8235
- *   - Tyan Tomcat K7M: AMD Geode NX + VIA KM400 + VT8237.
+ *   - Tyan S2498 (Tomcat K7M): AMD Geode NX + VIA KM400 + VT8237.
  */
 static int board_asus_a7v8x_mx(const char *name)
 {
 	struct pci_dev *dev;
-	uint8_t val;
 
 	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
 	if (!dev)
@@ -202,29 +245,18 @@ static int board_asus_a7v8x_mx(const char *name)
 		return -1;
 	}
 
-	/* This bit is marked reserved actually. */
-	val = pci_read_byte(dev, 0x59);
-	val &= 0x7F;
-	pci_write_byte(dev, 0x59, val);
-
-	/* Raise ROM MEMW# line on Winbond W83697 Super I/O. */
-	w836xx_ext_enter(0x2E);
-
-	if (!(wbsio_read(0x2E, 0x24) & 0x02))	/* Flash ROM enabled? */
-		wbsio_mask(0x2E, 0x24, 0x08, 0x08);	/* Enable MEMW#. */
-
-	w836xx_ext_leave(0x2E);
+	vt823x_set_all_writes_to_lpc(dev);
+	w836xx_memw_enable(0x2E);
 
 	return 0;
 }
 
 /**
- * Suited for VIAs EPIA SP.
+ * Suited for VIAs EPIA SP and EPIA CN.
  */
 static int board_via_epia_sp(const char *name)
 {
 	struct pci_dev *dev;
-	uint8_t val;
 
 	dev = pci_dev_find(0x1106, 0x3227);	/* VT8237R ISA bridge */
 	if (!dev) {
@@ -232,10 +264,25 @@ static int board_via_epia_sp(const char *name)
 		return -1;
 	}
 
-	/* All memory cycles, not just ROM ones, go to LPC */
-	val = pci_read_byte(dev, 0x59);
-	val &= ~0x80;
-	pci_write_byte(dev, 0x59, val);
+	vt823x_set_all_writes_to_lpc(dev);
+
+	return 0;
+}
+
+/**
+ * Suited for EPoX EP-8K5A2.
+ */
+static int board_epox_ep_8k5a2(const char *name)
+{
+	struct pci_dev *dev;
+
+	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
+	if (!dev) {
+		fprintf(stderr, "\nERROR: VT8235 ISA bridge not found.\n");
+		return -1;
+	}
+
+	w836xx_memw_enable(0x2E);
 
 	return 0;
 }
@@ -578,8 +625,6 @@ static int board_msi_kt4v(const char *name)
 {
 	struct pci_dev *dev;
 	uint8_t val;
-	uint32_t val2;
-	uint16_t port;
 
 	dev = pci_dev_find(0x1106, 0x3177);	/* VT8235 ISA bridge */
 	if (!dev) {
@@ -591,23 +636,8 @@ static int board_msi_kt4v(const char *name)
 	val &= 0x0c;
 	pci_write_byte(dev, 0x59, val);
 
-	/* We need the I/O Base Address for this board's flash enable. */
-	port = pci_read_word(dev, 0x88) & 0xff80;
-
-	/* Starting at 'I/O Base + 0x4c' is the GPO Port Output Value.
-	 * We must assert GPO12 for our enable, which is in 0x4d.
-	 */
-	val2 = INB(port + 0x4d);
-	val2 |= 0x10;
-	OUTB(val2, port + 0x4d);
-
-	/* Raise ROM MEMW# line on Winbond W83697 Super I/O. */
-	w836xx_ext_enter(0x2e);
-	if (!(wbsio_read(0x2e, 0x24) & 0x02)) {	/* Flash ROM enabled? */
-		/* Enable MEMW# and set ROM size select to max. (4M). */
-		wbsio_mask(0x2e, 0x24, 0x28, 0x28);
-	}
-	w836xx_ext_leave(0x2e);
+	vt823x_gpio_set(dev, 12, 1);
+	w836xx_memw_enable(0x2E);
 
 	return 0;
 }
@@ -631,84 +661,188 @@ static int board_msi_kt4v(const char *name)
  * When a board is identified through its coreboot ids (in both cases), the
  * main pci ids are still required to match, as a safeguard.
  */
-struct board_pciid_enable {
-	/* Any device, but make it sensible, like the ISA bridge. */
-	uint16_t first_vendor;
-	uint16_t first_device;
-	uint16_t first_card_vendor;
-	uint16_t first_card_device;
 
-	/* Any device, but make it sensible, like
-	 * the host bridge. May be NULL.
-	 */
-	uint16_t second_vendor;
-	uint16_t second_device;
-	uint16_t second_card_vendor;
-	uint16_t second_card_device;
-
-	/* The vendor / part name from the coreboot table. */
-	const char *lb_vendor;
-	const char *lb_part;
-
-	const char *name;
-	int (*enable) (const char *name);
-};
-
+/* Please keep this list alphabetically ordered by vendor/board name. */
 struct board_pciid_enable board_pciid_enables[] = {
-	/* first pci-id set [4],          second pci-id set [4],          coreboot id [2],          boardname,                flash enable */
-	{0x1106, 0x0571, 0x1462, 0x7120,       0,      0,      0,      0, "msi",        "kt4v",     "MSI KT4V",               board_msi_kt4v},
-	{0x8086, 0x1a30, 0x1043, 0x8070,  0x8086, 0x244b, 0x1043, 0x8028, NULL,         NULL,       "ASUS P4B266",            ich2_gpio22_raise},
-	{0x10de, 0x0360,      0,      0,       0,      0,      0,      0, "gigabyte",   "m57sli",   "GIGABYTE GA-M57SLI-S4",  it87xx_probe_spi_flash},
-	{0x10de, 0x03e0,      0,      0,       0,      0,      0,      0, "gigabyte",   "m61p",     "GIGABYTE GA-M61P-S3",    it87xx_probe_spi_flash},
-	{0x1002, 0x4398, 0x1458, 0x5004,  0x1002, 0x4385, 0x1458, 0x4385, NULL,         NULL,       "GIGABYTE GA-MA78G-DS3H", it87xx_probe_spi_flash},
+	/* first pci-id set [4],          second pci-id set [4],          coreboot id [2],             vendor name    board name        flash enable */
+	{0x8086, 0x1130,      0,      0,  0x105a, 0x0d30, 0x105a, 0x4d33, "acorp",      "6a815epd",    "Acorp",       "6A815EPD",       board_acorp_6a815epd},
+	{0x1022, 0x746B, 0x1022, 0x36C0,       0,      0,      0,      0, "AGAMI",      "ARUMA",       "agami",       "Aruma",              w83627hf_gpio24_raise_2e},
+	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, "artecgroup", "dbe61",       "Artec Group", "DBE61",              board_artecgroup_dbe6x},
+	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, "artecgroup", "dbe62",       "Artec Group", "DBE62",              board_artecgroup_dbe6x},
+	{0x1106, 0x3177, 0x1043, 0x80A1,  0x1106, 0x3205, 0x1043, 0x8118, NULL,         NULL,          "ASUS",        "A7V8-MX SE",         board_asus_a7v8x_mx},
+	{0x8086, 0x1a30, 0x1043, 0x8070,  0x8086, 0x244b, 0x1043, 0x8028, NULL,         NULL,          "ASUS",        "P4B266",             ich2_gpio22_raise},
+	{0x10B9, 0x1541,      0,      0,  0x10B9, 0x1533,      0,      0, "asus",       "p5a",         "ASUS",        "P5A",                board_asus_p5a},
+	{0x1106, 0x3149, 0x1565, 0x3206,  0x1106, 0x3344, 0x1565, 0x1202, NULL,         NULL,          "BioStar",     "P4M80-M4",           board_biostar_p4m80_m4},
+	{0x1106, 0x3177, 0x1106, 0x3177,  0x1106, 0x3059, 0x1695, 0x3005, NULL,         NULL,          "EPoX",        "EP-8K5A2",           board_epox_ep_8k5a2},
+	{0x8086, 0x7110,      0,      0,  0x8086, 0x7190,      0,      0, "epox",       "ep-bx3",      "EPoX",        "EP-BX3",             board_epox_ep_bx3},
+	{0x1039, 0x0761,      0,      0,       0,      0,      0,      0, "gigabyte",   "2761gxdk",    "GIGABYTE",    "GA-2761GXDK",        it87xx_probe_spi_flash},
+	{0x1106, 0x3227, 0x1458, 0x5001,  0x10ec, 0x8139, 0x1458, 0xe000, NULL,         NULL,          "GIGABYTE",    "GA-7VT600",          board_biostar_p4m80_m4},
+	{0x10de, 0x0360,      0,      0,       0,      0,      0,      0, "gigabyte",   "m57sli",      "GIGABYTE",    "GA-M57SLI-S4",       it87xx_probe_spi_flash},
+	{0x10de, 0x03e0,      0,      0,       0,      0,      0,      0, "gigabyte",   "m61p",        "GIGABYTE",    "GA-M61P-S3",         it87xx_probe_spi_flash},
+	{0x1002, 0x4398, 0x1458, 0x5004,  0x1002, 0x4391, 0x1458, 0xb000, NULL,         NULL,          "GIGABYTE",    "GA-MA78G-DS3H",      it87xx_probe_spi_flash},
+	{0x1002, 0x4398, 0x1458, 0x5004,  0x1002, 0x4391, 0x1458, 0xb002, NULL,         NULL,          "GIGABYTE",    "GA-MA78GM-S2H",      it87xx_probe_spi_flash},
 	/* SB600 LPC, RD790 North. Neither are specific to the GA-MA790FX-DQ6. The coreboot ID is here to be able to trigger the board enable more easily. */
-	{0x1002, 0x438d, 0x1458, 0x5001,  0x1002, 0x5956, 0x1002, 0x5956, "gigabyte",   "ma790fx-dq6", "GIGABYTE GA-MA790FX-DQ6", it87xx_probe_spi_flash},
-	{0x1039, 0x0761,      0,      0,       0,      0,      0,      0, "gigabyte",   "2761gxdk", "GIGABYTE GA-2761GXDK",   it87xx_probe_spi_flash},
-	{0x1022, 0x7468,      0,      0,       0,      0,      0,      0, "iwill",      "dk8_htx",  "IWILL DK8-HTX",          w83627hf_gpio24_raise_2e},
-	{0x10de, 0x005e,      0,      0,       0,      0,      0,      0, "msi",        "k8n-neo3", "MSI K8N Neo3",           w83627thf_gpio4_4_raise_4e},
-	{0x1022, 0x746B, 0x1022, 0x36C0,       0,      0,      0,      0, "AGAMI",      "ARUMA",    "agami Aruma",            w83627hf_gpio24_raise_2e},
-	{0x1106, 0x3177, 0x1106, 0xAA01,  0x1106, 0x3123, 0x1106, 0xAA01, NULL,         NULL,       "VIA EPIA M/MII/...",     board_via_epia_m},
-	{0x1106, 0x3177, 0x1043, 0x80A1,  0x1106, 0x3205, 0x1043, 0x8118, NULL,         NULL,       "ASUS A7V8-MX SE",        board_asus_a7v8x_mx},
-	{0x1106, 0x3227, 0x1106, 0xAA01,  0x1106, 0x0259, 0x1106, 0xAA01, NULL,         NULL,       "VIA EPIA SP",            board_via_epia_sp},
-	{0x1106, 0x0314, 0x1106, 0xaa08,  0x1106, 0x3227, 0x1106, 0xAA08, NULL,         NULL,       "VIA EPIA-CN",            board_via_epia_sp},
-	{0x8086, 0x1076, 0x8086, 0x1176,  0x1106, 0x3059, 0x10f1, 0x2498, NULL,         NULL,       "Tyan Tomcat K7M",        board_asus_a7v8x_mx},
-	{0x10B9, 0x1541,      0,      0,  0x10B9, 0x1533,      0,      0, "asus",       "p5a",      "ASUS P5A",               board_asus_p5a},
-	{0x1166, 0x0205, 0x1014, 0x0347,       0,      0,      0,      0, "ibm",        "x3455",    "IBM x3455",              board_ibm_x3455},
-	{0x8086, 0x7110,      0,      0,  0x8086, 0x7190,      0,      0, "epox",       "ep-bx3",   "EPoX EP-BX3",            board_epox_ep_bx3},
-	{0x8086, 0x1130,      0,      0,  0x105a, 0x0d30, 0x105a, 0x4d33, "acorp",      "6a815epd", "Acorp 6A815EPD",         board_acorp_6a815epd},
-	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, "artecgroup", "dbe61",    "Artec Group DBE61",      board_artecgroup_dbe6x},
-	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, "artecgroup", "dbe62",    "Artec Group DBE62",      board_artecgroup_dbe6x},
+	{0x1002, 0x438d, 0x1458, 0x5001,  0x1002, 0x5956, 0x1002, 0x5956, "gigabyte",   "ma790fx-dq6", "GIGABYTE",    "GA-MA790FX-DQ6",     it87xx_probe_spi_flash},
+	{0x1166, 0x0223, 0x103c, 0x320d,  0x102b, 0x0522, 0x103c, 0x31fa, "hp",         "dl145_g3",    "HP",          "DL145 G3",           board_hp_dl145_g3_enable},
+	{0x1166, 0x0205, 0x1014, 0x0347,       0,      0,      0,      0, "ibm",        "x3455",       "IBM",         "x3455",              board_ibm_x3455},
+	{0x1039, 0x5513, 0x8086, 0xd61f,  0x1039, 0x6330, 0x8086, 0xd61f, NULL,         NULL,          "Intel",       "D201GLY",            wbsio_check_for_spi},
+	{0x1022, 0x7468,      0,      0,       0,      0,      0,      0, "iwill",      "dk8_htx",     "IWILL",       "DK8-HTX",            w83627hf_gpio24_raise_2e},
 	/* Note: There are >= 2 version of the Kontron 986LCD-M/mITX! */
-	{0x8086, 0x27b8,      0,      0,       0,      0,      0,      0, "kontron",    "986lcd-m", "Kontron 986LCD-M",       board_kontron_986lcd_m},
-	{0x10ec, 0x8168, 0x10ec, 0x8168,  0x104c, 0x8023, 0x104c, 0x8019, "kontron",    "986lcd-m", "Kontron 986LCD-M",       board_kontron_986lcd_m},
-	{0x1106, 0x3149, 0x1565, 0x3206,  0x1106, 0x3344, 0x1565, 0x1202, NULL,         NULL,       "BioStar P4M80-M4",       board_biostar_p4m80_m4},
-	{0x1106, 0x3227, 0x1458, 0x5001,  0x10ec, 0x8139, 0x1458, 0xe000, NULL,         NULL,       "GIGABYTE GA-7VT600",     board_biostar_p4m80_m4},
-	{0x1106, 0x3149, 0x1462, 0x7094,  0x10ec, 0x8167, 0x1462, 0x094c, NULL,         NULL,       "MSI K8T Neo2",           w83627thf_gpio4_4_raise_2e},
-	{0x1039, 0x5513, 0x8086, 0xd61f,  0x1039, 0x6330, 0x8086, 0xd61f, NULL,         NULL,       "Intel D201GLY",          wbsio_check_for_spi},
-	{0x8086, 0x2658, 0x1462, 0x7046,  0x1106, 0x3044, 0x1462, 0x046d, NULL,         NULL,       "MSI MS-7046",            ich6_gpio19_raise},
-	{0x1166, 0x0223, 0x103c, 0x320d,  0x102b, 0x0522, 0x103c, 0x31fa, "hp",         "dl145_g3", "HP DL145 G3",            board_hp_dl145_g3_enable},
-	{0x1106, 0x5337, 0x1458, 0xb003,  0x1106, 0x287e, 0x1106, 0x337e, "via",        "pc3500g",  "VIA PC3500G",            it87xx_probe_spi_flash},
-	{     0,      0,      0,      0,       0,      0,      0,      0, NULL,         NULL,       NULL,                     NULL}, /* end marker */
+	{0x8086, 0x27b8,      0,      0,       0,      0,      0,      0, "kontron",    "986lcd-m",    "Kontron",     "986LCD-M",           board_kontron_986lcd_m},
+	{0x10ec, 0x8168, 0x10ec, 0x8168,  0x104c, 0x8023, 0x104c, 0x8019, "kontron",    "986lcd-m",    "Kontron",     "986LCD-M",           board_kontron_986lcd_m},
+	{0x10de, 0x005e,      0,      0,       0,      0,      0,      0, "msi",        "k8n-neo3",    "MSI",         "K8N Neo3",           w83627thf_gpio4_4_raise_4e},
+	{0x1106, 0x3149, 0x1462, 0x7094,  0x10ec, 0x8167, 0x1462, 0x094c, NULL,         NULL,          "MSI",         "K8T Neo2",           w83627thf_gpio4_4_raise_2e},
+	{0x1106, 0x0571, 0x1462, 0x7120,       0,      0,      0,      0, "msi",        "kt4v",        "MSI",         "KT4V",               board_msi_kt4v},
+	{0x8086, 0x2658, 0x1462, 0x7046,  0x1106, 0x3044, 0x1462, 0x046d, NULL,         NULL,          "MSI",         "MS-7046",            ich6_gpio19_raise},
+	{0x8086, 0x1076, 0x8086, 0x1176,  0x1106, 0x3059, 0x10f1, 0x2498, NULL,         NULL,          "Tyan",        "S2498 (Tomcat K7M)", board_asus_a7v8x_mx},
+	{0x1106, 0x0314, 0x1106, 0xaa08,  0x1106, 0x3227, 0x1106, 0xAA08, NULL,         NULL,          "VIA",         "EPIA-CN",            board_via_epia_sp},
+	{0x1106, 0x3177, 0x1106, 0xAA01,  0x1106, 0x3123, 0x1106, 0xAA01, NULL,         NULL,          "VIA",         "EPIA M/MII/...",     board_via_epia_m},
+	{0x1106, 0x3227, 0x1106, 0xAA01,  0x1106, 0x0259, 0x1106, 0xAA01, NULL,         NULL,          "VIA",         "EPIA SP",            board_via_epia_sp},
+	{0x1106, 0x5337, 0x1458, 0xb003,  0x1106, 0x287e, 0x1106, 0x337e, "via",        "pc3500g",     "VIA",         "PC3500G",            it87xx_probe_spi_flash},
+	{     0,      0,      0,      0,       0,      0,      0,      0, NULL,         NULL,          NULL,          NULL,                 NULL}, /* end marker */
 };
+
+/* Please keep this list alphabetically ordered by vendor/board. */
+const struct board_info boards_ok[] = {
+	/* Verified working boards that don't need write-enables. */
+	{ "Abit",		"AX8", },
+	{ "Advantech",		"PCM-5820", },
+	{ "ASI",		"MB-5BLMP", },
+	{ "ASUS",		"A8N-E", },
+	{ "ASUS",		"A8NE-FM/S", },
+	{ "ASUS",		"A8N-SLI Premium", },
+	{ "ASUS",		"A8V-E Deluxe", },
+	{ "ASUS",		"M2A-VM", },
+	{ "ASUS",		"M2N-E", },
+	{ "ASUS",		"P2B", },
+	{ "ASUS",		"P2B-F", },
+	{ "ASUS",		"P2B-D", },
+	{ "ASUS",		"P2B-DS", },
+	{ "ASUS",		"A7V400-MX", },
+	{ "ASUS",		"A7V8X-MX", },
+	{ "ASUS",		"P4B266", },
+	{ "ASUS",		"A8V-E SE", },
+	{ "ASUS",		"P2L97-S", },
+	{ "ASUS",		"M2A-MX", },
+	{ "ASUS",		"P5B-Deluxe", },
+	{ "ASUS",		"P6T Deluxe V2", },
+	{ "A-Trend",		"ATC-6220", },
+	{ "BCOM",		"WinNET100", },
+	{ "GIGABYTE",		"GA-6BXC", },
+	{ "GIGABYTE",		"GA-6BXDU", },
+	{ "GIGABYTE",		"GA-6ZMA", },
+	{ "Intel",		"EP80759", },
+	{ "MSI",		"KT4V", },
+	{ "MSI",		"MS-7046", },
+	{ "MSI",		"MS-7065", },
+	{ "MSI",		"MS-7236 (945PL Neo3)", },
+	{ "MSI",		"MS-7345 (P35 Neo2-FIR)", },
+	{ "MSI",		"MS-7168 (Orion)", },
+	{ "NEC",		"PowerMate 2000", },
+	{ "PC Engines",		"Alix.1c", },
+	{ "PC Engines",		"Alix.2c2", },
+	{ "PC Engines",		"Alix.2c3", },
+	{ "PC Engines",		"Alix.3c3", },
+	{ "RCA",		"RM4100", },
+	{ "Supermicro",		"H8QC8", },
+	{ "Sun",		"Blade x6250", },
+	{ "Thomson",		"IP1000", },
+	{ "T-Online",		"S-100", },
+	{ "Tyan",		"S1846", },
+	{ "Tyan",		"S2881", },
+	{ "Tyan",		"S2882", },
+	{ "Tyan",		"S2882-D", },
+	{ "Tyan",		"S2891", },
+	{ "Tyan",		"S2892", },
+	{ "Tyan",		"S2895", },
+	{ "Tyan",		"S3095", },
+	{ "Tyan",		"S5180", },
+	{ "Tyan",		"S5191", },
+	{ "Tyan",		"S5197", },
+	{ "Tyan",		"S5211", },
+	{ "Tyan",		"S5211-1U", },
+	{ "Tyan",		"S5220", },
+	{ "Tyan",		"S5375", },
+	{ "Tyan",		"iS5375-1U", },
+	{ "Tyan",		"S5376G2NR/S5376}WAG2NR", },
+	{ "Tyan",		"S5377", },
+	{ "Tyan",		"S5397", },
+	{ "VIA",		"EPIA-M", },
+	{ "VIA",		"EPIA-MII", },
+	{ "VIA",		"EPIA-CN", },
+	{ "VIA",		"EPIA-LN", },
+	{ "VIA",		"VB700X", },
+	{ "VIA",		"NAB74X0", },
+	{ "VIA",		"pc2500e", },
+
+	{},
+};
+
+/* Please keep this list alphabetically ordered by vendor/board. */
+const struct board_info boards_bad[] = {
+	/* Verified non-working boards (for now). */
+	{ "Abit",		"IS-10", },
+	{ "ASUS",		"A7N8X-E Deluxe", },
+	{ "ASUS",		"MEW-AM", },
+	{ "ASUS",		"MEW-VM", },
+	{ "ASUS",		"P3B-F", },
+	{ "ASUS",		"P5B", },
+	{ "ASUS",		"P5BV-M", },
+	{ "Biostar",		"M6TBA", },
+	{ "Boser",		"HS-6637", },
+	{ "FIC",		"VA-502", },
+	{ "MSI",		"MS-7260 (K9N Neo)", },
+	{ "PCCHIPS",		"M537DMA33", },
+	{ "Soyo",		"SY-5VD", },
+	{ "Sun",		"Fire x4540", },
+	{ "Sun",		"Fire x4150", },
+	{ "Sun",		"Fire x4200", },
+	{ "Sun",		"Fire x4600", },
+
+	{},
+};
+
+void print_supported_boards_helper(const struct board_info *b)
+{
+	int i, j;
+
+	for (i = 0; b[i].vendor != NULL; i++) {
+		printf("%s", b[i].vendor);
+		for (j = 0; j < 25 - strlen(b[i].vendor); j++)
+			printf(" ");
+		printf("%s", b[i].name);
+		for (j = 0; j < 23 - strlen(b[i].name); j++)
+			printf(" ");
+		printf("\n");
+	}
+}
 
 void print_supported_boards(void)
 {
-	int i;
+	int i, j;
+	struct board_pciid_enable *b = board_pciid_enables;
 
-	printf("\nSupported mainboards (this list is not exhaustive!):\n\n");
+	printf("\nSupported boards which need write-enable code:\n\nVendor:   "
+	       "               Board:                   Required option:\n\n");
 
-	for (i = 0; board_pciid_enables[i].name != NULL; i++) {
-		if (board_pciid_enables[i].lb_vendor != NULL) {
-			printf("%s (-m %s:%s)\n", board_pciid_enables[i].name,
-			       board_pciid_enables[i].lb_vendor,
-			       board_pciid_enables[i].lb_part);
-		} else {
-			printf("%s (autodetected)\n",
-			       board_pciid_enables[i].name);
-		}
+	for (i = 0; b[i].vendor_name != NULL; i++) {
+		printf("%s", b[i].vendor_name);
+		for (j = 0; j < 25 - strlen(b[i].vendor_name); j++)
+			printf(" ");
+		printf("%s", b[i].board_name);
+		for (j = 0; j < 25 - strlen(b[i].board_name); j++)
+			printf(" ");
+		if (b[i].lb_vendor != NULL)
+			printf("-m %s:%s\n", b[i].lb_vendor, b[i].lb_part);
+		else
+			printf("(none, board is autodetected)\n");
 	}
 
-	printf("\nSee also: http://coreboot.org/Flashrom\n");
+	printf("\nSupported boards which don't need write-enable code:\n\n");
+	print_supported_boards_helper(boards_ok);
+
+	printf("\nBoards which have been verified to NOT work (yet):\n\n");
+	print_supported_boards_helper(boards_bad);
 }
 
 /**
@@ -721,7 +855,7 @@ static struct board_pciid_enable *board_match_coreboot_name(const char *vendor,
 	struct board_pciid_enable *board = board_pciid_enables;
 	struct board_pciid_enable *partmatch = NULL;
 
-	for (; board->name; board++) {
+	for (; board->vendor_name; board++) {
 		if (vendor && (!board->lb_vendor
 			       || strcasecmp(board->lb_vendor, vendor)))
 			continue;
@@ -765,7 +899,7 @@ static struct board_pciid_enable *board_match_pci_card_ids(void)
 {
 	struct board_pciid_enable *board = board_pciid_enables;
 
-	for (; board->name; board++) {
+	for (; board->vendor_name; board++) {
 		if (!board->first_card_vendor || !board->first_card_device)
 			continue;
 
@@ -806,10 +940,10 @@ int board_flash_enable(const char *vendor, const char *part)
 		board = board_match_pci_card_ids();
 
 	if (board) {
-		printf("Found board \"%s\", enabling flash write... ",
-		       board->name);
+		printf("Found board \"%s %s\", enabling flash write... ",
+		       board->vendor_name, board->board_name);
 
-		ret = board->enable(board->name);
+		ret = board->enable(board->vendor_name);
 		if (ret)
 			printf("FAILED!\n");
 		else

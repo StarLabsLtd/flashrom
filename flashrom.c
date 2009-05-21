@@ -3,7 +3,8 @@
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2004 Tyan Corp <yhlu@tyan.com>
- * Copyright (C) 2005-2008 coresystems GmbH 
+ * Copyright (C) 2005-2008 coresystems GmbH
+ * Copyright (C) 2008,2009 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,77 +21,148 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <errno.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include <pci/pci.h>
-/* for iopl */
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
-#include <strings.h>
-#include <sys/sysi86.h>
-#include <sys/psw.h>
-#include <asm/sunddi.h>
-#endif
 #include "flash.h"
 
 char *chip_to_probe = NULL;
-struct pci_access *pacc;	/* For board and chipset_enable */
 int exclude_start_page, exclude_end_page;
 int verbose = 0;
+int programmer = PROGRAMMER_INTERNAL;
 
-struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device)
+const struct programmer_entry programmer_table[] = {
+	{
+		.init			= internal_init,
+		.shutdown		= internal_shutdown,
+		.map_flash_region	= physmap,
+		.unmap_flash_region	= physunmap,
+		.chip_readb		= internal_chip_readb,
+		.chip_readw		= internal_chip_readw,
+		.chip_readl		= internal_chip_readl,
+		.chip_writeb		= internal_chip_writeb,
+		.chip_writew		= internal_chip_writew,
+		.chip_writel		= internal_chip_writel,
+	},
+
+	{
+		.init			= dummy_init,
+		.shutdown		= dummy_shutdown,
+		.map_flash_region	= dummy_map,
+		.unmap_flash_region	= dummy_unmap,
+		.chip_readb		= dummy_chip_readb,
+		.chip_readw		= dummy_chip_readw,
+		.chip_readl		= dummy_chip_readl,
+		.chip_writeb		= dummy_chip_writeb,
+		.chip_writew		= dummy_chip_writew,
+		.chip_writel		= dummy_chip_writel,
+	},
+
+	{
+		.init			= nic3com_init,
+		.shutdown		= nic3com_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= nic3com_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_writeb		= nic3com_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+	},
+
+	{
+		.init			= satasii_init,
+		.shutdown		= satasii_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= satasii_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_writeb		= satasii_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+	},
+
+	{},
+};
+
+int programmer_init(void)
 {
-	struct pci_dev *temp;
-	struct pci_filter filter;
-
-	pci_filter_init(NULL, &filter);
-	filter.vendor = vendor;
-	filter.device = device;
-
-	for (temp = pacc->devices; temp; temp = temp->next)
-		if (pci_filter_match(&filter, temp))
-			return temp;
-
-	return NULL;
+	return programmer_table[programmer].init();
 }
 
-struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
-			      uint16_t card_vendor, uint16_t card_device)
+int programmer_shutdown(void)
 {
-	struct pci_dev *temp;
-	struct pci_filter filter;
+	return programmer_table[programmer].shutdown();
+}
 
-	pci_filter_init(NULL, &filter);
-	filter.vendor = vendor;
-	filter.device = device;
+void *programmer_map_flash_region(const char *descr, unsigned long phys_addr,
+				  size_t len)
+{
+	return programmer_table[programmer].map_flash_region(descr,
+							     phys_addr, len);
+}
 
-	for (temp = pacc->devices; temp; temp = temp->next)
-		if (pci_filter_match(&filter, temp)) {
-			if ((card_vendor ==
-			     pci_read_word(temp, PCI_SUBSYSTEM_VENDOR_ID))
-			    && (card_device ==
-				pci_read_word(temp, PCI_SUBSYSTEM_ID)))
-				return temp;
-		}
+void programmer_unmap_flash_region(void *virt_addr, size_t len)
+{
+	programmer_table[programmer].unmap_flash_region(virt_addr, len);
+}
 
-	return NULL;
+void chip_writeb(uint8_t val, chipaddr addr)
+{
+	programmer_table[programmer].chip_writeb(val, addr);
+}
+
+void chip_writew(uint16_t val, chipaddr addr)
+{
+	programmer_table[programmer].chip_writew(val, addr);
+}
+
+void chip_writel(uint32_t val, chipaddr addr)
+{
+	programmer_table[programmer].chip_writel(val, addr);
+}
+
+uint8_t chip_readb(const chipaddr addr)
+{
+	return programmer_table[programmer].chip_readb(addr);
+}
+
+uint16_t chip_readw(const chipaddr addr)
+{
+	return programmer_table[programmer].chip_readw(addr);
+}
+
+uint32_t chip_readl(const chipaddr addr)
+{
+	return programmer_table[programmer].chip_readl(addr);
 }
 
 void map_flash_registers(struct flashchip *flash)
 {
 	size_t size = flash->total_size * 1024;
-	flash->virtual_registers = physmap("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
+	/* Flash registers live 4 MByte below the flash. */
+	flash->virtual_registers = (chipaddr)programmer_map_flash_region("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
+}
+
+int read_memmapped(struct flashchip *flash, uint8_t *buf)
+{
+	int i;
+
+	/* We could do a memcpy as optimization if the flash is onboard */
+	//memcpy(buf, (const char *)flash->virtual_memory, flash->total_size * 1024);
+	for (i = 0; i < flash->total_size * 1024; i++)
+		buf[i] = chip_readb(flash->virtual_memory + i);
+		
+	return 0;
 }
 
 struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 {
-	volatile uint8_t *bios;
 	struct flashchip *flash;
 	unsigned long base = 0, size;
 
@@ -106,23 +178,8 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 
 		size = flash->total_size * 1024;
 
-		/* If getpagesize() > size -> 
-		 * "Can't mmap memory using /dev/mem: Invalid argument"
-		 * This should never happen as we don't support any flash chips
-		 * smaller than 4k or 8k (yet).
-		 */
-
-		if (getpagesize() > size) {
-			/*
-			 * if a flash size of 0 is mapped, we map a single page
-			 * so we can probe in that area whether we know the
-			 * vendor at least.
-			 */
-			size = getpagesize();
-		}
-
-		base = flashbase && flashchips == first_flash ? flashbase : (0xffffffff - size + 1);
-		flash->virtual_memory = bios = physmap("flash chip", base, size);
+		base = flashbase ? flashbase : (0xffffffff - size + 1);
+		flash->virtual_memory = (chipaddr)programmer_map_flash_region("flash chip", base, size);
 
 		if (force)
 			break;
@@ -135,7 +192,7 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			break;
 
 notfound:
-		physunmap((void *)bios, size);
+		programmer_unmap_flash_region((void *)flash->virtual_memory, size);
 	}
 
 	if (!flash || !flash->name)
@@ -143,7 +200,6 @@ notfound:
 
 	printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
 	       flash->vendor, flash->name, flash->total_size, base);
-	flashbase = base;
 	return flash;
 }
 
@@ -152,9 +208,11 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	int idx;
 	int total_size = flash->total_size * 1024;
 	uint8_t *buf2 = (uint8_t *) calloc(total_size, sizeof(char));
-	if (flash->read == NULL)
-		memcpy(buf2, (const char *)flash->virtual_memory, total_size);
-	else
+	if (!flash->read) {
+		printf("FAILED!\n");
+		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
+		return 1;
+	} else
 		flash->read(flash, buf2);
 
 	printf("Verifying flash... ");
@@ -198,9 +256,11 @@ int read_flash(struct flashchip *flash, char *filename, unsigned int exclude_sta
 		exit(1);
 	}
 	printf("Reading flash... ");
-	if (flash->read == NULL)
-		memcpy(buf, (const char *)flash->virtual_memory, size);
-	else
+	if (!flash->read) {
+		printf("FAILED!\n");
+		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
+		return 1;
+	} else
 		flash->read(flash, buf);
 
 	if (exclude_end_position - exclude_start_position > 0)
@@ -227,10 +287,14 @@ int erase_flash(struct flashchip *flash)
 		return 1;
 	}
 	flash->erase(flash);
-	if (NULL == flash->read)
-		memcpy(buf, (const char *)flash->virtual_memory, size);
-	else
+
+	if (!flash->read) {
+		printf("FAILED!\n");
+		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
+		return 1;
+	} else
 		flash->read(flash, buf);
+
 	for (erasedbytes = 0; erasedbytes < size; erasedbytes++)
 		if (0xff != buf[erasedbytes]) {
 			printf("FAILED!\n");
@@ -249,7 +313,7 @@ int erase_flash(struct flashchip *flash)
 
 void print_supported_chips(void)
 {
-	int okcol = 0, pos = 0;
+	int okcol = 0, pos = 0, i;
 	struct flashchip *f;
 
 	for (f = flashchips; f->name != NULL; f++) {
@@ -259,7 +323,8 @@ void print_supported_chips(void)
 	}
 	okcol = (okcol + 7) & ~7;
 
-	POS_PRINT("Supported flash chips:");
+	printf("Supported flash chips:\n\n");
+	POS_PRINT("Vendor:   Device:");
 	while (pos < okcol) {
 		printf("\t");
 		pos += 8 - (pos % 8);
@@ -267,8 +332,16 @@ void print_supported_chips(void)
 	printf("Tested OK operations:\tKnown BAD operations:\n\n");
 
 	for (f = flashchips; f->name != NULL; f++) {
-		printf("%s %s", f->vendor, f->name);
-		pos = strlen(f->vendor) + 1 + strlen(f->name);
+		/* Don't print "unknown XXXX SPI chip" entries. */
+		if (!strncmp(f->name, "unknown", 7))
+			continue;
+
+		printf("%s", f->vendor);
+		for (i = 0; i < 10 - strlen(f->vendor); i++)
+			printf(" ");
+		printf("%s", f->name);
+
+		pos = 10 + strlen(f->name);
 		while (pos < okcol) {
 			printf("\t");
 			pos += 8 - (pos % 8);
@@ -303,9 +376,15 @@ void print_supported_chips(void)
 
 void usage(const char *name)
 {
-	printf("usage: %s [-rwvEVfLhR] [-c chipname] [-s exclude_start]\n",
+	printf("usage: %s [-EVfLhR] [-r file] [-w file] [-v file] [-c chipname] [-s addr]\n"
+	       "       [-e addr] [-m [vendor:]part] [-l file] [-i image] [-p programmer] [file]\n\n",
 	       name);
-	printf("       [-e exclude_end] [-m [vendor:]part] [-l file.layout] [-i imagename] [file]\n");
+
+	printf("Please note that the command line interface for flashrom will "
+		"change before\nflashrom 1.0. Do not use flashrom in scripts "
+		"or other automated tools without\nchecking that your flashrom"
+		" version won't interpret options in a different way.\n\n");
+
 	printf
 	    ("   -r | --read:                      read flash and save into file\n"
 	     "   -w | --write:                     write file into flash\n"
@@ -317,19 +396,21 @@ void usage(const char *name)
 	     "   -e | --eend <addr>:               exclude end postion\n"
 	     "   -m | --mainboard <[vendor:]part>: override mainboard settings\n"
 	     "   -f | --force:                     force write without checking image\n"
-	     "   -l | --layout <file.layout>:      read rom layout from file\n"
+	     "   -l | --layout <file.layout>:      read ROM layout from file\n"
 	     "   -i | --image <name>:              only flash image name from flash layout\n"
 	     "   -L | --list-supported:            print supported devices\n"
+	     "   -p | --programmer <name>:         specify the programmer device\n"
+	     "                                     (internal, dummy, nic3com, satasii)\n"
 	     "   -h | --help:                      print this help text\n"
 	     "   -R | --version:                   print the version (release)\n"
-	     "\n" " If no file is specified, then all that happens"
+	     "\nIf no file is specified, then all that happens"
 	     " is that flash info is dumped.\n\n");
 	exit(1);
 }
 
 void print_version(void)
 {
-	printf("flashrom r%s\n", FLASHROM_VERSION);
+	printf("flashrom v%s\n", FLASHROM_VERSION);
 }
 
 int main(int argc, char *argv[])
@@ -343,10 +424,8 @@ int main(int argc, char *argv[])
 	int option_index = 0;
 	int force = 0;
 	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
+	int list_supported = 0;
 	int ret = 0, i;
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-	int io_fd;
-#endif
 
 	static struct option long_options[] = {
 		{"read", 0, 0, 'r'},
@@ -362,6 +441,7 @@ int main(int argc, char *argv[])
 		{"layout", 1, 0, 'l'},
 		{"image", 1, 0, 'i'},
 		{"list-supported", 0, 0, 'L'},
+		{"programmer", 1, 0, 'p'},
 		{"help", 0, 0, 'h'},
 		{"version", 0, 0, 'R'},
 		{0, 0, 0, 0}
@@ -372,6 +452,8 @@ int main(int argc, char *argv[])
 	unsigned int exclude_start_position = 0, exclude_end_position = 0;	// [x,y)
 	char *tempstr = NULL, *tempstr2 = NULL;
 
+	print_version();
+
 	if (argc > 1) {
 		/* Yes, print them. */
 		int i;
@@ -381,7 +463,7 @@ int main(int argc, char *argv[])
 	}
 
 	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:Lh",
+	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:p:Lh",
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'r':
@@ -435,13 +517,28 @@ int main(int argc, char *argv[])
 			find_romentry(tempstr);
 			break;
 		case 'L':
-			print_supported_chips();
-			print_supported_chipsets();
-			print_supported_boards();
-			exit(0);
+			list_supported = 1;
+			break;
+		case 'p':
+			if (strncmp(optarg, "internal", 8) == 0) {
+				programmer = PROGRAMMER_INTERNAL;
+			} else if (strncmp(optarg, "dummy", 5) == 0) {
+				programmer = PROGRAMMER_DUMMY;
+			} else if (strncmp(optarg, "nic3com", 7) == 0) {
+				programmer = PROGRAMMER_NIC3COM;
+				if (optarg[7] == '=')
+					pcidev_bdf = strdup(optarg + 8);
+			} else if (strncmp(optarg, "satasii", 7) == 0) {
+				programmer = PROGRAMMER_SATASII;
+				if (optarg[7] == '=')
+					pcidev_bdf = strdup(optarg + 8);
+			} else {
+				printf("Error: Unknown programmer.\n");
+				exit(1);
+			}
 			break;
 		case 'R':
-			print_version();
+			/* print_version() is always called during startup. */
 			exit(0);
 			break;
 		case 'h':
@@ -449,6 +546,17 @@ int main(int argc, char *argv[])
 			usage(argv[0]);
 			break;
 		}
+	}
+
+	if (list_supported) {
+		print_supported_chips();
+		print_supported_chipsets();
+		print_supported_boards();
+		printf("\nSupported PCI devices flashrom can use "
+		       "as programmer:\n\n");
+		print_supported_pcidevs(nics_3com);
+		print_supported_pcidevs(satas_sii);
+		exit(0);
 	}
 
 	if (read_it && write_it) {
@@ -459,41 +567,9 @@ int main(int argc, char *argv[])
 	if (optind < argc)
 		filename = argv[optind++];
 
-	/* First get full io access */
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
-	if (sysi86(SI86V86, V86SC_IOPL, PS_IOPL) != 0) {
-#elif defined(__FreeBSD__) || defined (__DragonFly__)
-	if ((io_fd = open("/dev/io", O_RDWR)) < 0) {
-#else
-	if (iopl(3) != 0) {
-#endif
-		fprintf(stderr, "ERROR: Could not get IO privileges (%s).\nYou need to be root.\n", strerror(errno));
-		exit(1);
-	}
-
-	/* Initialize PCI access for flash enables */
-	pacc = pci_alloc();	/* Get the pci_access structure */
-	/* Set all options you want -- here we stick with the defaults */
-	pci_init(pacc);		/* Initialize the PCI library */
-	pci_scan_bus(pacc);	/* We want to get the list of devices */
+	ret = programmer_init();
 
 	myusec_calibrate_delay();
-
-	/* We look at the lbtable first to see if we need a
-	 * mainboard specific flash enable sequence.
-	 */
-	coreboot_init();
-
-	/* try to enable it. Failure IS an option, since not all motherboards
-	 * really need this to be done, etc., etc.
-	 */
-	ret = chipset_flash_enable();
-	if (ret == -2) {
-		printf("WARNING: No chipset found. Flash detection "
-		       "will most likely fail.\n");
-	}
-
-	board_flash_enable(lb_vendor, lb_part);
 
 	for (i = 0; i < ARRAY_SIZE(flashes); i++) {
 		flashes[i] =
@@ -538,9 +614,11 @@ int main(int argc, char *argv[])
 				exit(1);
 			}
 			printf("Force reading flash... ");
-			if (!flashes[0]->read)
-				memcpy(buf, (const char *)flashes[0]->virtual_memory, size);
-			else
+			if (!flashes[0]->read) {
+				printf("FAILED!\n");
+				fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
+				return 1;
+			} else
 				flashes[0]->read(flashes[0], buf);
 
 			if (exclude_end_position - exclude_start_position > 0)
@@ -589,10 +667,12 @@ int main(int argc, char *argv[])
 				printf(" WRITE");
 			printf("\n");
 		}
-		printf("Please email a report to flashrom@coreboot.org if any of the above operations\n");
-		printf("work correctly for you with this flash part. Please include the full output\n");
-		printf("from the program, including chipset found. Thank you for your help!\n");
-		printf("===\n");
+		printf("Please email a report to flashrom@coreboot.org if any "
+		       "of the above operations\nwork correctly for you with "
+		       "this flash part. Please include the flashrom\noutput "
+		       "with the additional -V option for all operations you "
+		       "tested (-V, -rV,\n-wV, -EV), and mention which "
+		       "mainboard you tested. Thanks for your help!\n===\n");
 	}
 
 	if (!(read_it | write_it | verify_it | erase_it)) {
@@ -649,6 +729,9 @@ int main(int argc, char *argv[])
 	 */
 
 	// ////////////////////////////////////////////////////////////
+	/* FIXME: This memcpy will not work for SPI nor external flashers.
+	 * Convert to chip_readb.
+	 */
 	if (exclude_end_position - exclude_start_position > 0)
 		memcpy(buf + exclude_start_position,
 		       (const char *)flash->virtual_memory +
@@ -679,8 +762,7 @@ int main(int argc, char *argv[])
 	if (verify_it)
 		ret |= verify_flash(flash, buf);
 
-#ifdef __FreeBSD__
-	close(io_fd);
-#endif
+	programmer_shutdown();
+
 	return ret;
 }
