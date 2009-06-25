@@ -32,24 +32,24 @@ static uint16_t wbsio_get_spibase(uint16_t port)
 	uint16_t flashport = 0;
 
 	w836xx_ext_enter(port);
-	id = wbsio_read(port, 0x20);
+	id = sio_read(port, 0x20);
 	if (id != 0xa0) {
 		fprintf(stderr, "\nW83627 not found at 0x%x, id=0x%02x want=0xa0.\n", port, id);
 		goto done;
 	}
 
-	if (0 == (wbsio_read(port, 0x24) & 2)) {
+	if (0 == (sio_read(port, 0x24) & 2)) {
 		fprintf(stderr, "\nW83627 found at 0x%x, but SPI pins are not enabled. (CR[0x24] bit 1=0)\n", port);
 		goto done;
 	}
 
-	wbsio_write(port, 0x07, 0x06);
-	if (0 == (wbsio_read(port, 0x30) & 1)) {
+	sio_write(port, 0x07, 0x06);
+	if (0 == (sio_read(port, 0x30) & 1)) {
 		fprintf(stderr, "\nW83627 found at 0x%x, but SPI is not enabled. (LDN6[0x30] bit 0=0)\n", port);
 		goto done;
 	}
 
-	flashport = (wbsio_read(port, 0x62) << 8) | wbsio_read(port, 0x63);
+	flashport = (sio_read(port, 0x62) << 8) | sio_read(port, 0x63);
 
 done:
 	w836xx_ext_leave(port);
@@ -63,7 +63,10 @@ int wbsio_check_for_spi(const char *name)
 			return 1;
 
 	printf_debug("\nwbsio_spibase = 0x%x\n", wbsio_spibase);
-	flashbus = BUS_TYPE_WBSIO_SPI;
+
+	buses_supported |= CHIP_BUSTYPE_SPI;
+	spi_controller = SPI_CONTROLLER_WBSIO;
+
 	return 0;
 }
 
@@ -156,7 +159,7 @@ int wbsio_spi_command(unsigned int writecnt, unsigned int readcnt,
 
 	OUTB(writearr[0], wbsio_spibase);
 	OUTB(mode, wbsio_spibase + 1);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	if (!readcnt)
 		return 0;
@@ -170,16 +173,16 @@ int wbsio_spi_command(unsigned int writecnt, unsigned int readcnt,
 	return 0;
 }
 
-int wbsio_spi_read(struct flashchip *flash, uint8_t *buf)
+int wbsio_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
 	int size = flash->total_size * 1024;
 
-	if (flash->total_size > 1024) {
+	if (size > 1024 * 1024) {
 		fprintf(stderr, "%s: Winbond saved on 4 register bits so max chip size is 1024 KB!\n", __func__);
 		return 1;
 	}
 
-	memcpy(buf, (const char *)flash->virtual_memory, size);
+	read_memmapped(flash, buf, start, len);
 	return 0;
 }
 
@@ -193,14 +196,17 @@ int wbsio_spi_write_1(struct flashchip *flash, uint8_t *buf)
 		return 1;
 	}
 
-	flash->erase(flash);
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	result = spi_write_enable();
 	if (result)
 		return result;
 	for (pos = 0; pos < size; pos++) {
 		spi_byte_program(pos, buf[pos]);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			myusec_delay(10);
+			programmer_delay(10);
 	}
 	spi_write_disable();
 	return 0;

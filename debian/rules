@@ -6,14 +6,15 @@ include /usr/share/cdbs/1/class/makefile.mk
 include /usr/share/cdbs/1/rules/simple-patchsys.mk
 
 DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
-LDFLAGS += -lpci
-CFLAGS += -D'FLASHROM_VERSION=\"0.9.0+r544\"'
+
+# Reduce the number of unneeded dependencies with --as-needed.
+LDFLAGS += "-Wl,--as-needed"
 
 # Upstream ChangeLog generated via 'LC_ALL=C svn log > ChangeLog'.
 DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog
 
 clean::
-	rm -f .dependencies
+	rm -f .dependencies .features
 
 common-binary-post-install-arch:: list-missing
 

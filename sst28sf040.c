@@ -54,14 +54,20 @@ static void unprotect_28sf040(chipaddr bios)
 	tmp = chip_readb(bios + 0x041A);
 }
 
-static int erase_sector_28sf040(chipaddr bios, unsigned long address)
+static int erase_sector_28sf040(struct flashchip *flash, unsigned long address, int sector_size)
 {
+	chipaddr bios = flash->virtual_memory;
+
 	chip_writeb(AUTO_PG_ERASE1, bios);
 	chip_writeb(AUTO_PG_ERASE2, bios + address);
 
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, address, sector_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -94,16 +100,16 @@ int probe_28sf040(struct flashchip *flash)
 	uint8_t id1, id2;
 
 	chip_writeb(RESET, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	chip_writeb(READ_ID, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	id1 = chip_readb(bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	id2 = chip_readb(bios + 0x01);
 
 	chip_writeb(RESET, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
@@ -121,9 +127,13 @@ int erase_28sf040(struct flashchip *flash)
 	chip_writeb(CHIP_ERASE, bios);
 	protect_28sf040(bios);
 
-	myusec_delay(10);
+	programmer_delay(10);
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -139,7 +149,10 @@ int write_28sf040(struct flashchip *flash, uint8_t *buf)
 	printf("Programming page: ");
 	for (i = 0; i < total_size / page_size; i++) {
 		/* erase the page before programming */
-		erase_sector_28sf040(bios, i * page_size);
+		if (erase_sector_28sf040(flash, i * page_size, page_size)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
 
 		/* write to the sector */
 		printf("%04d at address: 0x%08x", i, i * page_size);

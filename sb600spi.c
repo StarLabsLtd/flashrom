@@ -25,30 +25,25 @@
 #include "flash.h"
 #include "spi.h"
 
-typedef struct _spi_controller {
-	unsigned int spi_cntrl0;	/* 00h */
-	unsigned int restrictedcmd1;	/* 04h */
-	unsigned int restrictedcmd2;	/* 08h */
-	unsigned int spi_cntrl1;	/* 0ch */
-	unsigned int spi_cmdvalue0;	/* 10h */
-	unsigned int spi_cmdvalue1;	/* 14h */
-	unsigned int spi_cmdvalue2;	/* 18h */
-	unsigned int spi_fakeid;	/* 1Ch */
-} sb600_spi_controller;
+/* This struct is unused, but helps visualize the SB600 SPI BAR layout.
+ *struct sb600_spi_controller {
+ *	unsigned int spi_cntrl0;	/ * 00h * /
+ *	unsigned int restrictedcmd1;	/ * 04h * /
+ *	unsigned int restrictedcmd2;	/ * 08h * /
+ *	unsigned int spi_cntrl1;	/ * 0ch * /
+ *	unsigned int spi_cmdvalue0;	/ * 10h * /
+ *	unsigned int spi_cmdvalue1;	/ * 14h * /
+ *	unsigned int spi_cmdvalue2;	/ * 18h * /
+ *	unsigned int spi_fakeid;	/ * 1Ch * /
+ *};
+ */
 
-sb600_spi_controller *spi_bar = NULL;
 uint8_t *sb600_spibar;
 
-int sb600_spi_read(struct flashchip *flash, uint8_t *buf)
+int sb600_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
-	int rc = 0, i;
-	int total_size = flash->total_size * 1024;
-	int page_size = 8;
-
-	for (i = 0; i < total_size / page_size; i++)
-		spi_nbyte_read(i * page_size, (void *)(buf + i * page_size),
-			       page_size);
-	return rc;
+	/* Maximum read length is 8 bytes. */
+	return spi_read_chunked(flash, buf, start, len, 8);
 }
 
 uint8_t sb600_read_status_register(void)
@@ -69,7 +64,10 @@ int sb600_spi_write_1(struct flashchip *flash, uint8_t *buf)
 
 	/* Erase first */
 	printf("Erasing flash before programming... ");
-	flash->erase(flash);
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	printf("done.\n");
 
 	printf("Programming flash");
@@ -89,7 +87,7 @@ int sb600_spi_write_1(struct flashchip *flash, uint8_t *buf)
 	return rc;
 }
 
-void reset_internal_fifo_pointer(void)
+static void reset_internal_fifo_pointer(void)
 {
 	mmio_writeb(mmio_readb(sb600_spibar + 2) | 0x10, sb600_spibar + 2);
 
@@ -97,7 +95,7 @@ void reset_internal_fifo_pointer(void)
 		printf("reset\n");
 }
 
-void execute_command(void)
+static void execute_command(void)
 {
 	mmio_writeb(mmio_readb(sb600_spibar + 2) | 1, sb600_spibar + 2);
 
@@ -113,8 +111,6 @@ int sb600_spi_command(unsigned int writecnt, unsigned int readcnt,
 	unsigned char cmd = *writearr++;
 
 	writecnt--;
-
-	spi_bar = (sb600_spi_controller *) sb600_spibar;
 
 	printf_debug("%s, cmd=%x, writecnt=%x, readcnt=%x\n",
 		     __func__, cmd, writecnt, readcnt);

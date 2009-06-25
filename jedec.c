@@ -73,7 +73,7 @@ void unprotect_jedec(chipaddr bios)
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0x20, bios + 0x5555);
 
-	usleep(200);
+	programmer_delay(200);
 }
 
 void protect_jedec(chipaddr bios)
@@ -82,7 +82,7 @@ void protect_jedec(chipaddr bios)
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xA0, bios + 0x5555);
 
-	usleep(200);
+	programmer_delay(200);
 }
 
 int probe_jedec(struct flashchip *flash)
@@ -91,17 +91,33 @@ int probe_jedec(struct flashchip *flash)
 	uint8_t id1, id2;
 	uint32_t largeid1, largeid2;
 	uint32_t flashcontent1, flashcontent2;
+	int probe_timing_enter, probe_timing_exit;
+
+	if (flash->probe_timing > 0) 
+		probe_timing_enter = probe_timing_exit = flash->probe_timing;
+	else if (flash->probe_timing == TIMING_ZERO) { /* No delay. */
+		probe_timing_enter = probe_timing_exit = 0;
+	} else if (flash->probe_timing == TIMING_FIXME) { /* == _IGNORED */
+		printf_debug("Chip lacks correct probe timing information, "
+			     "using default 10mS/40uS\n");
+		probe_timing_enter = 10000;
+		probe_timing_exit = 40;
+	} else {
+		printf("Chip has negative value in probe_timing, failing "
+		       "without chip access\n");
+		return 0;
+	}
 
 	/* Issue JEDEC Product ID Entry command */
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x90, bios + 0x5555);
 	/* Older chips may need up to 100 us to respond. The ATMEL 29C020
 	 * needs 10 ms according to the data sheet.
 	 */
-	myusec_delay(10000);
+	programmer_delay(probe_timing_enter);
 
 	/* Read product ID */
 	id1 = chip_readb(bios);
@@ -123,11 +139,11 @@ int probe_jedec(struct flashchip *flash)
 
 	/* Issue JEDEC Product ID Exit command */
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0xF0, bios + 0x5555);
-	myusec_delay(40);
+	programmer_delay(probe_timing_exit);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x", __FUNCTION__, largeid1, largeid2);
 	if (!oddparity(id1))
@@ -159,73 +175,90 @@ int probe_jedec(struct flashchip *flash)
 	return 0;
 }
 
-int erase_sector_jedec(chipaddr bios, unsigned int page)
+int erase_sector_jedec(struct flashchip *flash, unsigned int page, int pagesize)
 {
+	chipaddr bios = flash->virtual_memory;
+
 	/*  Issue the Sector Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x80, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x30, bios + page);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, page, pagesize)) {
+		fprintf(stderr,"ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
-int erase_block_jedec(chipaddr bios, unsigned int block)
+int erase_block_jedec(struct flashchip *flash, unsigned int block, int blocksize)
 {
+	chipaddr bios = flash->virtual_memory;
+
 	/*  Issue the Sector Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x80, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x50, bios + block);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, block, blocksize)) {
+		fprintf(stderr,"ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
 int erase_chip_jedec(struct flashchip *flash)
 {
+	int total_size = flash->total_size * 1024;
 	chipaddr bios = flash->virtual_memory;
 
 	/*  Issue the JEDEC Chip Erase command   */
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x80, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x10, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, 0, total_size)) {
+		fprintf(stderr,"ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -326,15 +359,11 @@ int write_jedec(struct flashchip *flash, uint8_t *buf)
 	int page_size = flash->page_size;
 	chipaddr bios = flash->virtual_memory;
 
-	erase_chip_jedec(flash);
-	// dumb check if erase was successful.
-	for (i = 0; i < total_size; i++) {
-		if (chip_readb(bios + i) != 0xff) {
-			printf("ERASE FAILED @%d, val %02x!\n", i, chip_readb(bios + i));
-			return -1;
-		}
+	if (erase_chip_jedec(flash)) {
+		fprintf(stderr,"ERASE FAILED!\n");
+		return -1;
 	}
-
+	
 	printf("Programming page: ");
 	for (i = 0; i < total_size / page_size; i++) {
 		printf("%04d at address: 0x%08x", i, i * page_size);

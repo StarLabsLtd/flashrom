@@ -27,6 +27,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 #include "flash.h"
 
 // I need that Berkeley bit-map printer
@@ -53,9 +54,9 @@ int probe_82802ab(struct flashchip *flash)
 #endif
 
 	chip_writeb(0xff, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x90, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	id1 = chip_readb(bios);
 	id2 = chip_readb(bios + 0x01);
@@ -65,7 +66,7 @@ int probe_82802ab(struct flashchip *flash)
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xF0, bios + 0x5555);
 
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 
@@ -92,7 +93,7 @@ uint8_t wait_82802ab(chipaddr bios)
 	// put another command to get out of status register mode
 
 	chip_writeb(0x90, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	id1 = chip_readb(bios);
 	id2 = chip_readb(bios + 0x01);
@@ -109,7 +110,6 @@ int erase_82802ab_block(struct flashchip *flash, int offset)
 {
 	chipaddr bios = flash->virtual_memory + offset;
 	chipaddr wrprotect = flash->virtual_registers + offset + 2;
-	int j;
 	uint8_t status;
 
 	// clear status register
@@ -124,15 +124,13 @@ int erase_82802ab_block(struct flashchip *flash, int offset)
 	// now start it
 	chip_writeb(0x20, bios);
 	chip_writeb(0xd0, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	// now let's see what the register is
 	status = wait_82802ab(flash->virtual_memory);
 	//print_82802ab_status(status);
-	for (j = 0; j < flash->page_size; j++) {
-		if (chip_readb(bios + j) != 0xFF) {
-			printf("BLOCK ERASE failed at 0x%x\n", offset);
-			return -1;
-		}
+	if (check_erased_range(flash, offset, flash->page_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
 	}
 	printf("DONE BLOCK 0x%x\n", offset);
 
@@ -147,7 +145,10 @@ int erase_82802ab(struct flashchip *flash)
 	printf("total_size is %d; flash->page_size is %d\n",
 	       total_size, flash->page_size);
 	for (i = 0; i < total_size; i += flash->page_size)
-		erase_82802ab_block(flash, i);
+		if (erase_82802ab_block(flash, i)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
 	printf("DONE ERASE\n");
 
 	return 0;
@@ -172,7 +173,12 @@ int write_82802ab(struct flashchip *flash, uint8_t *buf)
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
 	chipaddr bios = flash->virtual_memory;
+	uint8_t *tmpbuf = malloc(page_size);
 
+	if (!tmpbuf) {
+		printf("Could not allocate memory!\n");
+		exit(1);
+	}
 	printf("Programming page: \n");
 	for (i = 0; i < total_size / page_size; i++) {
 		printf
@@ -186,19 +192,23 @@ int write_82802ab(struct flashchip *flash, uint8_t *buf)
 		 * or not erased and rewritten; their data is retained also in
 		 * sudden power off situations
 		 */
-		if (!memcmp((void *)(buf + i * page_size),
-			    (void *)(bios + i * page_size), page_size)) {
+		chip_readn(tmpbuf, bios + i * page_size, page_size);
+		if (!memcmp((void *)(buf + i * page_size), tmpbuf, page_size)) {
 			printf("SKIPPED\n");
 			continue;
 		}
 
 		/* erase block by block and write block by block; this is the most secure way */
-		erase_82802ab_block(flash, i * page_size);
+		if (erase_82802ab_block(flash, i * page_size)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
 		write_page_82802ab(bios, buf + i * page_size,
 				   bios + i * page_size, page_size);
 	}
 	printf("\n");
 	protect_jedec(bios);
+	free(tmpbuf);
 
 	return 0;
 }

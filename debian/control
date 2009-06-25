@@ -2,14 +2,14 @@ Source: flashrom
 Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
-Build-Depends: cdbs, debhelper (>= 5), libpci-dev
-Standards-Version: 3.8.1
+Build-Depends: cdbs, debhelper (>= 5), libpci-dev, libftdi-dev
+Standards-Version: 3.8.2
 Homepage: http://coreboot.org/Flashrom
 
 Package: flashrom
 Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 netbsd-alpha netbsd-i386
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Identify, read, write, erasing, and verify BIOS/ROM/flash chips
+Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
  flashrom is a tool for identifying, reading, writing, verifying and erasing
  flash chips. It's often used to flash BIOS/EFI/coreboot/firmware images
  in-system using a supported mainboard, but it also supports flashing of

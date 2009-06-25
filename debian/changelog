@@ -1,3 +1,22 @@
+flashrom (0.9+r631-1) unstable; urgency=low
+
+  * New upstream release.
+     + The command line usage has changed a bit in this release:
+        + Combined operations like -wv or -Ewv are no longer allowed.
+        + The -w option automatically does an auto-verify after writing
+          (but you can also explicitly do it via 'flashrom -v file').
+        + The -E option is also automatically verified per default.
+     + Support for external programmers was added (-p), see manpage.
+     + Acer Aspire One is now marked unsupported upstream (Closes: #528308).
+  * Add build-dependency on libftdi-dev, flashrom now supports an
+    external libftdi-based programmer (ft2232spi).
+  * debian/patches/20_drop_svndef.patch: Drop, we use 'make tarball' now,
+    which properly handles svn version printing in flashrom.
+  * Standards-Version: 3.8.2 (no changes required).
+  * debian/copyright: Update.
+
+ -- Uwe Hermann <uwe@debian.org>  Thu, 25 Jun 2009 14:18:53 +0200
+
 flashrom (0.9+r544-1) unstable; urgency=low
 
   * New upstream release.

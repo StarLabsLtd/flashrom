@@ -1,7 +1,7 @@
 /*
  * This file is part of the flashrom project.
  *
- * Copyright (C) 2007, 2008 Carl-Daniel Hailfinger
+ * Copyright (C) 2007, 2008, 2009 Carl-Daniel Hailfinger
  * Copyright (C) 2008 coresystems GmbH
  *
  * This program is free software; you can redistribute it and/or modify
@@ -24,26 +24,32 @@
 
 #include <string.h>
 #include "flash.h"
+#include "flashchips.h"
 #include "spi.h"
+
+enum spi_controller spi_controller = SPI_CONTROLLER_NONE;
+void *spibar = NULL;
 
 void spi_prettyprint_status_register(struct flashchip *flash);
 
 int spi_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr)
 {
-	switch (flashbus) {
-	case BUS_TYPE_IT87XX_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_IT87XX:
 		return it8716f_spi_command(writecnt, readcnt, writearr,
 					   readarr);
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_ICH9_SPI:
-	case BUS_TYPE_VIA_SPI:
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_ICH9:
+	case SPI_CONTROLLER_VIA:
 		return ich_spi_command(writecnt, readcnt, writearr, readarr);
-	case BUS_TYPE_SB600_SPI:
+	case SPI_CONTROLLER_SB600:
 		return sb600_spi_command(writecnt, readcnt, writearr, readarr);
-	case BUS_TYPE_WBSIO_SPI:
+	case SPI_CONTROLLER_WBSIO:
 		return wbsio_spi_command(writecnt, readcnt, writearr, readarr);
-	case BUS_TYPE_DUMMY_SPI:
+	case SPI_CONTROLLER_FT2232:
+		return ft2232_spi_command(writecnt, readcnt, writearr, readarr);
+	case SPI_CONTROLLER_DUMMY:
 		return dummy_spi_command(writecnt, readcnt, writearr, readarr);
 	default:
 		printf_debug
@@ -122,10 +128,10 @@ int spi_write_enable(void)
 	if (result)
 		printf_debug("%s failed", __func__);
 	if (result == SPI_INVALID_OPCODE) {
-		switch (flashbus) {
-		case BUS_TYPE_ICH7_SPI:
-		case BUS_TYPE_ICH9_SPI:
-		case BUS_TYPE_VIA_SPI:
+		switch (spi_controller) {
+		case SPI_CONTROLLER_ICH7:
+		case SPI_CONTROLLER_ICH9:
+		case SPI_CONTROLLER_VIA:
 			printf_debug(" due to SPI master limitation, ignoring"
 				     " and hoping it will be run as PREOP\n");
 			return 0;
@@ -150,8 +156,8 @@ int spi_write_disable(void)
 static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 {
 	unsigned char readarr[4];
-	uint32_t manuf_id;
-	uint32_t model_id;
+	uint32_t id1;
+	uint32_t id2;
 
 	if (spi_rdid(readarr, bytes))
 		return 0;
@@ -163,21 +169,20 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 	if (readarr[0] == 0x7f) {
 		if (!oddparity(readarr[1]))
 			printf_debug("RDID byte 1 parity violation.\n");
-		manuf_id = (readarr[0] << 8) | readarr[1];
-		model_id = readarr[2];
+		id1 = (readarr[0] << 8) | readarr[1];
+		id2 = readarr[2];
 		if (bytes > 3) {
-			model_id <<= 8;
-			model_id |= readarr[3];
+			id2 <<= 8;
+			id2 |= readarr[3];
 		}
 	} else {
-		manuf_id = readarr[0];
-		model_id = (readarr[1] << 8) | readarr[2];
+		id1 = readarr[0];
+		id2 = (readarr[1] << 8) | readarr[2];
 	}
 
-	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, manuf_id,
-		     model_id);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 
-	if (manuf_id == flash->manufacture_id && model_id == flash->model_id) {
+	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
 		 * user about possible write protection.
 		 */
@@ -187,7 +192,7 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 	}
 
 	/* Test if this is a pure vendor match. */
-	if (manuf_id == flash->manufacture_id &&
+	if (id1 == flash->manufacture_id &&
 	    GENERIC_DEVICE_ID == flash->model_id)
 		return 1;
 
@@ -203,13 +208,14 @@ int probe_spi_rdid(struct flashchip *flash)
 int probe_spi_rdid4(struct flashchip *flash)
 {
 	/* only some SPI chipsets support 4 bytes commands */
-	switch (flashbus) {
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_ICH9_SPI:
-	case BUS_TYPE_VIA_SPI:
-	case BUS_TYPE_SB600_SPI:
-	case BUS_TYPE_WBSIO_SPI:
-	case BUS_TYPE_DUMMY_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_ICH9:
+	case SPI_CONTROLLER_VIA:
+	case SPI_CONTROLLER_SB600:
+	case SPI_CONTROLLER_WBSIO:
+	case SPI_CONTROLLER_FT2232:
+	case SPI_CONTROLLER_DUMMY:
 		return probe_spi_rdid_generic(flash, 4);
 	default:
 		printf_debug("4b ID not supported on this SPI controller\n");
@@ -221,18 +227,17 @@ int probe_spi_rdid4(struct flashchip *flash)
 int probe_spi_rems(struct flashchip *flash)
 {
 	unsigned char readarr[JEDEC_REMS_INSIZE];
-	uint32_t manuf_id, model_id;
+	uint32_t id1, id2;
 
 	if (spi_rems(readarr))
 		return 0;
 
-	manuf_id = readarr[0];
-	model_id = readarr[1];
+	id1 = readarr[0];
+	id2 = readarr[1];
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, manuf_id,
-		     model_id);
+	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
 
-	if (manuf_id == flash->manufacture_id && model_id == flash->model_id) {
+	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
 		 * user about possible write protection.
 		 */
@@ -242,7 +247,7 @@ int probe_spi_rems(struct flashchip *flash)
 	}
 
 	/* Test if this is a pure vendor match. */
-	if (manuf_id == flash->manufacture_id &&
+	if (id1 == flash->manufacture_id &&
 	    GENERIC_DEVICE_ID == flash->model_id)
 		return 1;
 
@@ -252,7 +257,7 @@ int probe_spi_rems(struct flashchip *flash)
 int probe_spi_res(struct flashchip *flash)
 {
 	unsigned char readarr[3];
-	uint32_t model_id;
+	uint32_t id2;
 
 	/* Check if RDID was successful and did not return 0xff 0xff 0xff.
 	 * In that case, RES is pointless.
@@ -264,9 +269,9 @@ int probe_spi_res(struct flashchip *flash)
 	if (spi_res(readarr))
 		return 0;
 
-	model_id = readarr[0];
-	printf_debug("%s: id 0x%x\n", __FUNCTION__, model_id);
-	if (model_id != flash->model_id)
+	id2 = readarr[0];
+	printf_debug("%s: id 0x%x\n", __FUNCTION__, id2);
+	if (id2 != flash->model_id)
 		return 0;
 
 	/* Print the status register to tell the
@@ -283,7 +288,7 @@ uint8_t spi_read_status_register(void)
 	int ret;
 
 	/* Read Status Register */
-	if (flashbus == BUS_TYPE_SB600_SPI) {
+	if (spi_controller == SPI_CONTROLLER_SB600) {
 		/* SB600 uses a different way to read status register. */
 		return sb600_read_status_register();
 	} else {
@@ -424,7 +429,11 @@ int spi_chip_erase_60(struct flashchip *flash)
 	 */
 	/* FIXME: We assume spi_read_status_register will never fail. */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		sleep(1);
+		programmer_delay(1000 * 1000);
+	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -452,7 +461,11 @@ int spi_chip_erase_c7(struct flashchip *flash)
 	 */
 	/* FIXME: We assume spi_read_status_register will never fail. */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		sleep(1);
+		programmer_delay(1000 * 1000);
+	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -467,9 +480,9 @@ int spi_chip_erase_60_c7(struct flashchip *flash)
 	return result;
 }
 
-int spi_block_erase_52(const struct flashchip *flash, unsigned long addr)
+int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_BE_52_OUTSIZE] = {JEDEC_BE_52};
+	unsigned char cmd[JEDEC_BE_52_OUTSIZE] = {JEDEC_BE_52, };
 	int result;
 
 	cmd[1] = (addr & 0x00ff0000) >> 16;
@@ -484,7 +497,11 @@ int spi_block_erase_52(const struct flashchip *flash, unsigned long addr)
 	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		usleep(100 * 1000);
+		programmer_delay(100 * 1000);
+	if (check_erased_range(flash, addr, blocklen)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -493,9 +510,9 @@ int spi_block_erase_52(const struct flashchip *flash, unsigned long addr)
  * 32k for SST
  * 4-32k non-uniform for EON
  */
-int spi_block_erase_d8(const struct flashchip *flash, unsigned long addr)
+int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_BE_D8_OUTSIZE] = { JEDEC_BE_D8 };
+	unsigned char cmd[JEDEC_BE_D8_OUTSIZE] = { JEDEC_BE_D8, };
 	int result;
 
 	cmd[1] = (addr & 0x00ff0000) >> 16;
@@ -510,7 +527,11 @@ int spi_block_erase_d8(const struct flashchip *flash, unsigned long addr)
 	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		usleep(100 * 1000);
+		programmer_delay(100 * 1000);
+	if (check_erased_range(flash, addr, blocklen)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -525,7 +546,7 @@ int spi_chip_erase_d8(struct flashchip *flash)
 	printf("Erasing chip: \n");
 
 	for (i = 0; i < total_size / erase_size; i++) {
-		rc = spi_block_erase_d8(flash, i * erase_size);
+		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
 		if (rc) {
 			printf("Error erasing block at 0x%x\n", i);
 			break;
@@ -538,9 +559,9 @@ int spi_chip_erase_d8(struct flashchip *flash)
 }
 
 /* Sector size is usually 4k, though Macronix eliteflash has 64k */
-int spi_sector_erase(const struct flashchip *flash, unsigned long addr)
+int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_SE_OUTSIZE] = { JEDEC_SE };
+	unsigned char cmd[JEDEC_SE_OUTSIZE] = { JEDEC_SE, };
 	int result;
 	
 	cmd[1] = (addr & 0x00ff0000) >> 16;
@@ -556,8 +577,30 @@ int spi_sector_erase(const struct flashchip *flash, unsigned long addr)
 	 * This usually takes 15-800 ms, so wait in 10 ms steps.
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		usleep(10 * 1000);
+		programmer_delay(10 * 1000);
+	if (check_erased_range(flash, addr, blocklen)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
+}
+
+int spi_block_erase_60(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
+{
+	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
+		fprintf(stderr, "%s called with incorrect arguments\n", __func__);
+		return -1;
+	}
+	return spi_chip_erase_60(flash);
+}
+
+int spi_block_erase_c7(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
+{
+	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
+		fprintf(stderr, "%s called with incorrect arguments\n", __func__);
+		return -1;
+	}
+	return spi_chip_erase_c7(flash);
 }
 
 int spi_write_status_enable(void)
@@ -571,10 +614,10 @@ int spi_write_status_enable(void)
 	if (result)
 		printf_debug("%s failed", __func__);
 	if (result == SPI_INVALID_OPCODE) {
-		switch (flashbus) {
-		case BUS_TYPE_ICH7_SPI:
-		case BUS_TYPE_ICH9_SPI:
-		case BUS_TYPE_VIA_SPI:
+		switch (spi_controller) {
+		case SPI_CONTROLLER_ICH7:
+		case SPI_CONTROLLER_ICH9:
+		case SPI_CONTROLLER_VIA:
 			printf_debug(" due to SPI master limitation, ignoring"
 				     " and hoping it will be run as PREOP\n");
 			return 0;
@@ -615,6 +658,27 @@ void spi_byte_program(int address, uint8_t byte)
 	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
+int spi_nbyte_program(int address, uint8_t *bytes, int len)
+{
+	unsigned char cmd[JEDEC_BYTE_PROGRAM_OUTSIZE - 1 + 256] = {
+		JEDEC_BYTE_PROGRAM,
+		(address >> 16) & 0xff,
+		(address >> 8) & 0xff,
+		(address >> 0) & 0xff,
+	};
+
+	if (len > 256) {
+		printf_debug ("%s called for too long a write\n",
+		     __FUNCTION__);
+		return 1;
+	}
+
+	memcpy(&cmd[4], bytes, len);
+
+	/* Send Byte-Program */
+	return spi_command(4 + len, 0, cmd, NULL);
+}
+
 int spi_disable_blockprotect(void)
 {
 	uint8_t status;
@@ -651,19 +715,60 @@ int spi_nbyte_read(int address, uint8_t *bytes, int len)
 	return spi_command(sizeof(cmd), len, cmd, bytes);
 }
 
-int spi_chip_read(struct flashchip *flash, uint8_t *buf)
+/*
+ * Read a complete flash chip.
+ * Each page is read separately in chunks with a maximum size of chunksize.
+ */
+int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize)
 {
-	switch (flashbus) {
-	case BUS_TYPE_IT87XX_SPI:
-		return it8716f_spi_chip_read(flash, buf);
-	case BUS_TYPE_SB600_SPI:
-		return sb600_spi_read(flash, buf);
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_ICH9_SPI:
-	case BUS_TYPE_VIA_SPI:
-		return ich_spi_read(flash, buf);
-	case BUS_TYPE_WBSIO_SPI:
-		return wbsio_spi_read(flash, buf);
+	int rc = 0;
+	int i, j, starthere, lenhere;
+	int page_size = flash->page_size;
+	int toread;
+
+	/* Warning: This loop has a very unusual condition and body.
+	 * The loop needs to go through each page with at least one affected
+	 * byte. The lowest page number is (start / page_size) since that
+	 * division rounds down. The highest page number we want is the page
+	 * where the last byte of the range lives. That last byte has the
+	 * address (start + len - 1), thus the highest page number is
+	 * (start + len - 1) / page_size. Since we want to include that last
+	 * page as well, the loop condition uses <=.
+	 */
+	for (i = start / page_size; i <= (start + len - 1) / page_size; i++) {
+		/* Byte position of the first byte in the range in this page. */
+		/* starthere is an offset to the base address of the chip. */
+		starthere = max(start, i * page_size);
+		/* Length of bytes in the range in this page. */
+		lenhere = min(start + len, (i + 1) * page_size) - starthere;
+		for (j = 0; j < lenhere; j += chunksize) {
+			toread = min(chunksize, lenhere - j);
+			rc = spi_nbyte_read(starthere + j, buf + starthere - start + j, toread);
+			if (rc)
+				break;
+		}
+		if (rc)
+			break;
+	}
+
+	return rc;
+}
+
+int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
+{
+	switch (spi_controller) {
+	case SPI_CONTROLLER_IT87XX:
+		return it8716f_spi_chip_read(flash, buf, start, len);
+	case SPI_CONTROLLER_SB600:
+		return sb600_spi_read(flash, buf, start, len);
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_ICH9:
+	case SPI_CONTROLLER_VIA:
+		return ich_spi_read(flash, buf, start, len);
+	case SPI_CONTROLLER_WBSIO:
+		return wbsio_spi_read(flash, buf, start, len);
+	case SPI_CONTROLLER_FT2232:
+		return ft2232_spi_read(flash, buf, start, len);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -689,7 +794,7 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 		spi_write_enable();
 		spi_byte_program(i, buf[i]);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			myusec_delay(10);
+			programmer_delay(10);
 	}
 
 	return 0;
@@ -701,17 +806,19 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
  */
 int spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
 {
-	switch (flashbus) {
-	case BUS_TYPE_IT87XX_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_IT87XX:
 		return it8716f_spi_chip_write_256(flash, buf);
-	case BUS_TYPE_SB600_SPI:
+	case SPI_CONTROLLER_SB600:
 		return sb600_spi_write_1(flash, buf);
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_ICH9_SPI:
-	case BUS_TYPE_VIA_SPI:
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_ICH9:
+	case SPI_CONTROLLER_VIA:
 		return ich_spi_write_256(flash, buf);
-	case BUS_TYPE_WBSIO_SPI:
+	case SPI_CONTROLLER_WBSIO:
 		return wbsio_spi_write_1(flash, buf);
+	case SPI_CONTROLLER_FT2232:
+		return ft2232_spi_write_256(flash, buf);
 	default:
 		printf_debug
 		    ("%s called, but no SPI chipset/strapping detected\n",
@@ -733,27 +840,30 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 	unsigned char w[6] = {0xad, 0, 0, 0, buf[0], buf[1]};
 	int result;
 
-	switch (flashbus) {
-	case BUS_TYPE_WBSIO_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_WBSIO:
 		fprintf(stderr, "%s: impossible with Winbond SPI masters,"
 				" degrading to byte program\n", __func__);
 		return spi_chip_write_1(flash, buf);
 	default:
 		break;
 	}
-	flash->erase(flash);
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	result = spi_write_enable();
 	if (result)
 		return result;
 	spi_command(6, 0, w, NULL);
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		myusec_delay(5); /* SST25VF040B Tbp is max 10us */
+		programmer_delay(5); /* SST25VF040B Tbp is max 10us */
 	while (pos < size) {
 		w[1] = buf[pos++];
 		w[2] = buf[pos++];
 		spi_command(3, 0, w, NULL);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			myusec_delay(5); /* SST25VF040B Tbp is max 10us */
+			programmer_delay(5); /* SST25VF040B Tbp is max 10us */
 	}
 	spi_write_disable();
 	return 0;

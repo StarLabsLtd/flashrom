@@ -23,7 +23,7 @@ Public License can be found in `/usr/share/common-licenses/GPL'.
 Files: board_enable.c
 Copyright: © 2005-2007 coresystems GmbH <stepan@coresystems.de>
            © 2006 Uwe Hermann <uwe@hermann-uwe.de>
-           © 2007-2008 Luc Verhaegen <libv@skynet.be>
+           © 2007-2009 Luc Verhaegen <libv@skynet.be>
            © 2007 Carl-Daniel Hailfinger
 License: GPL-2
 
@@ -45,6 +45,13 @@ License: GPL-2
 
 -------------------------------------------------------------------------------
 
+Files: coreboot_tables.h
+Copyright: © 2002 Linux Networx
+           © 2005-2007 coresystems GmbH
+License: GPL-2
+
+-------------------------------------------------------------------------------
+
 Files: dummyflasher.c, en29f002a.c, internal.c
 Copyright: © 2007-2009 Carl-Daniel Hailfinger
 License: GPL-2+
@@ -60,10 +67,20 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
+Files: flashchips.h
+Copyright: © 2000 Silicon Integrated System Corporation
+           © 2000 Ronald G. Minnich <rminnich@gmail.com>
+           © 2005-2007 coresystems GmbH <stepan@openbios.org>
+           © 2006-2009 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
 Files: flash.h
 Copyright: © 2000 Silicon Integrated System Corporation
            © 2000 Ronald G. Minnich <rminnich@gmail.com>
            © 2005-2007 coresystems GmbH <stepan@coresystems.de>
+           © 2006-2009 Carl-Daniel Hailfinger
 License: GPL-2+
 
 -------------------------------------------------------------------------------
@@ -74,6 +91,13 @@ Copyright: © 2000 Silicon Integrated System Corporation
            © 2005-2008 coresystems GmbH
 	   © 2008,2009 Carl-Daniel Hailfinger
 License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: ft2232_spi.c
+Copyright: © 2009 Paul Fox <pgf@laptop.org>
+           © 2009 Carl-Daniel Hailfinger
+License: GPL-2
 
 -------------------------------------------------------------------------------
 
@@ -103,15 +127,9 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
-Files: layout.c
+Files: layout.c, Makefile
 Copyright: © 2005-2008 coresystems GmbH
 License: GPL-2
-
--------------------------------------------------------------------------------
-
-Files: w39v080fa.c
-Copyright: © 2008 coresystems GmbH
-License: GPL-2+
 
 -------------------------------------------------------------------------------
 
@@ -121,8 +139,14 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
-Files: nic3com.c, pcidev.c
+Files: nic3com.c, pcidev.c, pm29f002.c
 Copyright: © 2009 Uwe Hermann <uwe@hermann-uwe.de>
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
+Files: w39v080fa.c
+Copyright: © 2008 coresystems GmbH
 License: GPL-2+
 
 -------------------------------------------------------------------------------
@@ -141,6 +165,13 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
+Files: print.c
+Copyright: © 2009 Uwe Hermann <uwe@hermann-uwe.de>
+           © 2009 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
 Files: satasii.c
 Copyright: © 2009 Rudolf Marek <r.marek@assembler.cz>
 License: GPL-2+
@@ -155,8 +186,15 @@ License: GPL-2+
 
 -------------------------------------------------------------------------------
 
+Files: serprog.c
+Copyright: © 2009 Urja Rannikko <urjaman@gmail.com>
+           © 2009 Carl-Daniel Hailfinger
+License: GPL-2+
+
+-------------------------------------------------------------------------------
+
 Files: spi.c
-Copyright: © 2007, 2008 Carl-Daniel Hailfinger
+Copyright: © 2007, 2008, 2009 Carl-Daniel Hailfinger
            © 2008 coresystems GmbH
 License: GPL-2
 

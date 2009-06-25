@@ -34,23 +34,10 @@ uint16_t it8716f_flashport = 0;
 /* use fast 33MHz SPI (<>0) or slow 16MHz (0) */
 int fast_spi = 1;
 
-/* Generic Super I/O helper functions */
-uint8_t regval(uint16_t port, uint8_t reg)
-{
-	OUTB(reg, port);
-	return INB(port + 1);
-}
-
-void regwrite(uint16_t port, uint8_t reg, uint8_t val)
-{
-	OUTB(reg, port);
-	OUTB(val, port + 1);
-}
-
 /* Helper functions for most recent ITE IT87xx Super I/O chips */
 #define CHIP_ID_BYTE1_REG	0x20
 #define CHIP_ID_BYTE2_REG	0x21
-static void enter_conf_mode_ite(uint16_t port)
+void enter_conf_mode_ite(uint16_t port)
 {
 	OUTB(0x87, port);
 	OUTB(0x01, port);
@@ -61,9 +48,9 @@ static void enter_conf_mode_ite(uint16_t port)
 		OUTB(0xaa, port);
 }
 
-static void exit_conf_mode_ite(uint16_t port)
+void exit_conf_mode_ite(uint16_t port)
 {
-	regwrite(port, 0x02, 0x02);
+	sio_write(port, 0x02, 0x02);
 }
 
 static uint16_t find_ite_spi_flash_port(uint16_t port)
@@ -73,13 +60,13 @@ static uint16_t find_ite_spi_flash_port(uint16_t port)
 
 	enter_conf_mode_ite(port);
 
-	id = regval(port, CHIP_ID_BYTE1_REG) << 8;
-	id |= regval(port, CHIP_ID_BYTE2_REG);
+	id = sio_read(port, CHIP_ID_BYTE1_REG) << 8;
+	id |= sio_read(port, CHIP_ID_BYTE2_REG);
 
 	/* TODO: Handle more IT87xx if they support flash translation */
 	if (0x8716 == id || 0x8718 == id) {
 		/* NOLDN, reg 0x24, mask out lowest bit (suspend) */
-		tmp = regval(port, 0x24) & 0xFE;
+		tmp = sio_read(port, 0x24) & 0xFE;
 		printf("Serial flash segment 0x%08x-0x%08x %sabled\n",
 		       0xFFFE0000, 0xFFFFFFFF, (tmp & 1 << 1) ? "en" : "dis");
 		printf("Serial flash segment 0x%08x-0x%08x %sabled\n",
@@ -94,19 +81,19 @@ static uint16_t find_ite_spi_flash_port(uint16_t port)
 		if ((tmp & 0xe) && (!(tmp & 1 << 4))) {
 			printf("Enabling LPC write to serial flash\n");
 			tmp |= 1 << 4;
-			regwrite(port, 0x24, tmp);
+			sio_write(port, 0x24, tmp);
 		}
 		printf("serial flash pin %i\n", (tmp & 1 << 5) ? 87 : 29);
 		/* LDN 0x7, reg 0x64/0x65 */
-		regwrite(port, 0x07, 0x7);
-		flashport = regval(port, 0x64) << 8;
-		flashport |= regval(port, 0x65);
+		sio_write(port, 0x07, 0x7);
+		flashport = sio_read(port, 0x64) << 8;
+		flashport |= sio_read(port, 0x65);
 	}
 	exit_conf_mode_ite(port);
 	return flashport;
 }
 
-int it87xx_probe_spi_flash(const char *name)
+int it87spi_common_init(void)
 {
 	it8716f_flashport = find_ite_spi_flash_port(ITE_SUPERIO_PORT1);
 
@@ -114,9 +101,31 @@ int it87xx_probe_spi_flash(const char *name)
 		it8716f_flashport = find_ite_spi_flash_port(ITE_SUPERIO_PORT2);
 
 	if (it8716f_flashport)
-		flashbus = BUS_TYPE_IT87XX_SPI;
+		spi_controller = SPI_CONTROLLER_IT87XX;
 
 	return (!it8716f_flashport);
+}
+
+
+int it87spi_init(void)
+{
+	int ret;
+
+	get_io_perms();
+	ret = it87spi_common_init();
+	if (!ret)
+		buses_supported = CHIP_BUSTYPE_SPI;
+	return ret;
+}
+
+int it87xx_probe_spi_flash(const char *name)
+{
+	int ret;
+
+	ret = it87spi_common_init();
+	if (!ret)
+		buses_supported |= CHIP_BUSTYPE_SPI;
+	return ret;
 }
 
 /*
@@ -211,7 +220,7 @@ static int it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
 	 * This usually takes 1-10 ms, so wait in 1 ms steps.
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		usleep(1000);
+		programmer_delay(1000);
 	return 0;
 }
 
@@ -236,7 +245,7 @@ int it8716f_spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 			return result;
 		spi_byte_program(i, buf[i]);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			myusec_delay(10);
+			programmer_delay(10);
 	}
 	/* resume normal ops... */
 	OUTB(0x20, it8716f_flashport);
@@ -248,21 +257,15 @@ int it8716f_spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
  * IT8716F only allows maximum of 512 kb SPI mapped to LPC memory cycles
  * Need to read this big flash using firmware cycles 3 byte at a time.
  */
-int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf)
+int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
 	int total_size = 1024 * flash->total_size;
-	int i;
 	fast_spi = 0;
 
-	if (total_size > 512 * 1024) {
-		for (i = 0; i < total_size; i += 3) {
-			int toread = 3;
-			if (total_size - i < toread)
-				toread = total_size - i;
-			spi_nbyte_read(i, buf + i, toread);
-		}
+	if ((programmer == PROGRAMMER_IT87SPI) || (total_size > 512 * 1024)) {
+		spi_read_chunked(flash, buf, start, len, 3);
 	} else {
-		memcpy(buf, (const char *)flash->virtual_memory, total_size);
+		read_memmapped(flash, buf, start, len);
 	}
 
 	return 0;
@@ -277,7 +280,7 @@ int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
 	 * IT8716F only allows maximum of 512 kb SPI chip size for memory
 	 * mapped access.
 	 */
-	if (total_size > 512 * 1024) {
+	if ((programmer == PROGRAMMER_IT87SPI) || (total_size > 512 * 1024)) {
 		it8716f_spi_chip_write_1(flash, buf);
 	} else {
 		for (i = 0; i < total_size / 256; i++) {
