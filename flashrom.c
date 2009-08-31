@@ -30,12 +30,15 @@
 #include "flash.h"
 #include "flashchips.h"
 
+const char *flashrom_version = FLASHROM_VERSION;
 char *chip_to_probe = NULL;
 int verbose = 0;
-int programmer = PROGRAMMER_INTERNAL;
+enum programmer programmer = PROGRAMMER_INTERNAL;
+char *programmer_param = NULL;
 
 const struct programmer_entry programmer_table[] = {
 	{
+		.name			= "internal",
 		.init			= internal_init,
 		.shutdown		= internal_shutdown,
 		.map_flash_region	= physmap,
@@ -52,6 +55,7 @@ const struct programmer_entry programmer_table[] = {
 	},
 
 	{
+		.name			= "dummy",
 		.init			= dummy_init,
 		.shutdown		= dummy_shutdown,
 		.map_flash_region	= dummy_map,
@@ -68,6 +72,7 @@ const struct programmer_entry programmer_table[] = {
 	},
 
 	{
+		.name			= "nic3com",
 		.init			= nic3com_init,
 		.shutdown		= nic3com_shutdown,
 		.map_flash_region	= fallback_map,
@@ -84,6 +89,7 @@ const struct programmer_entry programmer_table[] = {
 	},
 
 	{
+		.name			= "satasii",
 		.init			= satasii_init,
 		.shutdown		= satasii_shutdown,
 		.map_flash_region	= fallback_map,
@@ -100,37 +106,44 @@ const struct programmer_entry programmer_table[] = {
 	},
 
 	{
+		.name			= "it87spi",
 		.init			= it87spi_init,
-		.shutdown		= dummy_shutdown,
-		.map_flash_region	= dummy_map,
-		.unmap_flash_region	= dummy_unmap,
+		.shutdown		= fallback_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= dummy_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
 		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= dummy_chip_writeb,
+		.chip_writeb		= fallback_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 
+#if FT2232_SPI_SUPPORT == 1
 	{
+		.name			= "ft2232spi",
 		.init			= ft2232_spi_init,
-		.shutdown		= dummy_shutdown,
-		.map_flash_region	= dummy_map,
-		.unmap_flash_region	= dummy_unmap,
+		.shutdown		= fallback_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= dummy_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
 		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= dummy_chip_writeb,
+		.chip_writeb		= fallback_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
+
+#if SERPROG_SUPPORT == 1
 	{
+		.name			= "serprog",
 		.init			= serprog_init,
 		.shutdown		= serprog_shutdown,
 		.map_flash_region	= fallback_map,
@@ -145,8 +158,9 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= fallback_chip_writen,
 		.delay			= serprog_delay,
 	},
+#endif
 
-	{},
+	{}, /* This entry corresponds to PROGRAMMER_INVALID. */
 };
 
 int programmer_init(void)
@@ -209,7 +223,6 @@ uint32_t chip_readl(const chipaddr addr)
 void chip_readn(uint8_t *buf, chipaddr addr, size_t len)
 {
 	programmer_table[programmer].chip_readn(buf, addr, len);
-	return;
 }
 
 void programmer_delay(int usecs)
@@ -221,6 +234,7 @@ void map_flash_registers(struct flashchip *flash)
 {
 	size_t size = flash->total_size * 1024;
 	/* Flash registers live 4 MByte below the flash. */
+	/* FIXME: This is incorrect for nonstandard flashbase. */
 	flash->virtual_registers = (chipaddr)programmer_map_flash_region("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
 }
 
@@ -278,6 +292,7 @@ int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, c
 	int i, j, starthere, lenhere, ret = 0;
 	int page_size = flash->page_size;
 	uint8_t *readbuf = malloc(page_size);
+	int failcount = 0;
 
 	if (!len)
 		goto out_free;
@@ -318,14 +333,20 @@ int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, c
 		flash->read(flash, readbuf, starthere, lenhere);
 		for (j = 0; j < lenhere; j++) {
 			if (cmpbuf[starthere - start + j] != readbuf[j]) {
-				fprintf(stderr, "%s FAILED at 0x%08x! "
-					"Expected=0x%02x, Read=0x%02x\n",
-					message, starthere + j,
-					cmpbuf[starthere - start + j], readbuf[j]);
-				ret = -1;
-				goto out_free;
+				/* Only print the first failure. */
+				if (!failcount++)
+					fprintf(stderr, "%s FAILED at 0x%08x! "
+						"Expected=0x%02x, Read=0x%02x,",
+						message, starthere + j,
+						cmpbuf[starthere - start + j],
+						readbuf[j]);
 			}
 		}
+	}
+	if (failcount) {
+		fprintf(stderr, " failed byte count from 0x%08x-0x%08x: 0x%x\n",
+			start, start + len - 1, failcount);
+		ret = -1;
 	}
 
 out_free:
@@ -380,8 +401,10 @@ notfound:
 	if (!flash || !flash->name)
 		return NULL;
 
-	printf("Found chip \"%s %s\" (%d KB) at physical address 0x%lx.\n",
-	       flash->vendor, flash->name, flash->total_size, base);
+	printf("Found chip \"%s %s\" (%d KB, %s) at physical address 0x%lx.\n",
+	       flash->vendor, flash->name, flash->total_size,
+	       flashbuses_to_text(flash->bustype), base);
+
 	return flash;
 }
 
@@ -466,8 +489,22 @@ int erase_flash(struct flashchip *flash)
 	return 0;
 }
 
+void emergency_help_message()
+{
+	fprintf(stderr, "Your flash chip is in an unknown state.\n"
+		"Get help on IRC at irc.freenode.net channel #flashrom or\n"
+		"mail flashrom@flashrom.org\n"
+		"------------------------------------------------------------\n"
+		"DO NOT REBOOT OR POWEROFF!\n");
+}
+
 void usage(const char *name)
 {
+	const char *pname;
+	int pnamelen;
+	int remaining = 0;
+	enum programmer p;
+
 	printf("usage: %s [-VfLzhR] [-E|-r file|-w file|-v file] [-c chipname]\n"
               "       [-m [vendor:]part] [-l file] [-i image] [-p programmer]\n\n", name);
 
@@ -490,9 +527,33 @@ void usage(const char *name)
 	     "   -i | --image <name>:              only flash image name from flash layout\n"
 	     "   -L | --list-supported:            print supported devices\n"
 	     "   -z | --list-supported-wiki:       print supported devices in wiki syntax\n"
-	     "   -p | --programmer <name>:         specify the programmer device\n"
-	     "                                     (internal, dummy, nic3com, satasii,\n"
-	     "                                     it87spi, ft2232spi, serprog)\n"
+	     "   -p | --programmer <name>:         specify the programmer device");
+
+	for (p = 0; p < PROGRAMMER_INVALID; p++) {
+		pname = programmer_table[p].name;
+		pnamelen = strlen(pname);
+		if (remaining - pnamelen - 2 < 0) {
+			printf("\n                                     ");
+			remaining = 43;
+		} else {
+			printf(" ");
+			remaining--;
+		}
+		if (p == 0) {
+			printf("(");
+			remaining--;
+		}
+		printf("%s", pname);
+		remaining -= pnamelen;
+		if (p < PROGRAMMER_INVALID - 1) {
+			printf(",");
+			remaining--;
+		} else {
+			printf(")\n");
+		}
+	}
+		
+	printf(
 	     "   -h | --help:                      print this help text\n"
 	     "   -R | --version:                   print the version (release)\n"
 	     "\nYou can specify one of -E, -r, -w, -v or no operation. If no operation is\n"
@@ -502,7 +563,7 @@ void usage(const char *name)
 
 void print_version(void)
 {
-	printf("flashrom v%s\n", FLASHROM_VERSION);
+	printf("flashrom v%s\n", flashrom_version);
 }
 
 int main(int argc, char *argv[])
@@ -512,6 +573,8 @@ int main(int argc, char *argv[])
 	FILE *image;
 	/* Probe for up to three flash chips. */
 	struct flashchip *flash, *flashes[3];
+	const char *name;
+	int namelen;
 	int opt;
 	int option_index = 0;
 	int force = 0;
@@ -552,6 +615,16 @@ int main(int argc, char *argv[])
 		printf_debug("The arguments are:\n");
 		for (i = 1; i < argc; ++i)
 			printf_debug("%s\n", argv[i]);
+	}
+
+	/* Safety check. */
+	if (ARRAY_SIZE(programmer_table) - 1 != PROGRAMMER_INVALID) {
+		fprintf(stderr, "Programmer table miscompilation!\n");
+		exit(1);
+	}
+	if (spi_programmer_count - 1 != SPI_CONTROLLER_INVALID) {
+		fprintf(stderr, "SPI programmer table miscompilation!\n");
+		exit(1);
 	}
 
 	setbuf(stdout, NULL);
@@ -630,30 +703,29 @@ int main(int argc, char *argv[])
 			list_supported_wiki = 1;
 			break;
 		case 'p':
-			if (strncmp(optarg, "internal", 8) == 0) {
-				programmer = PROGRAMMER_INTERNAL;
-			} else if (strncmp(optarg, "dummy", 5) == 0) {
-				programmer = PROGRAMMER_DUMMY;
-				if (optarg[5] == '=')
-					dummytype = strdup(optarg + 6);
-			} else if (strncmp(optarg, "nic3com", 7) == 0) {
-				programmer = PROGRAMMER_NIC3COM;
-				if (optarg[7] == '=')
-					pcidev_bdf = strdup(optarg + 8);
-			} else if (strncmp(optarg, "satasii", 7) == 0) {
-				programmer = PROGRAMMER_SATASII;
-				if (optarg[7] == '=')
-					pcidev_bdf = strdup(optarg + 8);
-			} else if (strncmp(optarg, "it87spi", 7) == 0) {
-				programmer = PROGRAMMER_IT87SPI;
-			} else if (strncmp(optarg, "ft2232spi", 9) == 0) {
-				programmer = PROGRAMMER_FT2232SPI;
- 			} else if (strncmp(optarg, "serprog", 7) == 0) {
- 				programmer = PROGRAMMER_SERPROG;
- 				if (optarg[7] == '=')
- 					serprog_param = strdup(optarg + 8);
-			} else {
-				printf("Error: Unknown programmer.\n");
+			for (programmer = 0; programmer < PROGRAMMER_INVALID; programmer++) {
+				name = programmer_table[programmer].name;
+				namelen = strlen(name);
+				if (strncmp(optarg, name, namelen) == 0) {
+					switch (optarg[namelen]) {
+					case ':':
+						programmer_param = strdup(optarg + namelen + 1);
+						break;
+					case '\0':
+						break;
+					default:
+						/* The continue refers to the
+						 * for loop. It is here to be
+						 * able to differentiate between
+						 * foo and foobar.
+						 */
+						continue;
+					}
+					break;
+				}
+			}
+			if (programmer == PROGRAMMER_INVALID) {
+				printf("Error: Unknown programmer %s.\n", optarg);
 				exit(1);
 			}
 			break;
@@ -692,7 +764,10 @@ int main(int argc, char *argv[])
 	if (optind < argc)
 		filename = argv[optind++];
 
-	ret = programmer_init();
+	if (programmer_init()) {
+		fprintf(stderr, "Error: Programmer initialization failed.\n");
+		exit(1);
+	}
 
 	myusec_calibrate_delay();
 
@@ -727,6 +802,7 @@ int main(int argc, char *argv[])
 				printf("Run flashrom -L to view the hardware supported in this flashrom version.\n");
 				exit(1);
 			}
+			printf("Please note that forced reads most likely contain garbage.\n");
 			return read_flash(flashes[0], filename);
 		}
 		// FIXME: flash writes stay enabled!
@@ -764,7 +840,7 @@ int main(int argc, char *argv[])
 				printf(" WRITE");
 			printf("\n");
 		}
-		printf("Please email a report to flashrom@coreboot.org if any "
+		printf("Please email a report to flashrom@flashrom.org if any "
 		       "of the above operations\nwork correctly for you with "
 		       "this flash part. Please include the flashrom\noutput "
 		       "with the additional -V option for all operations you "
@@ -792,14 +868,44 @@ int main(int argc, char *argv[])
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
-		if (erase_flash(flash))
+		if (flash->tested & TEST_BAD_ERASE) {
+			fprintf(stderr, "Erase is not working on this chip. ");
+			if (!force) {
+				fprintf(stderr, "Aborting.\n");
+				return 1;
+			} else {
+				fprintf(stderr, "Continuing anyway.\n");
+			}
+		}
+		if (erase_flash(flash)) {
+			emergency_help_message();
 			return 1;
+		}
 	} else if (read_it) {
 		if (read_flash(flash, filename))
 			return 1;
 	} else {
 		struct stat image_stat;
 
+		if (flash->tested & TEST_BAD_ERASE) {
+			fprintf(stderr, "Erase is not working on this chip "
+				"and erase is needed for write. ");
+			if (!force) {
+				fprintf(stderr, "Aborting.\n");
+				return 1;
+			} else {
+				fprintf(stderr, "Continuing anyway.\n");
+			}
+		}
+		if (flash->tested & TEST_BAD_WRITE) {
+			fprintf(stderr, "Write is not working on this chip. ");
+			if (!force) {
+				fprintf(stderr, "Aborting.\n");
+				return 1;
+			} else {
+				fprintf(stderr, "Continuing anyway.\n");
+			}
+		}
 		if ((image = fopen(filename, "r")) == NULL) {
 			perror(filename);
 			exit(1);
@@ -824,8 +930,7 @@ int main(int argc, char *argv[])
 
 	// This should be moved into each flash part's code to do it 
 	// cleanly. This does the job.
-	/* FIXME: Adapt to the external flasher infrastructure. */
-	handle_romentries(buf, (uint8_t *) flash->virtual_memory);
+	handle_romentries(buf, flash);
 
 	// ////////////////////////////////////////////////////////////
 
@@ -835,12 +940,27 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Error: flashrom has no write function for this flash chip.\n");
 			return 1;
 		}
-		ret |= flash->write(flash, buf);
-		if (!ret) printf("COMPLETE.\n");
+		ret = flash->write(flash, buf);
+		if (ret) {
+			fprintf(stderr, "FAILED!\n");
+			emergency_help_message();
+			return 1;
+		} else {
+			printf("COMPLETE.\n");
+		}
 	}
 
-	if (verify_it)
-		ret |= verify_flash(flash, buf);
+	if (verify_it) {
+		/* Work around chips which need some time to calm down. */
+		if (write_it)
+			programmer_delay(1000*1000);
+		ret = verify_flash(flash, buf);
+		/* If we tried to write, and now we don't properly verify, we
+		 * might have an emergency situation.
+		 */
+		if (ret && write_it)
+			emergency_help_message();
+	}
 
 	programmer_shutdown();
 

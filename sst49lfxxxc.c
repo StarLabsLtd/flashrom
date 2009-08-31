@@ -19,9 +19,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/mman.h>
 #include <stdlib.h>
 #include "flash.h"
 
@@ -91,6 +88,7 @@ static int erase_sector_49lfxxxc(struct flashchip *flash, unsigned long address,
 			return (-1);
 		}
 	} while (!(status & STATUS_WSMS));
+	chip_writeb(RESET, bios);
 
 	if (check_erased_range(flash, address, sector_size)) {
 		fprintf(stderr, "ERASE FAILED!\n");

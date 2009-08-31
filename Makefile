@@ -49,7 +49,7 @@ OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
 	sst49lfxxxc.o sst_fwhub.o layout.o cbtable.o flashchips.o physmap.o \
 	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o it87spi.o \
 	ichspi.o w39v040c.o sb600spi.o wbsio_spi.o m29f002.o internal.o \
-	dummyflasher.o pcidev.o nic3com.o satasii.o ft2232_spi.o serprog.o \
+	dummyflasher.o pcidev.o nic3com.o satasii.o ft2232_spi.o \
 	print.o
 
 all: pciutils features dep $(PROGRAM)
@@ -58,18 +58,36 @@ all: pciutils features dep $(PROGRAM)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 631
+SVNVERSION := 706
 
-VERSION := 0.9.0-r$(SVNVERSION)
+RELEASE := 0.9.0
+VERSION := $(RELEASE)-r$(SVNVERSION)
+RELEASENAME ?= $(VERSION)
 
 SVNDEF := -D'FLASHROM_VERSION="$(VERSION)"'
+
+# Always enable serprog for now. Needs to be disabled on Windows.
+CONFIG_SERPROG = yes
+
+ifeq ($(CONFIG_SERPROG), yes)
+FEATURE_CFLAGS += -D'SERPROG_SUPPORT=1'
+OBJS += serprog.o
+ifeq ($(OS_ARCH), SunOS)
+LIBS += -lsocket
+endif
+endif
+
+FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
+
+FEATURE_LIBS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-lftdi")
 
 $(PROGRAM): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(LIBS) $(FEATURE_LIBS)
 
-FEATURE_CFLAGS = $(shell LANG=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
-
-FEATURE_LIBS = $(shell LANG=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-lftdi")
+# TAROPTIONS reduces information leakage from the packager's system.
+# If other tar programs support command line arguments for setting uid/gid of
+# stored files, they can be handled here as well.
+TAROPTIONS = $(shell LC_ALL=C tar --version|grep -q GNU && echo "--owner=root --group=root")
 
 %.o: %.c .features
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(FEATURE_CFLAGS) $(SVNDEF) -o $@ -c $<
@@ -130,15 +148,16 @@ install: $(PROGRAM)
 	$(INSTALL) -m 0644 $(PROGRAM).8 $(DESTDIR)$(MANDIR)/man8
 
 export:
-	@rm -rf $(EXPORTDIR)/flashrom-$(VERSION)
-	@svn export -r BASE . $(EXPORTDIR)/flashrom-$(VERSION)
-	@sed "s/^SVNVERSION.*/SVNVERSION := $(SVNVERSION)/" Makefile >$(EXPORTDIR)/flashrom-$(VERSION)/Makefile
-	@echo Exported $(EXPORTDIR)/flashrom-$(VERSION)/
+	@rm -rf $(EXPORTDIR)/flashrom-$(RELEASENAME)
+	@svn export -r BASE . $(EXPORTDIR)/flashrom-$(RELEASENAME)
+	@sed "s/^SVNVERSION.*/SVNVERSION := $(SVNVERSION)/" Makefile >$(EXPORTDIR)/flashrom-$(RELEASENAME)/Makefile
+	@LC_ALL=C svn log >$(EXPORTDIR)/flashrom-$(RELEASENAME)/ChangeLog
+	@echo Exported $(EXPORTDIR)/flashrom-$(RELEASENAME)/
 
 tarball: export
-	@tar cfz $(EXPORTDIR)/flashrom-$(VERSION).tar.gz -C $(EXPORTDIR)/ flashrom-$(VERSION)/
-	@rm -rf $(EXPORTDIR)/flashrom-$(VERSION)
-	@echo Created $(EXPORTDIR)/flashrom-$(VERSION).tar.gz
+	@tar cjf $(EXPORTDIR)/flashrom-$(RELEASENAME).tar.bz2 -C $(EXPORTDIR)/ $(TAROPTIONS) flashrom-$(RELEASENAME)/
+	@rm -rf $(EXPORTDIR)/flashrom-$(RELEASENAME)
+	@echo Created $(EXPORTDIR)/flashrom-$(RELEASENAME).tar.bz2
 
 .PHONY: all clean distclean dep compiler pciutils features export tarball
 

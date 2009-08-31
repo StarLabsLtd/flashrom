@@ -10,9 +10,6 @@ DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
 # Reduce the number of unneeded dependencies with --as-needed.
 LDFLAGS += "-Wl,--as-needed"
 
-# Upstream ChangeLog generated via 'LC_ALL=C svn log > ChangeLog'.
-DEB_INSTALL_CHANGELOGS_ALL := debian/ChangeLog
-
 clean::
 	rm -f .dependencies .features
 

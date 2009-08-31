@@ -22,10 +22,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include "flash.h"
 
 #define PCI_VENDOR_ID_SII	0x1095
@@ -51,7 +47,7 @@ int satasii_init(void)
 
 	get_io_perms();
 
-	pcidev_init(PCI_VENDOR_ID_SII, satas_sii);
+	pcidev_init(PCI_VENDOR_ID_SII, satas_sii, programmer_param);
 	id = pcidev_dev->device_id;
 
 	if ((id == 0x3132) || (id == 0x3124)) {
@@ -75,11 +71,9 @@ int satasii_init(void)
 
 int satasii_shutdown(void)
 {
-	free(pcidev_bdf);
+	free(programmer_param);
 	pci_cleanup(pacc);
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-	close(io_fd);
-#endif
+	release_io_perms();
 	return 0;
 }
 

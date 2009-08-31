@@ -20,10 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include "flash.h"
 
 #define BIOS_ROM_ADDR		0x04
@@ -41,7 +38,7 @@ struct pcidev_status nics_3com[] = {
 	/* 3C90xB */
 	{0x10b7, 0x9055, PCI_OK, "3COM", "3C90xB: PCI 10/100 Mbps; shared 10BASE-T/100BASE-TX"},
 	{0x10b7, 0x9001, PCI_NT, "3COM", "3C90xB: PCI 10/100 Mbps; shared 10BASE-T/100BASE-T4" },
-	{0x10b7, 0x9004, PCI_NT, "3COM", "3C90xB: PCI 10BASE-T (TPO)" },
+	{0x10b7, 0x9004, PCI_OK, "3COM", "3C90xB: PCI 10BASE-T (TPO)" },
 	{0x10b7, 0x9005, PCI_NT, "3COM", "3C90xB: PCI 10BASE-T/10BASE2/AUI (COMBO)" },
 	{0x10b7, 0x9006, PCI_NT, "3COM", "3C90xB: PCI 10BASE-T/10BASE2 (TPC)" },
 	{0x10b7, 0x900a, PCI_NT, "3COM", "3C90xB: PCI 10BASE-FL" },
@@ -61,7 +58,7 @@ int nic3com_init(void)
 {
 	get_io_perms();
 
-	io_base_addr = pcidev_init(PCI_VENDOR_ID_3COM, nics_3com);
+	io_base_addr = pcidev_init(PCI_VENDOR_ID_3COM, nics_3com, programmer_param);
 	id = pcidev_dev->device_id;
 
 	/* 3COM 3C90xB cards need a special fixup. */
@@ -97,11 +94,9 @@ int nic3com_shutdown(void)
 		OUTL(internal_conf, io_base_addr + INTERNAL_CONFIG);
 	}
 
-	free(pcidev_bdf);
+	free(programmer_param);
 	pci_cleanup(pacc);
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-	close(io_fd);
-#endif
+	release_io_perms();
 	return 0;
 }
 

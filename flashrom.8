@@ -15,16 +15,12 @@ flash chips.
 It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, and
 TSOP40 chips, which use various protocols such as LPC, FWH, parallel flash,
 or SPI.
-.PP
-(see
-.B http://coreboot.org
-for details on coreboot)
 .SH OPTIONS
 Please note that the command line interface for flashrom will change before
 flashrom 1.0. Do not use flashrom in scripts or other automated tools without
 checking that your flashrom version won't interpret options in a different way.
 .PP
-You can specify one of -E, -r, -w, -v or no operation.
+You can specify one of \-E, \-r, \-w, \-v or no operation.
 If no operation is specified, then all that happens
 is that flash info is dumped and the flash chip is set to writable.
 .TP
@@ -33,9 +29,7 @@ Read flash ROM contents and save them into the given
 .BR <file> .
 .TP
 .B "\-w, \-\-write <file>"
-Write file into flash ROM (default when
-.B <file>
-is specified).
+Write file into flash ROM.
 .TP
 .B "\-n, \-\-noverify"
 Do
@@ -135,7 +129,7 @@ if you have proper means to recover from failure!
 Same as
 .BR \-\-list\-supported ,
 but outputs the supported hardware in MediaWiki syntax, so that it can be
-easily pasted into the wiki page at http://coreboot.org/Flashrom.
+easily pasted into the wiki page at http://www.flashrom.org/.
 .TP
 .B "\-p, \-\-programmer <name>"
 Specify the programmer device. Currently supported are:
@@ -152,9 +146,11 @@ Specify the programmer device. Currently supported are:
 .sp
 .BR "* ft2232spi" " (for flash ROMs attached to a FT2232H/FT4232H based USB SPI programmer)"
 .sp
+.BR "* serprog" " (for flash ROMs attached to Urja's AVR programmer)"
+.sp
 The dummy programmer has an optional parameter specifying the bus types it
 should support. For that you have to use the
-.B "flashrom -p dummy=type"
+.B "flashrom -p dummy:type"
 syntax where
 .B type
 can be any comma-separated combination of
@@ -162,11 +158,11 @@ can be any comma-separated combination of
 in any order.
 .sp
 Example:
-.B "flashrom -p dummy=lpc,fwh"
+.B "flashrom -p dummy:lpc,fwh"
 .sp
 If you have multiple supported PCI cards which can program flash chips
 (NICs, SATA/IDE controllers, etc.) in your system, you must use the
-.B "flashrom -p xxxx=bb:dd.f"
+.B "flashrom -p xxxx:bb:dd.f"
 syntax to explicitly select one of them, where
 .B xxxx
 is the name of the programmer
@@ -178,11 +174,49 @@ is the PCI device number, and
 is the PCI function number of the desired NIC.
 .sp
 Example:
-.B "flashrom -p nic3com=05:04.0"
+.B "flashrom -p nic3com:05:04.0"
 .sp
 Currently the following programmers support this mechanism:
 .BR nic3com ,
 .BR satasii .
+.sp
+The it87spi programmer has an optional parameter which will set the I/O base
+port of the IT87* SPI controller interface to the port specified in the
+parameter. For that you have to use the
+.B "flashrom -p it87spi:port=portnum"
+syntax where
+.B portnum
+is an I/O port number which must be a multiple of 8.
+.sp
+The ft2232spi programmer has an optional parameter specifying the controller
+type and interface/port it should support. For that you have to use the
+.B "flashrom -p ft2232spi:model,port=interface"
+syntax where
+.B model
+can be any of
+.B 2232H 4232H
+and
+.B interface
+can be any of
+.B A
+.BR B .
+The default model is
+.B 4232H
+and the default interface is
+.BR B .
+.sp
+The serprog programmer has an optional parameter specifying either a serial
+device/baud combination or an IP/port combination for communication with the
+programmer. For serial, you have to use the
+.B "flashrom -p serprog:/dev/device:baud"
+syntax and for IP, you have to use
+.B "flashrom -p serprog:ip:port"
+instead. More information about serprog is available in serprog-protocol.txt in
+the source distribution.
+.sp
+Support for some programmers can be disabled at compile time.
+.B "flashrom -h"
+lists all supported programmers.
 .TP
 .B "\-h, \-\-help"
 Show a help text and exit.
@@ -194,9 +228,9 @@ flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
 (/dev/xsvc on Solaris) can not be opened and with 3 if a call to mmap() fails.
 .SH BUGS
 Please report any bugs at
-.BR http://tracker.coreboot.org/trac/coreboot/newticket ","
-or on the coreboot mailing list
-.RB "(" http://coreboot.org/Mailinglist ")."
+.BR http://www.flashrom.org/trac/flashrom/newticket ","
+or on the flashrom mailing list
+.RB "(" http://www.flashrom.org/mailman/listinfo/flashrom ")."
 .SH LICENCE
 .B flashrom
 is covered by the GNU General Public License (GPL), version 2. Some files are

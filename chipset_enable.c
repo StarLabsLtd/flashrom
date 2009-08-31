@@ -2,7 +2,7 @@
  * This file is part of the flashrom project.
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
- * Copyright (C) 2005-2007 coresystems GmbH <stepan@coresystems.de>
+ * Copyright (C) 2005-2009 coresystems GmbH
  * Copyright (C) 2006 Uwe Hermann <uwe@hermann-uwe.de>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -29,7 +29,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/mman.h>
 #include <fcntl.h>
 #include "flash.h"
 
@@ -99,7 +98,7 @@ static int enable_flash_sis630(struct pci_dev *dev, const char *name)
 	}
 
 	OUTB(0x24, 0x2e);
-	printf("2f is %#x\n", INB(0x2f));
+	printf_debug("2f is %#x\n", INB(0x2f));
 	b = INB(0x2f) | 0xfc;
 	OUTB(0x24, 0x2e);
 	OUTB(b, 0x2f);
@@ -147,7 +146,7 @@ static int enable_flash_piix4(struct pci_dev *dev, const char *name)
 	pci_write_word(dev, xbcs, new);
 
 	if (pci_read_word(dev, xbcs) != new) {
-		printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", xbcs, new, name);
+		printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", xbcs, new, name);
 		return -1;
 	}
 
@@ -183,7 +182,7 @@ static int enable_flash_ich(struct pci_dev *dev, const char *name,
 	pci_write_byte(dev, bios_cntl, new);
 
 	if (pci_read_byte(dev, bios_cntl) != new) {
-		printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", bios_cntl, new, name);
+		printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", bios_cntl, new, name);
 		return -1;
 	}
 
@@ -192,11 +191,61 @@ static int enable_flash_ich(struct pci_dev *dev, const char *name,
 
 static int enable_flash_ich_4e(struct pci_dev *dev, const char *name)
 {
+	/*
+	 * Note: ICH5 has registers similar to FWH_SEL1, FWH_SEL2 and
+	 * FWH_DEC_EN1, but they are called FB_SEL1, FB_SEL2, FB_DEC_EN1 and
+	 * FB_DEC_EN2.
+	 */
 	return enable_flash_ich(dev, name, 0x4e);
 }
 
 static int enable_flash_ich_dc(struct pci_dev *dev, const char *name)
 {
+	uint32_t fwh_conf;
+	int i;
+	char *idsel = NULL;
+
+	/* Ignore all legacy ranges below 1 MB. */
+	/* FWH_SEL1 */
+	fwh_conf = pci_read_long(dev, 0xd0);
+	for (i = 7; i >= 0; i--)
+		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
+			     (0x1ff8 + i) * 0x80000,
+			     (0x1ff0 + i) * 0x80000,
+			     (fwh_conf >> (i * 4)) & 0xf);
+	/* FWH_SEL2 */
+	fwh_conf = pci_read_word(dev, 0xd4);
+	for (i = 3; i >= 0; i--)
+		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
+			     (0xff4 + i) * 0x100000,
+			     (0xff0 + i) * 0x100000,
+			     (fwh_conf >> (i * 4)) & 0xf);
+	/* FWH_DEC_EN1 */
+	fwh_conf = pci_read_word(dev, 0xd8);
+	for (i = 7; i >= 0; i--)
+		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
+			     (0x1ff8 + i) * 0x80000,
+			     (0x1ff0 + i) * 0x80000,
+			     (fwh_conf >> (i + 0x8)) & 0x1 ? "en" : "dis");
+	for (i = 3; i >= 0; i--)
+		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
+			     (0xff4 + i) * 0x100000,
+			     (0xff0 + i) * 0x100000,
+			     (fwh_conf >> i) & 0x1 ? "en" : "dis");
+
+	if (programmer_param)
+		idsel = strstr(programmer_param, "fwh_idsel=");
+
+	if (idsel) {
+		idsel += strlen("fwh_idsel=");
+		fwh_conf = (uint32_t)strtoul(idsel, NULL, 0);
+
+		/* FIXME: Need to undo this on shutdown. */
+		printf("\nSetting IDSEL=0x%x for top 16 MB", fwh_conf);
+		pci_write_long(dev, 0xd0, fwh_conf);
+		pci_write_word(dev, 0xd4, fwh_conf);
+	}
+
 	return enable_flash_ich(dev, name, 0xdc);
 }
 
@@ -452,7 +501,7 @@ static int enable_flash_vt823x(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x40, val);
 
 	if (pci_read_byte(dev, 0x40) != val) {
-		printf("\nWARNING: Failed to enable ROM Write on \"%s\"\n",
+		printf("\nWARNING: Failed to enable flash write on \"%s\"\n",
 		       name);
 		return -1;
 	}
@@ -492,91 +541,35 @@ static int enable_flash_cs5530(struct pci_dev *dev, const char *name)
 
 /**
  * Geode systems write protect the BIOS via RCONFs (cache settings similar
- * to MTRRs). To unlock, change MSR 0x1808 top byte to 0x22. Reading and
- * writing to MSRs, however requires instructions rdmsr/wrmsr, which are
- * ring0 privileged instructions so only the kernel can do the read/write.
- * This function, therefore, requires that the msr kernel module be loaded
- * to access these instructions from user space using device /dev/cpu/0/msr.
- *
- * This hard-coded location could have potential problems on SMP machines
- * since it assumes cpu0, but it is safe on the Geode which is not SMP.
+ * to MTRRs). To unlock, change MSR 0x1808 top byte to 0x22. 
  *
  * Geode systems also write protect the NOR flash chip itself via MSR_NORF_CTL.
  * To enable write to NOR Boot flash for the benefit of systems that have such
  * a setup, raise MSR 0x51400018 WE_CS3 (write enable Boot Flash Chip Select).
- *
- * This is probably not portable beyond Linux.
  */
 static int enable_flash_cs5536(struct pci_dev *dev, const char *name)
 {
 #define MSR_RCONF_DEFAULT	0x1808
 #define MSR_NORF_CTL		0x51400018
 
-	int fd_msr;
-	unsigned char buf[8];
+	msr_t msr;
 
-	fd_msr = open("/dev/cpu/0/msr", O_RDWR);
-	if (fd_msr == -1) {
-		perror("open(/dev/cpu/0/msr)");
-		printf("Cannot operate on MSR. Did you run 'modprobe msr'?\n");
+	/* Geode only has a single core */
+	if (setup_cpu_msr(0))
 		return -1;
+
+	msr = rdmsr(MSR_RCONF_DEFAULT);
+	if ((msr.hi >> 24) != 0x22) {
+		msr.hi &= 0xfbffffff;
+		wrmsr(MSR_RCONF_DEFAULT, msr);
 	}
 
-	if (lseek64(fd_msr, (off64_t) MSR_RCONF_DEFAULT, SEEK_SET) == -1) {
-		perror("lseek64");
-		close(fd_msr);
-		return -1;
-	}
-
-	if (read(fd_msr, buf, 8) != 8) {
-		perror("read msr");
-		close(fd_msr);
-		return -1;
-	}
-
-	if (buf[7] != 0x22) {
-		buf[7] &= 0xfb;
-		if (lseek64(fd_msr, (off64_t) MSR_RCONF_DEFAULT,
-			    SEEK_SET) == -1) {
-			perror("lseek64");
-			close(fd_msr);
-			return -1;
-		}
-
-		if (write(fd_msr, buf, 8) < 0) {
-			perror("msr write");
-			close(fd_msr);
-			return -1;
-		}
-	}
-
-	if (lseek64(fd_msr, (off64_t) MSR_NORF_CTL, SEEK_SET) == -1) {
-		perror("lseek64");
-		close(fd_msr);
-		return -1;
-	}
-
-	if (read(fd_msr, buf, 8) != 8) {
-		perror("read msr");
-		close(fd_msr);
-		return -1;
-	}
-
+	msr = rdmsr(MSR_NORF_CTL);
 	/* Raise WE_CS3 bit. */
-	buf[0] |= 0x08;
+	msr.lo |= 0x08;
+	wrmsr(MSR_NORF_CTL, msr);
 
-	if (lseek64(fd_msr, (off64_t) MSR_NORF_CTL, SEEK_SET) == -1) {
-		perror("lseek64");
-		close(fd_msr);
-		return -1;
-	}
-	if (write(fd_msr, buf, 8) < 0) {
-		perror("msr write");
-		close(fd_msr);
-		return -1;
-	}
-
-	close(fd_msr);
+	cleanup_cpu_msr();
 
 #undef MSR_RCONF_DEFAULT
 #undef MSR_NORF_CTL
@@ -592,7 +585,7 @@ static int enable_flash_sc1100(struct pci_dev *dev, const char *name)
 	new = pci_read_byte(dev, 0x52);
 
 	if (new != 0xee) {
-		printf("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x52, new, name);
+		printf_debug("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x52, new, name);
 		return -1;
 	}
 
@@ -612,8 +605,8 @@ static int enable_flash_sis5595(struct pci_dev *dev, const char *name)
 
 	newer = pci_read_byte(dev, 0x45);
 	if (newer != new) {
-		printf("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x45, new, name);
-		printf("Stuck at 0x%x\n", newer);
+		printf_debug("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x45, new, name);
+		printf_debug("Stuck at 0x%x\n", newer);
 		return -1;
 	}
 
@@ -624,8 +617,8 @@ static int enable_flash_sis5595(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x40, new);
 	newer = pci_read_byte(dev, 0x40);
 	if (newer != new) {
-		printf("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x40, new, name);
-		printf("Stuck at 0x%x\n", newer);
+		printf_debug("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x40, new, name);
+		printf_debug("Stuck at 0x%x\n", newer);
 		return -1;
 	}
 	return 0;
@@ -642,7 +635,7 @@ static int enable_flash_amd8111(struct pci_dev *dev, const char *name)
 	if (new != old) {
 		pci_write_byte(dev, 0x43, new);
 		if (pci_read_byte(dev, 0x43) != new) {
-			printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x43, new, name);
+			printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x43, new, name);
 		}
 	}
 
@@ -654,7 +647,7 @@ static int enable_flash_amd8111(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x40, new);
 
 	if (pci_read_byte(dev, 0x40) != new) {
-		printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x40, new, name);
+		printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x40, new, name);
 		return -1;
 	}
 
@@ -692,25 +685,49 @@ static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 
 	/* Read SPI_BaseAddr */
 	tmp = pci_read_long(dev, 0xa0);
-	tmp &= 0xfffffff0;	/* remove low 4 bits (reserved) */
+	tmp &= 0xffffffe0;	/* remove bits 4-0 (reserved) */
 	printf_debug("SPI base address is at 0x%x\n", tmp);
 
 	/* If the BAR has address 0, it is unlikely SPI is used. */
 	if (!tmp)
 		has_spi = 0;
 
-	/* Physical memory can only be mapped at page (4k) boundaries */
-	sb600_spibar = physmap("SB600 SPI registers", tmp & 0xfffff000, 0x1000);
-	/* The low bits of the SPI base address are used as offset into the mapped page */
-	sb600_spibar += tmp & 0xfff;
+	if (has_spi) {
+		/* Physical memory has to be mapped at page (4k) boundaries. */
+		sb600_spibar = physmap("SB600 SPI registers", tmp & 0xfffff000,
+				       0x1000);
+		/* The low bits of the SPI base address are used as offset into
+		 * the mapped page.
+		 */
+		sb600_spibar += tmp & 0xfff;
+
+		tmp = pci_read_long(dev, 0xa0);
+		printf_debug("AltSpiCSEnable=%i, SpiRomEnable=%i, "
+			     "AbortEnable=%i\n", tmp & 0x1, (tmp & 0x2) >> 1,
+			     (tmp & 0x4) >> 2);
+		tmp = (pci_read_byte(dev, 0xba) & 0x4) >> 2;
+		printf_debug("PrefetchEnSPIFromIMC=%i, ", tmp);
+
+		tmp = pci_read_byte(dev, 0xbb);
+		printf_debug("PrefetchEnSPIFromHost=%i, SpiOpEnInLpcMode=%i\n",
+			     tmp & 0x1, (tmp & 0x20) >> 5);
+		tmp = mmio_readl(sb600_spibar);
+		printf_debug("SpiArbEnable=%i, SpiAccessMacRomEn=%i, "
+			     "SpiHostAccessRomEn=%i, ArbWaitCount=%i, "
+			     "SpiBridgeDisable=%i, DropOneClkOnRd=%i\n",
+			     (tmp >> 19) & 0x1, (tmp >> 22) & 0x1,
+			     (tmp >> 23) & 0x1, (tmp >> 24) & 0x7,
+			     (tmp >> 27) & 0x1, (tmp >> 28) & 0x1);
+	}
 
 	/* Look for the SMBus device. */
 	smbus_dev = pci_dev_find(0x1002, 0x4385);
 
-	if (!smbus_dev) {
+	if (has_spi && !smbus_dev) {
 		fprintf(stderr, "ERROR: SMBus device not found. Not enabling SPI.\n");
 		has_spi = 0;
-	} else {
+	}
+	if (has_spi) {
 		/* Note about the bit tests below: If a bit is zero, the GPIO is SPI. */
 		/* GPIO11/SPI_DO and GPIO12/SPI_DI status */
 		reg = pci_read_byte(smbus_dev, 0xAB);
@@ -801,7 +818,7 @@ static int enable_flash_ck804(struct pci_dev *dev, const char *name)
 	if (new != old) {
 		pci_write_byte(dev, 0x88, new);
 		if (pci_read_byte(dev, 0x88) != new) {
-			printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x88, new, name);
+			printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x88, new, name);
 		}
 	}
 
@@ -812,7 +829,7 @@ static int enable_flash_ck804(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x6d, new);
 
 	if (pci_read_byte(dev, 0x6d) != new) {
-		printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x6d, new, name);
+		printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x6d, new, name);
 		return -1;
 	}
 
@@ -878,7 +895,7 @@ static int enable_flash_mcp55(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x6d, new);
 
 	if (pci_read_byte(dev, 0x6d) != new) {
-		printf("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x6d, new, name);
+		printf_debug("tried to set 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x6d, new, name);
 		return -1;
 	}
 
@@ -944,7 +961,7 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 	}
 
 	/* 4. Clean up */
-	munmap(mmcr, getpagesize());
+	physunmap(mmcr, getpagesize());
 	return 0;
 }
 
@@ -957,7 +974,7 @@ const struct penable chipset_enables[] = {
 	{0x1022, 0x2080, OK, "AMD", "CS5536",		enable_flash_cs5536},
 	{0x1022, 0x3000, OK, "AMD", "Elan SC520",	get_flashbase_sc520},
 	{0x1002, 0x438D, OK, "AMD", "SB600",		enable_flash_sb600},
-	{0x1002, 0x439d, OK, "AMD", "SB700",		enable_flash_sb600},
+	{0x1002, 0x439d, OK, "AMD", "SB700/SB710/SB750", enable_flash_sb600},
 	{0x100b, 0x0510, NT, "AMD", "SC1100",		enable_flash_sc1100},
 	{0x1002, 0x4377, OK, "ATI", "SB400",		enable_flash_sb400},
 	{0x1166, 0x0205, OK, "Broadcom", "HT-1000",	enable_flash_ht1000},
@@ -995,6 +1012,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x2919, OK, "Intel", "ICH9M",		enable_flash_ich9},
 	{0x8086, 0x2917, OK, "Intel", "ICH9M-E",	enable_flash_ich9},
 	{0x8086, 0x2916, OK, "Intel", "ICH9R",		enable_flash_ich9},
+	{0x8086, 0x2910, OK, "Intel", "ICH9 Engineering Sample", enable_flash_ich9},
 	{0x8086, 0x1234, NT, "Intel", "MPIIX",		enable_flash_piix4},
 	{0x8086, 0x7000, OK, "Intel", "PIIX3",		enable_flash_piix4},
 	{0x8086, 0x7110, OK, "Intel", "PIIX4/4E/4M",	enable_flash_piix4},
@@ -1059,6 +1077,8 @@ int chipset_flash_enable(void)
 		else
 			printf("OK.\n");
 	}
+	printf("This chipset supports the following protocols: %s.\n",
+	       flashbuses_to_text(buses_supported));
 
 	return ret;
 }

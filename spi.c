@@ -32,31 +32,129 @@ void *spibar = NULL;
 
 void spi_prettyprint_status_register(struct flashchip *flash);
 
-int spi_command(unsigned int writecnt, unsigned int readcnt,
+const struct spi_programmer spi_programmer[] = {
+	{ /* SPI_CONTROLLER_NONE */
+		.command = NULL,
+		.multicommand = NULL,
+		.read = NULL,
+		.write_256 = NULL,
+	},
+
+	{ /* SPI_CONTROLLER_ICH7 */
+		.command = ich_spi_send_command,
+		.multicommand = ich_spi_send_multicommand,
+		.read = ich_spi_read,
+		.write_256 = ich_spi_write_256,
+	},
+
+	{ /* SPI_CONTROLLER_ICH9 */
+		.command = ich_spi_send_command,
+		.multicommand = ich_spi_send_multicommand,
+		.read = ich_spi_read,
+		.write_256 = ich_spi_write_256,
+	},
+
+	{ /* SPI_CONTROLLER_IT87XX */
+		.command = it8716f_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = it8716f_spi_chip_read,
+		.write_256 = it8716f_spi_chip_write_256,
+	},
+
+	{ /* SPI_CONTROLLER_SB600 */
+		.command = sb600_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = sb600_spi_read,
+		.write_256 = sb600_spi_write_1,
+	},
+
+	{ /* SPI_CONTROLLER_VIA */
+		.command = ich_spi_send_command,
+		.multicommand = ich_spi_send_multicommand,
+		.read = ich_spi_read,
+		.write_256 = ich_spi_write_256,
+	},
+
+	{ /* SPI_CONTROLLER_WBSIO */
+		.command = wbsio_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = wbsio_spi_read,
+		.write_256 = wbsio_spi_write_1,
+	},
+
+#if FT2232_SPI_SUPPORT == 1
+	{ /* SPI_CONTROLLER_FT2232 */
+		.command = ft2232_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = ft2232_spi_read,
+		.write_256 = ft2232_spi_write_256,
+	},
+#endif
+
+	{ /* SPI_CONTROLLER_DUMMY */
+		.command = dummy_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = NULL,
+		.write_256 = NULL,
+	},
+
+	{}, /* This entry corresponds to SPI_CONTROLLER_INVALID. */
+};
+
+const int spi_programmer_count = ARRAY_SIZE(spi_programmer);
+
+int spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr)
 {
-	switch (spi_controller) {
-	case SPI_CONTROLLER_IT87XX:
-		return it8716f_spi_command(writecnt, readcnt, writearr,
-					   readarr);
-	case SPI_CONTROLLER_ICH7:
-	case SPI_CONTROLLER_ICH9:
-	case SPI_CONTROLLER_VIA:
-		return ich_spi_command(writecnt, readcnt, writearr, readarr);
-	case SPI_CONTROLLER_SB600:
-		return sb600_spi_command(writecnt, readcnt, writearr, readarr);
-	case SPI_CONTROLLER_WBSIO:
-		return wbsio_spi_command(writecnt, readcnt, writearr, readarr);
-	case SPI_CONTROLLER_FT2232:
-		return ft2232_spi_command(writecnt, readcnt, writearr, readarr);
-	case SPI_CONTROLLER_DUMMY:
-		return dummy_spi_command(writecnt, readcnt, writearr, readarr);
-	default:
-		printf_debug
-		    ("%s called, but no SPI chipset/strapping detected\n",
-		     __FUNCTION__);
+	if (!spi_programmer[spi_controller].command) {
+		fprintf(stderr, "%s called, but SPI is unsupported on this "
+			"hardware. Please report a bug.\n", __func__);
+		return 1;
 	}
-	return 1;
+
+	return spi_programmer[spi_controller].command(writecnt, readcnt,
+						      writearr, readarr);
+}
+
+int spi_send_multicommand(struct spi_command *spicommands)
+{
+	if (!spi_programmer[spi_controller].multicommand) {
+		fprintf(stderr, "%s called, but SPI is unsupported on this "
+			"hardware. Please report a bug.\n", __func__);
+		return 1;
+	}
+
+	return spi_programmer[spi_controller].multicommand(spicommands);
+}
+
+int default_spi_send_command(unsigned int writecnt, unsigned int readcnt,
+			     const unsigned char *writearr, unsigned char *readarr)
+{
+	struct spi_command cmd[] = {
+	{
+		.writecnt = writecnt,
+		.readcnt = readcnt,
+		.writearr = writearr,
+		.readarr = readarr,
+	}, {
+		.writecnt = 0,
+		.writearr = NULL,
+		.readcnt = 0,
+		.readarr = NULL,
+	}};
+
+	return spi_send_multicommand(cmd);
+}
+
+int default_spi_send_multicommand(struct spi_command *spicommands)
+{
+	int result = 0;
+	while ((spicommands->writecnt || spicommands->readcnt) && !result) {
+		result = spi_send_command(spicommands->writecnt, spicommands->readcnt,
+					  spicommands->writearr, spicommands->readarr);
+		spicommands++;
+	}
+	return result;
 }
 
 static int spi_rdid(unsigned char *readarr, int bytes)
@@ -65,13 +163,13 @@ static int spi_rdid(unsigned char *readarr, int bytes)
 	int ret;
 	int i;
 
-	ret = spi_command(sizeof(cmd), bytes, cmd, readarr);
+	ret = spi_send_command(sizeof(cmd), bytes, cmd, readarr);
 	if (ret)
 		return ret;
 	printf_debug("RDID returned");
 	for (i = 0; i < bytes; i++)
 		printf_debug(" 0x%02x", readarr[i]);
-	printf_debug("\n");
+	printf_debug(". ");
 	return 0;
 }
 
@@ -81,18 +179,18 @@ static int spi_rems(unsigned char *readarr)
 	uint32_t readaddr;
 	int ret;
 
-	ret = spi_command(sizeof(cmd), JEDEC_REMS_INSIZE, cmd, readarr);
+	ret = spi_send_command(sizeof(cmd), JEDEC_REMS_INSIZE, cmd, readarr);
 	if (ret == SPI_INVALID_ADDRESS) {
 		/* Find the lowest even address allowed for reads. */
 		readaddr = (spi_get_valid_read_addr() + 1) & ~1;
 		cmd[1] = (readaddr >> 16) & 0xff,
 		cmd[2] = (readaddr >> 8) & 0xff,
 		cmd[3] = (readaddr >> 0) & 0xff,
-		ret = spi_command(sizeof(cmd), JEDEC_REMS_INSIZE, cmd, readarr);
+		ret = spi_send_command(sizeof(cmd), JEDEC_REMS_INSIZE, cmd, readarr);
 	}
 	if (ret)
 		return ret;
-	printf_debug("REMS returned %02x %02x.\n", readarr[0], readarr[1]);
+	printf_debug("REMS returned %02x %02x. ", readarr[0], readarr[1]);
 	return 0;
 }
 
@@ -102,18 +200,18 @@ static int spi_res(unsigned char *readarr)
 	uint32_t readaddr;
 	int ret;
 
-	ret = spi_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
+	ret = spi_send_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
 	if (ret == SPI_INVALID_ADDRESS) {
 		/* Find the lowest even address allowed for reads. */
 		readaddr = (spi_get_valid_read_addr() + 1) & ~1;
 		cmd[1] = (readaddr >> 16) & 0xff,
 		cmd[2] = (readaddr >> 8) & 0xff,
 		cmd[3] = (readaddr >> 0) & 0xff,
-		ret = spi_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
+		ret = spi_send_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
 	}
 	if (ret)
 		return ret;
-	printf_debug("RES returned %02x.\n", readarr[0]);
+	printf_debug("RES returned %02x. ", readarr[0]);
 	return 0;
 }
 
@@ -123,24 +221,10 @@ int spi_write_enable(void)
 	int result;
 
 	/* Send WREN (Write Enable) */
-	result = spi_command(sizeof(cmd), 0, cmd, NULL);
+	result = spi_send_command(sizeof(cmd), 0, cmd, NULL);
 
 	if (result)
-		printf_debug("%s failed", __func__);
-	if (result == SPI_INVALID_OPCODE) {
-		switch (spi_controller) {
-		case SPI_CONTROLLER_ICH7:
-		case SPI_CONTROLLER_ICH9:
-		case SPI_CONTROLLER_VIA:
-			printf_debug(" due to SPI master limitation, ignoring"
-				     " and hoping it will be run as PREOP\n");
-			return 0;
-		default:
-			break;
-		}
-	}
-	if (result)
-		printf_debug("\n");
+		fprintf(stderr, "%s failed\n", __func__);
 
 	return result;
 }
@@ -150,7 +234,7 @@ int spi_write_disable(void)
 	const unsigned char cmd[JEDEC_WRDI_OUTSIZE] = { JEDEC_WRDI };
 
 	/* Send WRDI (Write Disable) */
-	return spi_command(sizeof(cmd), 0, cmd, NULL);
+	return spi_send_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
@@ -163,12 +247,12 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 		return 0;
 
 	if (!oddparity(readarr[0]))
-		printf_debug("RDID byte 0 parity violation.\n");
+		printf_debug("RDID byte 0 parity violation. ");
 
 	/* Check if this is a continuation vendor ID */
 	if (readarr[0] == 0x7f) {
 		if (!oddparity(readarr[1]))
-			printf_debug("RDID byte 1 parity violation.\n");
+			printf_debug("RDID byte 1 parity violation. ");
 		id1 = (readarr[0] << 8) | readarr[1];
 		id2 = readarr[2];
 		if (bytes > 3) {
@@ -214,7 +298,9 @@ int probe_spi_rdid4(struct flashchip *flash)
 	case SPI_CONTROLLER_VIA:
 	case SPI_CONTROLLER_SB600:
 	case SPI_CONTROLLER_WBSIO:
+#if FT2232_SPI_SUPPORT == 1
 	case SPI_CONTROLLER_FT2232:
+#endif
 	case SPI_CONTROLLER_DUMMY:
 		return probe_spi_rdid_generic(flash, 4);
 	default:
@@ -284,18 +370,14 @@ int probe_spi_res(struct flashchip *flash)
 uint8_t spi_read_status_register(void)
 {
 	const unsigned char cmd[JEDEC_RDSR_OUTSIZE] = { JEDEC_RDSR };
+	/* FIXME: No workarounds for driver/hardware bugs in generic code. */
 	unsigned char readarr[2]; /* JEDEC_RDSR_INSIZE=1 but wbsio needs 2 */
 	int ret;
 
 	/* Read Status Register */
-	if (spi_controller == SPI_CONTROLLER_SB600) {
-		/* SB600 uses a different way to read status register. */
-		return sb600_read_status_register();
-	} else {
-		ret = spi_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
-		if (ret)
-			printf_debug("RDSR failed!\n");
-	}
+	ret = spi_send_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
+	if (ret)
+		fprintf(stderr, "RDSR failed!\n");
 
 	return readarr[0];
 }
@@ -407,21 +489,35 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 
 int spi_chip_erase_60(struct flashchip *flash)
 {
-	const unsigned char cmd[JEDEC_CE_60_OUTSIZE] = {JEDEC_CE_60};
 	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_CE_60_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_CE_60 },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 	
 	result = spi_disable_blockprotect();
 	if (result) {
-		printf_debug("spi_disable_blockprotect failed\n");
+		fprintf(stderr, "spi_disable_blockprotect failed\n");
 		return result;
 	}
-	result = spi_write_enable();
-	if (result)
-		return result;
-	/* Send CE (Chip Erase) */
-	result = spi_command(sizeof(cmd), 0, cmd, NULL);
+	
+	result = spi_send_multicommand(spicommands);
 	if (result) {
-		printf_debug("spi_chip_erase_60 failed sending erase\n");
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -439,21 +535,34 @@ int spi_chip_erase_60(struct flashchip *flash)
 
 int spi_chip_erase_c7(struct flashchip *flash)
 {
-	const unsigned char cmd[JEDEC_CE_C7_OUTSIZE] = { JEDEC_CE_C7 };
 	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_CE_C7_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_CE_C7 },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
 	result = spi_disable_blockprotect();
 	if (result) {
-		printf_debug("spi_disable_blockprotect failed\n");
+		fprintf(stderr, "spi_disable_blockprotect failed\n");
 		return result;
 	}
-	result = spi_write_enable();
-	if (result)
-		return result;
-	/* Send CE (Chip Erase) */
-	result = spi_command(sizeof(cmd), 0, cmd, NULL);
+
+	result = spi_send_multicommand(spicommands);
 	if (result) {
-		printf_debug("spi_chip_erase_60 failed sending erase\n");
+		fprintf(stderr, "%s failed during command execution\n", __func__);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -482,17 +591,31 @@ int spi_chip_erase_60_c7(struct flashchip *flash)
 
 int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_BE_52_OUTSIZE] = {JEDEC_BE_52, };
 	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_BE_52_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_BE_52, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff) },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
-	cmd[1] = (addr & 0x00ff0000) >> 16;
-	cmd[2] = (addr & 0x0000ff00) >> 8;
-	cmd[3] = (addr & 0x000000ff);
-	result = spi_write_enable();
-	if (result)
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
 		return result;
-	/* Send BE (Block Erase) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	}
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
 	 */
@@ -512,17 +635,30 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
  */
 int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_BE_D8_OUTSIZE] = { JEDEC_BE_D8, };
 	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_BE_D8_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_BE_D8, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff) },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
-	cmd[1] = (addr & 0x00ff0000) >> 16;
-	cmd[2] = (addr & 0x0000ff00) >> 8;
-	cmd[3] = (addr & 0x000000ff);
-	result = spi_write_enable();
-	if (result)
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n", __func__);
 		return result;
-	/* Send BE (Block Erase) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	}
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
 	 */
@@ -548,7 +684,7 @@ int spi_chip_erase_d8(struct flashchip *flash)
 	for (i = 0; i < total_size / erase_size; i++) {
 		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
 		if (rc) {
-			printf("Error erasing block at 0x%x\n", i);
+			fprintf(stderr, "Error erasing block at 0x%x\n", i);
 			break;
 		}
 	}
@@ -561,18 +697,31 @@ int spi_chip_erase_d8(struct flashchip *flash)
 /* Sector size is usually 4k, though Macronix eliteflash has 64k */
 int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
-	unsigned char cmd[JEDEC_SE_OUTSIZE] = { JEDEC_SE, };
 	int result;
-	
-	cmd[1] = (addr & 0x00ff0000) >> 16;
-	cmd[2] = (addr & 0x0000ff00) >> 8;
-	cmd[3] = (addr & 0x000000ff);
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_SE_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_SE, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff) },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
-	result = spi_write_enable();
-	if (result)
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
 		return result;
-	/* Send SE (Sector Erase) */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	}
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 15-800 ms, so wait in 10 ms steps.
 	 */
@@ -588,7 +737,8 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 int spi_block_erase_60(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
-		fprintf(stderr, "%s called with incorrect arguments\n", __func__);
+		fprintf(stderr, "%s called with incorrect arguments\n",
+			__func__);
 		return -1;
 	}
 	return spi_chip_erase_60(flash);
@@ -597,7 +747,8 @@ int spi_block_erase_60(struct flashchip *flash, unsigned int addr, unsigned int 
 int spi_block_erase_c7(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
-		fprintf(stderr, "%s called with incorrect arguments\n", __func__);
+		fprintf(stderr, "%s called with incorrect arguments\n",
+			__func__);
 		return -1;
 	}
 	return spi_chip_erase_c7(flash);
@@ -609,24 +760,10 @@ int spi_write_status_enable(void)
 	int result;
 
 	/* Send EWSR (Enable Write Status Register). */
-	result = spi_command(sizeof(cmd), JEDEC_EWSR_INSIZE, cmd, NULL);
+	result = spi_send_command(sizeof(cmd), JEDEC_EWSR_INSIZE, cmd, NULL);
 
 	if (result)
-		printf_debug("%s failed", __func__);
-	if (result == SPI_INVALID_OPCODE) {
-		switch (spi_controller) {
-		case SPI_CONTROLLER_ICH7:
-		case SPI_CONTROLLER_ICH9:
-		case SPI_CONTROLLER_VIA:
-			printf_debug(" due to SPI master limitation, ignoring"
-				     " and hoping it will be run as PREOP\n");
-			return 0;
-		default:
-			break;
-		}
-	}
-	if (result)
-		printf_debug("\n");
+		fprintf(stderr, "%s failed\n", __func__);
 
 	return result;
 }
@@ -637,46 +774,107 @@ int spi_write_status_enable(void)
  */
 int spi_write_status_register(int status)
 {
-	const unsigned char cmd[JEDEC_WRSR_OUTSIZE] =
-	    { JEDEC_WRSR, (unsigned char)status };
+	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_EWSR_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_EWSR },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_WRSR_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WRSR, (unsigned char) status },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
-	/* Send WRSR (Write Status Register) */
-	return spi_command(sizeof(cmd), 0, cmd, NULL);
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
+	}
+	return result;
 }
 
-void spi_byte_program(int address, uint8_t byte)
+int spi_byte_program(int addr, uint8_t byte)
 {
-	const unsigned char cmd[JEDEC_BYTE_PROGRAM_OUTSIZE] = {
-		JEDEC_BYTE_PROGRAM,
-		(address >> 16) & 0xff,
-		(address >> 8) & 0xff,
-		(address >> 0) & 0xff,
-		byte
-	};
+	int result;
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_BYTE_PROGRAM_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_BYTE_PROGRAM, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff), byte },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
-	/* Send Byte-Program */
-	spi_command(sizeof(cmd), 0, cmd, NULL);
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
+	}
+	return result;
 }
 
 int spi_nbyte_program(int address, uint8_t *bytes, int len)
 {
+	int result;
+	/* FIXME: Switch to malloc based on len unless that kills speed. */
 	unsigned char cmd[JEDEC_BYTE_PROGRAM_OUTSIZE - 1 + 256] = {
 		JEDEC_BYTE_PROGRAM,
 		(address >> 16) & 0xff,
 		(address >> 8) & 0xff,
 		(address >> 0) & 0xff,
 	};
+	struct spi_command spicommands[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_BYTE_PROGRAM_OUTSIZE - 1 + len,
+		.writearr	= cmd,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
+	if (!len) {
+		fprintf(stderr, "%s called for zero-length write\n", __func__);
+		return 1;
+	}
 	if (len > 256) {
-		printf_debug ("%s called for too long a write\n",
-		     __FUNCTION__);
+		fprintf(stderr, "%s called for too long a write\n", __func__);
 		return 1;
 	}
 
 	memcpy(&cmd[4], bytes, len);
 
-	/* Send Byte-Program */
-	return spi_command(4 + len, 0, cmd, NULL);
+	result = spi_send_multicommand(spicommands);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution\n",
+			__func__);
+	}
+	return result;
 }
 
 int spi_disable_blockprotect(void)
@@ -688,14 +886,9 @@ int spi_disable_blockprotect(void)
 	/* If there is block protection in effect, unprotect it first. */
 	if ((status & 0x3c) != 0) {
 		printf_debug("Some block protection in effect, disabling\n");
-		result = spi_write_status_enable();
-		if (result) {
-			printf_debug("spi_write_status_enable failed\n");
-			return result;
-		}
 		result = spi_write_status_register(status & ~0x3c);
 		if (result) {
-			printf_debug("spi_write_status_register failed\n");
+			fprintf(stderr, "spi_write_status_register failed\n");
 			return result;
 		}
 	}
@@ -712,7 +905,7 @@ int spi_nbyte_read(int address, uint8_t *bytes, int len)
 	};
 
 	/* Send Read */
-	return spi_command(sizeof(cmd), len, cmd, bytes);
+	return spi_send_command(sizeof(cmd), len, cmd, bytes);
 }
 
 /*
@@ -756,26 +949,13 @@ int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, 
 
 int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
-	switch (spi_controller) {
-	case SPI_CONTROLLER_IT87XX:
-		return it8716f_spi_chip_read(flash, buf, start, len);
-	case SPI_CONTROLLER_SB600:
-		return sb600_spi_read(flash, buf, start, len);
-	case SPI_CONTROLLER_ICH7:
-	case SPI_CONTROLLER_ICH9:
-	case SPI_CONTROLLER_VIA:
-		return ich_spi_read(flash, buf, start, len);
-	case SPI_CONTROLLER_WBSIO:
-		return wbsio_spi_read(flash, buf, start, len);
-	case SPI_CONTROLLER_FT2232:
-		return ft2232_spi_read(flash, buf, start, len);
-	default:
-		printf_debug
-		    ("%s called, but no SPI chipset/strapping detected\n",
-		     __FUNCTION__);
+	if (!spi_programmer[spi_controller].read) {
+		fprintf(stderr, "%s called, but SPI read is unsupported on this"
+			" hardware. Please report a bug.\n", __func__);
+		return 1;
 	}
 
-	return 1;
+	return spi_programmer[spi_controller].read(flash, buf, start, len);
 }
 
 /*
@@ -790,8 +970,14 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 	int i;
 
 	spi_disable_blockprotect();
+	/* Erase first */
+	printf("Erasing flash before programming... ");
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
+	printf("done.\n");
 	for (i = 0; i < total_size; i++) {
-		spi_write_enable();
 		spi_byte_program(i, buf[i]);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 			programmer_delay(10);
@@ -806,26 +992,13 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
  */
 int spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
 {
-	switch (spi_controller) {
-	case SPI_CONTROLLER_IT87XX:
-		return it8716f_spi_chip_write_256(flash, buf);
-	case SPI_CONTROLLER_SB600:
-		return sb600_spi_write_1(flash, buf);
-	case SPI_CONTROLLER_ICH7:
-	case SPI_CONTROLLER_ICH9:
-	case SPI_CONTROLLER_VIA:
-		return ich_spi_write_256(flash, buf);
-	case SPI_CONTROLLER_WBSIO:
-		return wbsio_spi_write_1(flash, buf);
-	case SPI_CONTROLLER_FT2232:
-		return ft2232_spi_write_256(flash, buf);
-	default:
-		printf_debug
-		    ("%s called, but no SPI chipset/strapping detected\n",
-		     __FUNCTION__);
+	if (!spi_programmer[spi_controller].write_256) {
+		fprintf(stderr, "%s called, but SPI page write is unsupported "
+			" on this hardware. Please report a bug.\n", __func__);
+		return 1;
 	}
 
-	return 1;
+	return spi_programmer[spi_controller].write_256(flash, buf);
 }
 
 uint32_t spi_get_valid_read_addr(void)
@@ -855,13 +1028,13 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 	result = spi_write_enable();
 	if (result)
 		return result;
-	spi_command(6, 0, w, NULL);
+	spi_send_command(6, 0, w, NULL);
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(5); /* SST25VF040B Tbp is max 10us */
 	while (pos < size) {
 		w[1] = buf[pos++];
 		w[2] = buf[pos++];
-		spi_command(3, 0, w, NULL);
+		spi_send_command(3, 0, w, NULL);
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 			programmer_delay(5); /* SST25VF040B Tbp is max 10us */
 	}
