@@ -1,4 +1,423 @@
 ------------------------------------------------------------------------
+r736 | hailfinger | 2009-09-28 15:15:16 +0200 (Mon, 28 Sep 2009) | 11 lines
+
+This is the bitbanging SPI driver infrastructure.
+
+If you want support for a particular piece of hardware, just fill in
+a few functions in spi_bitbang_master_table. That's it.
+On top of this, the RayeR SPI flasher should be supportable in ~20 LOC.
+
+Tested, trace looks OK.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r735 | uwe | 2009-09-25 03:31:51 +0200 (Fri, 25 Sep 2009) | 6 lines
+
+Enable drkaiser programmer support in wiki output (trivial).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r734 | uwe | 2009-09-25 03:22:42 +0200 (Fri, 25 Sep 2009) | 21 lines
+
+Mark the following boards as OK:
+
+ - ASUS M3A78-EM (reported by Christian Heinz <christian.ch.heinz@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-September/000629.html
+ 
+ - MSI MS-7368 (K9AG Neo2-Digital) (reported by Joshua Roys <roysjosh@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-September/000632.html
+
+ - GIGABYTE GA-MA770T-UD3P (reported by Kevin Sopp <baraclese@googlemail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-September/000529.html
+   
+ - Elitegroup P6VAP-A+
+   Tested by Uwe Hermann <uwe@hermann-uwe.de> on hardware. Maximum supported
+   chip size in this board is 256 KB.
+   
+Small changes in print.c were required to adjust for longer board names.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r733 | uwe | 2009-09-25 03:09:18 +0200 (Fri, 25 Sep 2009) | 8 lines
+
+Mark the SST SST49LF003A/B as read-tested.
+
+See http://www.coreboot.org/pipermail/coreboot/2009-July/050675.html.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r732 | uwe | 2009-09-25 03:05:06 +0200 (Fri, 25 Sep 2009) | 8 lines
+
+Add chipset support for VIA VT82C596 by adding a PCI ID (trivial).
+
+This is successfully tested by me on the Elitegroup P6VAP-A+ board.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r731 | hailfinger | 2009-09-24 00:01:33 +0200 (Thu, 24 Sep 2009) | 13 lines
+
+Switch SST49LF004A/B to block erase, remove the hack which simulated
+(unsupported) chip erase.
+Annotate SST49LF004B quirks for TBL#.
+
+Add TEST_OK_PRW which is useful when a PREW chip gets a new erase
+routine.
+
+Change a few erase function prototypes to use unsigned int instead of
+int.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+------------------------------------------------------------------------
+r730 | hailfinger | 2009-09-23 23:58:34 +0200 (Wed, 23 Sep 2009) | 6 lines
+
+Change the status of the SST49LF020A to TEST_OK_PREW.
+I tested it on the Wyse Winterm S50 see attached test results.
+
+Signed-off-by: Nils Jacobs <njacobs8@hetnet.nl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r729 | hailfinger | 2009-09-23 04:09:23 +0200 (Wed, 23 Sep 2009) | 10 lines
+
+Enable flashrom on Wyse Winterm S50.
+
+On the Wyse Winterm S50 lspci doesn`t show the cs5536 hostbridge and so 
+flashrom doesn`t detect the cs5536.
+
+This patch is adding the cs5536 isa id [1022:2090] for chip detect.
+
+Signed-off-by: Nils Jacobs <njacobs8@hetnet.nl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r728 | hailfinger | 2009-09-23 04:05:12 +0200 (Wed, 23 Sep 2009) | 6 lines
+
+This enables flashing the Dell S1850 under Linux. 
+This code has been tested. 
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+------------------------------------------------------------------------
+r727 | hailfinger | 2009-09-18 17:50:56 +0200 (Fri, 18 Sep 2009) | 14 lines
+
+The current ICH SPI preop handling is a hack which spews lots of
+warnings, but still yields correct results.
+With the multicommand infrastructure I introduced in r645, it became
+possible to integrate ICH SPI preopcodes cleanly into the flashrom
+design.
+
+The new code checks for every opcode in a multicommand array if it is a
+preopcode. If yes, it checks if the next opcode is associated with that
+preopcode and in that case it simply runs the opcode because the correct
+preopcode will be run automatically before the opcode.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: FENG Yu Ning <fengyuning1984@gmail.com>
+
+------------------------------------------------------------------------
+r726 | uwe | 2009-09-18 15:38:14 +0200 (Fri, 18 Sep 2009) | 8 lines
+
+Fix copy-paste errors by s/CONFIG_PRINT_WIKI/PRINT_WIKI_SUPPORT/.
+
+Trivial, and build-tested.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r725 | hailfinger | 2009-09-16 14:19:03 +0200 (Wed, 16 Sep 2009) | 11 lines
+
+Compile out wiki output on request and move wiki stuff into a separate
+file.
+This is useful for libflashrom (you don't need wiki output in a coreboot
+payload).
+
+Wiki output is now disabled by default. If you want to enable it, run
+make CONFIG_PRINT_WIKI=yes
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r724 | hailfinger | 2009-09-16 12:09:21 +0200 (Wed, 16 Sep 2009) | 14 lines
+
+Allow to exclude each of the external programmer drivers from being
+compiled in.
+
+Example make commandline if you want only internal programmers:
+make CONFIG_FT2232SPI=no CONFIG_SERPROG=no CONFIG_NIC3COM=no
+CONFIG_SATASII=no CONFIG_DRKAISER=no CONFIG_DUMMY=no
+
+Of course, all of the CONFIG_* symbols can be mixed and matched as
+needed. CONFIG_FT2232SPI is special because even if it is enabled, make
+will check if the headers are available and skip it otherwise.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r723 | stepan | 2009-09-16 10:26:59 +0200 (Wed, 16 Sep 2009) | 7 lines
+
+This patch cleans up flashrom so that it passes LLVM/clang's scan-build
+without warnings.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Ronald G. Minnich <rminnich@gmail.com>
+
+
+------------------------------------------------------------------------
+r722 | stepan | 2009-09-16 10:18:08 +0200 (Wed, 16 Sep 2009) | 8 lines
+
+this patch fixes all 27 flashrom source code issues reported by
+LLVM/clang's scan-build (r79326, new build on the way).
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+
+This commit fixes only some of the issues, those that were
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r721 | uwe | 2009-09-09 02:58:19 +0200 (Wed, 09 Sep 2009) | 6 lines
+
+Mark Macronix MX29F001B as OK, tested by me on hardware.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r720 | uwe | 2009-09-09 02:55:13 +0200 (Wed, 09 Sep 2009) | 6 lines
+
+Replace pseudonym in drkaiser.c with real name.
+
+Signed-off-by: Joerg Fischer <turboj@gmx.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r719 | hailfinger | 2009-09-05 04:30:58 +0200 (Sat, 05 Sep 2009) | 66 lines
+
+This is a patch which stores eraseblock sizes and corresponding block
+erase functions in struct flashchip. I decided to fill in the info for a
+few chips to illustrate how this works both for uniform and non-uniform
+sector sizes.
+
+struct eraseblock{
+int size; /* Eraseblock size */
+int count; /* Number of contiguous blocks with that size */
+};
+
+struct eraseblock doesn't correspond with a single erase block, but with
+a group of contiguous erase blocks having the same size.
+Given a (top boot block) flash chip with the following weird, but
+real-life structure:
+
+top
+16384
+8192
+8192
+32768
+65536
+65536
+65536
+65536
+65536
+65536
+65536
+bottom
+
+we get the following encoding:
+{65536,7},{32768,1},{8192,2},{16384,1}
+
+Although the number of blocks is bigger than 4, the number of block
+groups is only 4. If you ever add some flash chips with more than 4
+contiguous block groups, the definition will not fit into the 4-member
+array anymore and gcc will recognize that and error out. No undetected
+overflow possible. In that case, you simply increase array size a bit.
+For modern flash chips with uniform erase block size, you only need one
+array member anyway.
+
+Of course data types will need to be changed if you ever get flash chips
+with more than 2^30 erase blocks, but even with the lowest known erase
+granularity of 256 bytes, these flash chips will have to have a size of
+a quarter Terabyte. I'm pretty confident we won't see such big EEPROMs
+in the near future (or at least not attached in a way that makes
+flashrom usable). For SPI chips, we even have a guaranteed safety factor
+of 4096 over the maximum SPI chip size (which is 2^24). And if such a
+big flash chip has uniform erase block size, you could even split it
+among the 4 array members. If you change int count to unsigned int
+count, the storable size doubles. So with a split and a slight change of
+data type, the maximum ROM chip size is 2 Terabytes.
+
+Since many chips have multiple block erase functions where the
+eraseblock layout depends on the block erase function, this patch
+couples the block erase functions with their eraseblock layouts.
+struct block_eraser {
+  struct eraseblock{
+    unsigned int size; /* Eraseblock size */
+    unsigned int count; /* Number of contiguous blocks with that size */
+  } eraseblocks[NUM_ERASEREGIONS];
+  int (*block_erase) (struct flashchip *flash, unsigned int blockaddr, unsigned int blocklen);
+} block_erasers[NUM_ERASEFUNCTIONS];
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r718 | hailfinger | 2009-09-05 03:31:32 +0200 (Sat, 05 Sep 2009) | 6 lines
+
+Update probe timings for dozens of flash chips.
+
+Signed-off-by: Udu Ogah <putlinuxonit@gmail.com>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r717 | hailfinger | 2009-09-05 03:16:30 +0200 (Sat, 05 Sep 2009) | 22 lines
+
+Quite a few probe functions in flashrom are copies of probe_jedec with
+additional lock bit printing or other glue. Make them call probe_jedec
+instead.
+
+Use the correct reset sequence for 82802AB. Detailed explanation:
+The reset sequence before ID reading was correct, so ID always
+worked. But the reset sequence after ID reading was a copy-paste
+leftover from probe_jedec and didn't have any effect. I dug up
+flash_and_burn from the freebios-v1 tree and found out that 82802ab.c
+was indeed a copy of jedec.c with lots of experimental unannotated #if 0
+and #if 1.
+About the wait_82802ab change:
+Before the patch, wait_82802ab entered read status mode, switched to ID
+mode, then tried an incorrect and unsupported JEDEC command to exit ID
+mode. Nobody ever saw that this failed because all subsequent function
+calls had the correct reset sequence at the beginning.
+With the patch, wait_82802ab enters read status mode, then switches back
+to read mode with the official reset command.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r716 | hailfinger | 2009-09-05 03:12:07 +0200 (Sat, 05 Sep 2009) | 6 lines
+
+Not all systems have svnversion installed. Fall back to svn info if
+svnversion fails.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r715 | hailfinger | 2009-09-05 03:10:23 +0200 (Sat, 05 Sep 2009) | 7 lines
+
+Fix strict aliasing in serprog.
+Initialize the sockaddr,sockaddr_in union directly instead of running
+memset later.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r714 | stepan | 2009-09-04 15:57:07 +0200 (Fri, 04 Sep 2009) | 6 lines
+
+fix for gcc 4.4 strict aliasing rules.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r713 | uwe | 2009-09-03 01:27:45 +0200 (Thu, 03 Sep 2009) | 6 lines
+
+Add drkaiser.c which was accidentally omitted in the last commit.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r712 | uwe | 2009-09-03 01:00:46 +0200 (Thu, 03 Sep 2009) | 13 lines
+
+Add support for parallel flash on Dr. Kaiser PC-Waechter PCI devices.
+
+The vendor sold different designs under that name, the patch works with
+the one that has an Actel FPGA as PCI-to-Flash bridge.
+
+The Flash chip is a "Macronix MX29F001B" (128 KB, parallel) soldered
+directly to the PCB.
+Flash operations (PROBE, READ, ERASE, WRITE) work as expected.
+
+Signed-off-by: TURBO J <turboj@gmx.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r711 | uwe | 2009-09-03 00:09:00 +0200 (Thu, 03 Sep 2009) | 14 lines
+
+Standardize on using __func__ instead of __FUNCTION__.
+
+The __func__ variant is standardized in C99 and recommended to be
+used instead of __FUNCTION__ in the gcc info page.
+
+Only _very_ old versions of gcc did not know about __func__, but we've
+been using both __func__ and __FUNCTION__ for a long while now, and
+nobody complained about this, so all our users seem to use recent
+enough compilers.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r709 | hailfinger | 2009-09-02 15:47:36 +0200 (Wed, 02 Sep 2009) | 9 lines
+
+flashrom 0.9.1
+
+Please refer to the release notes for a high-level overview of all the
+amazing changes and added features since 0.9.0.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r708 | hailfinger | 2009-09-02 15:43:56 +0200 (Wed, 02 Sep 2009) | 8 lines
+
+Don't abort if chipset init failed because the failing init may have
+been a warning only.
+Even a failing chipset init (maybe due to unknown chipset) could still
+get us reasonable probe results or at least forced reads.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r707 | hailfinger | 2009-09-02 02:24:26 +0200 (Wed, 02 Sep 2009) | 6 lines
+
+Move the Asus A7V600-X out of the unsupported list. This is a followup
+to r705.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+------------------------------------------------------------------------
 r706 | hailfinger | 2009-09-02 00:13:42 +0200 (Wed, 02 Sep 2009) | 5 lines
 
 Use correct name for SB700/SB710/SB750 instead of calling them SB700.

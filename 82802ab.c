@@ -33,13 +33,13 @@
 // I need that Berkeley bit-map printer
 void print_82802ab_status(uint8_t status)
 {
-	printf("%s", status & 0x80 ? "Ready:" : "Busy:");
-	printf("%s", status & 0x40 ? "BE SUSPEND:" : "BE RUN/FINISH:");
-	printf("%s", status & 0x20 ? "BE ERROR:" : "BE OK:");
-	printf("%s", status & 0x10 ? "PROG ERR:" : "PROG OK:");
-	printf("%s", status & 0x8 ? "VP ERR:" : "VPP OK:");
-	printf("%s", status & 0x4 ? "PROG SUSPEND:" : "PROG RUN/FINISH:");
-	printf("%s", status & 0x2 ? "WP|TBL#|WP#,ABORT:" : "UNLOCK:");
+	printf_debug("%s", status & 0x80 ? "Ready:" : "Busy:");
+	printf_debug("%s", status & 0x40 ? "BE SUSPEND:" : "BE RUN/FINISH:");
+	printf_debug("%s", status & 0x20 ? "BE ERROR:" : "BE OK:");
+	printf_debug("%s", status & 0x10 ? "PROG ERR:" : "PROG OK:");
+	printf_debug("%s", status & 0x8 ? "VP ERR:" : "VPP OK:");
+	printf_debug("%s", status & 0x4 ? "PROG SUSPEND:" : "PROG RUN/FINISH:");
+	printf_debug("%s", status & 0x2 ? "WP|TBL#|WP#,ABORT:" : "UNLOCK:");
 }
 
 int probe_82802ab(struct flashchip *flash)
@@ -47,14 +47,11 @@ int probe_82802ab(struct flashchip *flash)
 	chipaddr bios = flash->virtual_memory;
 	uint8_t id1, id2;
 
-#if 0
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0x90, bios + 0x5555);
-#endif
-
-	chip_writeb(0xff, bios);
+	/* Reset to get a clean state */
+	chip_writeb(0xFF, bios);
 	programmer_delay(10);
+
+	/* Enter ID mode */
 	chip_writeb(0x90, bios);
 	programmer_delay(10);
 
@@ -62,13 +59,11 @@ int probe_82802ab(struct flashchip *flash)
 	id2 = chip_readb(bios + 0x01);
 
 	/* Leave ID mode */
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0xF0, bios + 0x5555);
+	chip_writeb(0xFF, bios);
 
 	programmer_delay(10);
 
-	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __func__, id1, id2);
 
 	if (id1 != flash->manufacture_id || id2 != flash->model_id)
 		return 0;
@@ -81,7 +76,6 @@ int probe_82802ab(struct flashchip *flash)
 uint8_t wait_82802ab(chipaddr bios)
 {
 	uint8_t status;
-	uint8_t id1, id2;
 
 	chip_writeb(0x70, bios);
 	if ((chip_readb(bios) & 0x80) == 0) {	// it's busy
@@ -90,18 +84,8 @@ uint8_t wait_82802ab(chipaddr bios)
 
 	status = chip_readb(bios);
 
-	// put another command to get out of status register mode
-
-	chip_writeb(0x90, bios);
-	programmer_delay(10);
-
-	id1 = chip_readb(bios);
-	id2 = chip_readb(bios + 0x01);
-
-	// this is needed to jam it out of "read id" mode
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0xF0, bios + 0x5555);
+	/* Reset to get a clean state */
+	chip_writeb(0xFF, bios);
 
 	return status;
 }
@@ -114,20 +98,19 @@ int erase_82802ab_block(struct flashchip *flash, int offset)
 
 	// clear status register
 	chip_writeb(0x50, bios);
-	//printf("Erase at %p\n", bios);
+
 	// clear write protect
-	//printf("write protect is at %p\n", (wrprotect));
-	//printf("write protect is 0x%x\n", *(wrprotect));
 	chip_writeb(0, wrprotect);
-	//printf("write protect is 0x%x\n", *(wrprotect));
 
 	// now start it
 	chip_writeb(0x20, bios);
 	chip_writeb(0xd0, bios);
 	programmer_delay(10);
+
 	// now let's see what the register is
 	status = wait_82802ab(flash->virtual_memory);
-	//print_82802ab_status(status);
+	print_82802ab_status(status);
+
 	if (check_erased_range(flash, offset, flash->page_size)) {
 		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;

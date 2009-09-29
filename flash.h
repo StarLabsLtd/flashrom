@@ -82,9 +82,18 @@ typedef unsigned long chipaddr;
 
 enum programmer {
 	PROGRAMMER_INTERNAL,
+#if DUMMY_SUPPORT == 1
 	PROGRAMMER_DUMMY,
+#endif
+#if NIC3COM_SUPPORT == 1
 	PROGRAMMER_NIC3COM,
+#endif
+#if DRKAISER_SUPPORT == 1
+	PROGRAMMER_DRKAISER,
+#endif
+#if SATASII_SUPPORT == 1
 	PROGRAMMER_SATASII,
+#endif
 	PROGRAMMER_IT87SPI,
 #if FT2232_SPI_SUPPORT == 1
 	PROGRAMMER_FT2232SPI,
@@ -136,6 +145,21 @@ uint32_t chip_readl(const chipaddr addr);
 void chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void programmer_delay(int usecs);
 
+enum spi_bitbang_master {
+	SPI_BITBANG_INVALID /* This must always be the last entry. */
+};
+
+extern const int spi_bitbang_master_count;
+
+extern enum spi_bitbang_master spi_bitbang_master;
+
+struct spi_bitbang_master_entry {
+	void (*set_cs) (int val);
+	void (*set_sck) (int val);
+	void (*set_mosi) (int val);
+	int (*get_miso) (void);
+};
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 enum chipbustype {
@@ -147,6 +171,17 @@ enum chipbustype {
 	CHIP_BUSTYPE_NONSPI	= CHIP_BUSTYPE_PARALLEL | CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH,
 	CHIP_BUSTYPE_UNKNOWN	= CHIP_BUSTYPE_PARALLEL | CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI,
 };
+
+/*
+ * How many different contiguous runs of erase blocks with one size each do
+ * we have for a given erase function?
+ */
+#define NUM_ERASEREGIONS 5
+
+/*
+ * How many different erase functions do we have per chip?
+ */
+#define NUM_ERASEFUNCTIONS 5
 
 struct flashchip {
 	const char *vendor;
@@ -176,6 +211,19 @@ struct flashchip {
 	/* Delay after "enter/exit ID mode" commands in microseconds. */
 	int probe_timing;
 	int (*erase) (struct flashchip *flash);
+
+	/*
+	 * Erase blocks and associated erase function. The default entry is a
+	 * chip-sized virtual block together with the chip erase function.
+	 */
+	struct block_eraser {
+		struct eraseblock{
+			unsigned int size; /* Eraseblock size */
+			unsigned int count; /* Number of contiguous blocks with that size */
+		} eraseblocks[NUM_ERASEREGIONS];
+		int (*block_erase) (struct flashchip *flash, unsigned int blockaddr, unsigned int blocklen);
+	} block_erasers[NUM_ERASEFUNCTIONS];
+
 	int (*write) (struct flashchip *flash, uint8_t *buf);
 	int (*read) (struct flashchip *flash, uint8_t *buf, int start, int len);
 
@@ -192,6 +240,7 @@ struct flashchip {
 #define TEST_OK_WRITE	(1 << 3)
 #define TEST_OK_PR	(TEST_OK_PROBE | TEST_OK_READ)
 #define TEST_OK_PRE	(TEST_OK_PROBE | TEST_OK_READ | TEST_OK_ERASE)
+#define TEST_OK_PRW	(TEST_OK_PROBE | TEST_OK_READ | TEST_OK_WRITE)
 #define TEST_OK_PREW	(TEST_OK_PROBE | TEST_OK_READ | TEST_OK_ERASE | TEST_OK_WRITE)
 #define TEST_OK_MASK	0x0f
 
@@ -281,8 +330,8 @@ struct pcidev_status {
 	const char *vendor_name;
 	const char *device_name;
 };
-uint32_t pcidev_validate(struct pci_dev *dev, struct pcidev_status *devs);
-uint32_t pcidev_init(uint16_t vendor_id, struct pcidev_status *devs, char *pcidev_bdf);
+uint32_t pcidev_validate(struct pci_dev *dev, uint32_t bar, struct pcidev_status *devs);
+uint32_t pcidev_init(uint16_t vendor_id, uint32_t bar, struct pcidev_status *devs, char *pcidev_bdf);
 
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
@@ -350,10 +399,11 @@ uint8_t mmio_readb(void *addr);
 uint16_t mmio_readw(void *addr);
 uint32_t mmio_readl(void *addr);
 void internal_delay(int usecs);
-int fallback_shutdown(void);
+int noop_shutdown(void);
 void *fallback_map(const char *descr, unsigned long phys_addr, size_t len);
 void fallback_unmap(void *virt_addr, size_t len);
-void fallback_chip_writeb(uint8_t val, chipaddr addr);
+uint8_t noop_chip_readb(const chipaddr addr);
+void noop_chip_writeb(uint8_t val, chipaddr addr);
 void fallback_chip_writew(uint16_t val, chipaddr addr);
 void fallback_chip_writel(uint32_t val, chipaddr addr);
 void fallback_chip_writen(uint8_t *buf, chipaddr addr, size_t len);
@@ -387,6 +437,13 @@ void nic3com_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nic3com_chip_readb(const chipaddr addr);
 extern struct pcidev_status nics_3com[];
 
+/* drkaiser.c */
+int drkaiser_init(void);
+int drkaiser_shutdown(void);
+void drkaiser_chip_writeb(uint8_t val, chipaddr addr);
+uint8_t drkaiser_chip_readb(const chipaddr addr);
+extern struct pcidev_status drkaiser_pcidev[];
+
 /* satasii.c */
 int satasii_init(void);
 int satasii_shutdown(void);
@@ -402,6 +459,14 @@ int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt, const u
 int ft2232_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf);
 
+/* bitbang_spi.c */
+extern int bitbang_half_period;
+extern const struct spi_bitbang_master_entry spi_bitbang_master_table[];
+int bitbang_spi_init(void);
+int bitbang_spi_send_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int bitbang_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
+int bitbang_spi_write_256(struct flashchip *flash, uint8_t *buf);
+
 /* flashrom.c */
 extern char *programmer_param;
 extern int verbose;
@@ -409,6 +474,7 @@ extern const char *flashrom_version;
 #define printf_debug(x...) { if (verbose) printf(x); }
 void map_flash_registers(struct flashchip *flash);
 int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
+int erase_flash(struct flashchip *flash);
 int min(int a, int b);
 int max(int a, int b);
 int check_erased_range(struct flashchip *flash, int start, int len);
@@ -441,7 +507,9 @@ enum spi_controller {
 #if FT2232_SPI_SUPPORT == 1
 	SPI_CONTROLLER_FT2232,
 #endif
+#if DUMMY_SUPPORT == 1
 	SPI_CONTROLLER_DUMMY,
+#endif
 	SPI_CONTROLLER_INVALID /* This must always be the last entry. */
 };
 extern const int spi_programmer_count;
@@ -454,7 +522,7 @@ struct spi_command {
 struct spi_programmer {
 	int (*command)(unsigned int writecnt, unsigned int readcnt,
 		   const unsigned char *writearr, unsigned char *readarr);
-	int (*multicommand)(struct spi_command *spicommands);
+	int (*multicommand)(struct spi_command *cmds);
 
 	/* Optimized functions for this programmer */
 	int (*read)(struct flashchip *flash, uint8_t *buf, int start, int len);
@@ -470,7 +538,7 @@ int probe_spi_rems(struct flashchip *flash);
 int probe_spi_res(struct flashchip *flash);
 int spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr);
-int spi_send_multicommand(struct spi_command *spicommands);
+int spi_send_multicommand(struct spi_command *cmds);
 int spi_write_enable(void);
 int spi_write_disable(void);
 int spi_chip_erase_60(struct flashchip *flash);
@@ -495,7 +563,7 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf);
 uint32_t spi_get_valid_read_addr(void);
 int default_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 			     const unsigned char *writearr, unsigned char *readarr);
-int default_spi_send_multicommand(struct spi_command *spicommands);
+int default_spi_send_multicommand(struct spi_command *cmds);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -521,7 +589,7 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		    const unsigned char *writearr, unsigned char *readarr);
 int ich_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int ich_spi_write_256(struct flashchip *flash, uint8_t * buf);
-int ich_spi_send_multicommand(struct spi_command *spicommands);
+int ich_spi_send_multicommand(struct spi_command *cmds);
 
 /* it87spi.c */
 extern uint16_t it8716f_flashport;
@@ -552,8 +620,8 @@ int write_byte_program_jedec(chipaddr bios, uint8_t *src,
 int probe_jedec(struct flashchip *flash);
 int erase_chip_jedec(struct flashchip *flash);
 int write_jedec(struct flashchip *flash, uint8_t *buf);
-int erase_sector_jedec(struct flashchip *flash, unsigned int page, int pagesize);
-int erase_block_jedec(struct flashchip *flash, unsigned int page, int blocksize);
+int erase_sector_jedec(struct flashchip *flash, unsigned int page, unsigned int pagesize);
+int erase_block_jedec(struct flashchip *flash, unsigned int page, unsigned int blocksize);
 int write_sector_jedec(chipaddr bios, uint8_t *src,
 		       chipaddr dst, unsigned int page_size);
 
@@ -613,6 +681,7 @@ int write_49lfxxxc(struct flashchip *flash, uint8_t *buf);
 /* sst_fwhub.c */
 int probe_sst_fwhub(struct flashchip *flash);
 int erase_sst_fwhub(struct flashchip *flash);
+int erase_sst_fwhub_block(struct flashchip *flash, unsigned int offset, unsigned int page_size);
 int write_sst_fwhub(struct flashchip *flash, uint8_t *buf);
 
 /* w39v040c.c */

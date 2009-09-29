@@ -569,6 +569,17 @@ static int ich2_gpio22_raise(const char *name)
 }
 
 /**
+ * Suited for the Dell S1850. All parameters except the last one are documented
+ * in the public Intel 82801EB ICH5 / 82801ER ICH5R Datasheet. The last
+ * parameter (GPIO number) has to be in the range [16,31] according to said
+ * Intel Datasheet and was found by exhaustive search.
+ */
+static int ich5_gpio23_raise(const char *name)
+{
+	return ich_gpio_raise(name, 0x8086, 0x24d0, 0x58, 0x0c, 0xffc0, 23);
+}
+
+/**
  * Suited for MSI MS-7046.
  */
 static int ich6_gpio19_raise(const char *name)
@@ -992,6 +1003,7 @@ struct board_pciid_enable board_pciid_enables[] = {
 	{0x8086, 0x2570, 0x1043, 0x80F2,  0x105A, 0x3373, 0x1043, 0x80F5, NULL,         NULL,          "ASUS",        "P4P800-E Deluxe",    board_asus_p4p800},
 	{0x10B9, 0x1541,      0,      0,  0x10B9, 0x1533,      0,      0, "asus",       "p5a",         "ASUS",        "P5A",                board_asus_p5a},
 	{0x1106, 0x3149, 0x1565, 0x3206,  0x1106, 0x3344, 0x1565, 0x1202, NULL,         NULL,          "Biostar",     "P4M80-M4",           it8705_rom_write_enable},
+	{0x8086, 0x3590, 0x1028, 0x016c,  0x1000, 0x0030, 0x1028, 0x016c, NULL,         NULL,          "Dell",        "S1850",              ich5_gpio23_raise},
 	{0x1106, 0x3038, 0x1019, 0x0996,  0x1106, 0x3177, 0x1019, 0x0996, NULL,         NULL,          "Elitegroup",  "K7VTA3",             it8705f_write_enable_2e},
 	{0x1106, 0x3177, 0x1106, 0x3177,  0x1106, 0x3059, 0x1695, 0x3005, NULL,         NULL,          "EPoX",        "EP-8K5A2",           board_epox_ep_8k5a2},
 	{0x8086, 0x7110,      0,      0,  0x8086, 0x7190,      0,      0, "epox",       "ep-bx3",      "EPoX",        "EP-BX3",             board_epox_ep_bx3},
@@ -1052,6 +1064,7 @@ const struct board_info boards_ok[] = {
 	{ "ASUS",		"M2A-VM", },
 	{ "ASUS",		"M2N-E", },
 	{ "ASUS",		"M2V", },
+	{ "ASUS",		"M3A78-EM", },
 	{ "ASUS",		"P2B", },
 	{ "ASUS",		"P2B-D", },
 	{ "ASUS",		"P2B-DS", },
@@ -1063,6 +1076,7 @@ const struct board_info boards_ok[] = {
 	{ "ASUS",		"P6T Deluxe V2", },
 	{ "A-Trend",		"ATC-6220", },
 	{ "BCOM",		"WinNET100", },
+	{ "Elitegroup",		"P6VAP-A+", },
 	{ "GIGABYTE",		"GA-6BXC", },
 	{ "GIGABYTE",		"GA-6BXDU", },
 	{ "GIGABYTE",		"GA-6ZMA", },
@@ -1071,6 +1085,7 @@ const struct board_info boards_ok[] = {
 	{ "GIGABYTE",		"GA-EX58-UD4P", },
 	{ "GIGABYTE",		"GA-MA78GPM-DS2H", },
 	{ "GIGABYTE",		"GA-MA790GP-DS4H", },
+	{ "GIGABYTE",		"GA-MA770T-UD3P", },
 	{ "Intel",		"EP80759", },
 	{ "Jetway",		"J7F4K1G5D-PB", },
 	{ "MSI",		"MS-6570 (K7N2)", },
@@ -1079,6 +1094,7 @@ const struct board_info boards_ok[] = {
 	{ "MSI",		"MS-7236 (945PL Neo3)", },
 	{ "MSI",		"MS-7255 (P4M890M)", },
 	{ "MSI",		"MS-7345 (P35 Neo2-FIR)", },
+	{ "MSI",		"MS-7368 (K9AG Neo2-Digital)", },
 	{ "NEC",		"PowerMate 2000", },
 	{ "PC Engines",		"Alix.1c", },
 	{ "PC Engines",		"Alix.2c2", },
@@ -1127,7 +1143,6 @@ const struct board_info boards_bad[] = {
 	/* Verified non-working boards (for now). */
 	{ "Abit",		"IS-10", },
 	{ "ASRock",		"K7VT4A+", },
-	{ "ASUS",		"A7V600-X", },
 	{ "ASUS",		"MEW-AM", },
 	{ "ASUS",		"MEW-VM", },
 	{ "ASUS",		"P3B-F", },
