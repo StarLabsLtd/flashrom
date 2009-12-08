@@ -41,7 +41,7 @@ CFLAGS += -I/usr/local/include
 LDFLAGS += -L/usr/local/lib
 endif
 
-LIBS += -lpci -lz
+LIBS += -lpci
 
 OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
 	sst28sf040.o am29f040b.o mx29f002.o m29f400bt.o pm29f002.o \
@@ -57,7 +57,7 @@ all: pciutils features dep $(PROGRAM)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 736
+SVNVERSION := 792
 
 RELEASE := 0.9.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
@@ -74,6 +74,9 @@ CONFIG_BITBANG_SPI ?= no
 # Always enable 3Com NICs for now.
 CONFIG_NIC3COM ?= yes
 
+# Disable NVIDIA graphics cards for now, write/erase don't work properly.
+CONFIG_GFXNVIDIA ?= no
+
 # Always enable SiI SATA controllers for now.
 CONFIG_SATASII ?= yes
 
@@ -86,7 +89,10 @@ CONFIG_DUMMY ?= yes
 # Always enable Dr. Kaiser for now.
 CONFIG_DRKAISER ?= yes
 
-# Always enable wiki printing for now.
+# Always enable Bus Pirate SPI for now.
+CONFIG_BUSPIRATESPI ?= yes
+
+# Disable wiki printing by default. It is only useful if you have wiki access.
 CONFIG_PRINT_WIKI ?= no
 
 ifeq ($(CONFIG_SERPROG), yes)
@@ -107,15 +113,21 @@ FEATURE_CFLAGS += -D'NIC3COM_SUPPORT=1'
 OBJS += nic3com.o
 endif
 
+ifeq ($(CONFIG_GFXNVIDIA), yes)
+FEATURE_CFLAGS += -D'GFXNVIDIA_SUPPORT=1'
+OBJS += gfxnvidia.o
+endif
+
 ifeq ($(CONFIG_SATASII), yes)
 FEATURE_CFLAGS += -D'SATASII_SUPPORT=1'
 OBJS += satasii.o
 endif
 
+FTDILIBS := $(shell pkg-config --libs libftdi 2>/dev/null || printf "%s" "-lftdi -lusb")
 ifeq ($(CONFIG_FT2232SPI), yes)
 # This is a totally ugly hack.
 FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
-FEATURE_LIBS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-lftdi")
+FEATURE_LIBS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "$(FTDILIBS)")
 OBJS += ft2232_spi.o
 endif
 
@@ -129,13 +141,30 @@ FEATURE_CFLAGS += -D'DRKAISER_SUPPORT=1'
 OBJS += drkaiser.o
 endif
 
+ifeq ($(CONFIG_BUSPIRATESPI), yes)
+FEATURE_CFLAGS += -D'BUSPIRATE_SPI_SUPPORT=1'
+OBJS += buspirate_spi.o
+endif
+
+# Ugly, but there's no elif/elseif.
+ifeq ($(CONFIG_SERPROG), yes)
+OBJS += serial.o
+else
+ifeq ($(CONFIG_BUSPIRATESPI), yes)
+OBJS += serial.o
+endif
+endif
+
 ifeq ($(CONFIG_PRINT_WIKI), yes)
 FEATURE_CFLAGS += -D'PRINT_WIKI_SUPPORT=1'
 OBJS += print_wiki.o
 endif
 
+# We could use PULLED_IN_LIBS, but that would be ugly.
+FEATURE_LIBS += $(shell LC_ALL=C grep -q "NEEDLIBZ := yes" .libdeps && printf "%s" "-lz")
+
 $(PROGRAM): $(OBJS)
-	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(LIBS) $(FEATURE_LIBS)
+	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(FEATURE_LIBS) $(LIBS)
 
 # TAROPTIONS reduces information leakage from the packager's system.
 # If other tar programs support command line arguments for setting uid/gid of
@@ -149,7 +178,7 @@ clean:
 	rm -f $(PROGRAM) *.o
 
 distclean: clean
-	rm -f .dependencies .features
+	rm -f .dependencies .features .libdeps
 
 dep:
 	@$(CC) $(CPPFLAGS) $(SVNDEF) -MM *.c > .dependencies
@@ -167,17 +196,36 @@ compiler:
 	@rm -f .test.c .test
 
 pciutils: compiler
-	@printf "Checking for pciutils and zlib... "
+	@printf "Checking for libpci headers... "
 	@$(shell ( echo "#include <pci/pci.h>";		   \
 		   echo "struct pci_access *pacc;";	   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .test.c -o .test $(LIBS) >/dev/null 2>&1 &&	\
-		echo "found." || ( echo "not found."; echo;		\
-		echo "Please install pciutils-devel and zlib-devel.";	\
-		echo "See README for more information."; echo;		\
-		rm -f .test.c .test; exit 1)
-	@rm -f .test.c .test
+	@$(CC) -c $(CFLAGS) .test.c -o .test.o >/dev/null 2>&1 &&		\
+		echo "found." || ( echo "not found."; echo;			\
+		echo "Please install libpci headers (package pciutils-devel).";	\
+		echo "See README for more information."; echo;			\
+		rm -f .test.c .test.o; exit 1)
+	@printf "Checking for libpci... "
+	@$(shell ( echo "#include <pci/pci.h>";		   \
+		   echo "int main(int argc, char **argv)"; \
+		   echo "{ return 0; }"; ) > .test1.c )
+	@$(CC) $(CFLAGS) $(LDFLAGS) .test1.c -o .test1 $(LIBS) >/dev/null 2>&1 &&	\
+		echo "found." || ( echo "not found."; echo;				\
+		echo "Please install libpci (package pciutils).";			\
+		echo "See README for more information."; echo;				\
+		rm -f .test1.c .test1; exit 1)
+	@printf "Checking if libpci is sufficient... "
+	@printf "" > .libdeps
+	@$(CC) $(LDFLAGS) .test.o -o .test $(LIBS) >/dev/null 2>&1 &&				\
+		echo "yes." || ( echo "no.";							\
+		printf "Checking if libz is present and supplies all needed symbols...";	\
+		$(CC) $(LDFLAGS) .test.o -o .test $(LIBS) -lz >/dev/null 2>&1 &&		\
+		( echo "yes."; echo "NEEDLIBZ := yes" > .libdeps ) || ( echo "no."; echo;	\
+		echo "Please install libz.";			\
+		echo "See README for more information."; echo;				\
+		rm -f .test.c .test.o .test; exit 1) )
+	@rm -f .test.c .test.o .test .test1.c .test1
 
 .features: features
 
@@ -188,7 +236,7 @@ features: compiler
 		   echo "struct ftdi_context *ftdic = NULL;";	   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ return ftdi_init(ftdic); }"; ) > .featuretest.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest $(LIBS) -lftdi >/dev/null 2>&1 &&	\
+	@$(CC) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest $(FTDILIBS) $(LIBS) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "FTDISUPPORT := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp )
 	@$(DIFF) -q .features.tmp .features >/dev/null 2>&1 && rm .features.tmp || mv .features.tmp .features

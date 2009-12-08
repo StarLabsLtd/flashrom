@@ -1,3 +1,10 @@
+flashrom (0.9.1+r792-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/control, debian/copyright: Update upstream website to flashrom.org.
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 08 Dec 2009 10:13:35 +0100
+
 flashrom (0.9.1+r736-1) unstable; urgency=low
 
   * New upstream release.

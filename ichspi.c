@@ -658,20 +658,16 @@ int ich_spi_write_256(struct flashchip *flash, uint8_t * buf)
 	int maxdata = 64;
 
 	spi_disable_blockprotect();
+	/* Erase first */
+	printf("Erasing flash before programming... ");
+	if (erase_flash(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
+	printf("done.\n");
 
 	printf("Programming page: \n");
-
 	for (i = 0; i < total_size / erase_size; i++) {
-		/* FIMXE: call the chip-specific spi_block_erase_XX instead.
-		 * For this, we need to add a block erase function to
-		 * struct flashchip.
-		 */
-		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
-		if (rc) {
-			printf("Error erasing block at 0x%x\n", i);
-			break;
-		}
-
 		if (spi_controller == SPI_CONTROLLER_VIA)
 			maxdata = 16;
 
@@ -756,11 +752,8 @@ int ich_spi_send_multicommand(struct spi_command *cmds)
 			 * opcode of the next command?
 			 */
 			if ((oppos != -1) && (preoppos != -1) &&
-			    (curopcodes->opcode[oppos].atomic - 1 == preoppos)) {
-				printf_debug("opcode 0x%02x will be run as PREOP\n",
-					     cmds->writearr[0]);
+			    ((curopcodes->opcode[oppos].atomic - 1) == preoppos))
 				continue;
-			}
 		}	
 			
 		ret = ich_spi_send_command(cmds->writecnt, cmds->readcnt,

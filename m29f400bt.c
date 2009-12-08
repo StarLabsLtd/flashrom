@@ -20,14 +20,11 @@
 
 #include "flash.h"
 
-void protect_m29f400bt(chipaddr bios)
-{
-	chip_writeb(0xAA, bios + 0xAAA);
-	chip_writeb(0x55, bios + 0x555);
-	chip_writeb(0xA0, bios + 0xAAA);
-
-	programmer_delay(200);
-}
+/* WARNING! 
+   This chip uses the standard JEDEC Addresses in 16-bit mode as word
+   addresses. In byte mode, 0xAAA has to be used instead of 0x555 and
+   0x555 instead of 0x2AA. Do *not* blindly replace with standard JEDEC
+   functions. */
 
 void write_page_m29f400bt(chipaddr bios, uint8_t *src,
 			  chipaddr dst, int page_size)
@@ -194,7 +191,6 @@ int write_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	write_page_m29f400bt(bios, buf + 0x7c000, bios + 0x7c000, 16 * 1024);
 
 	printf("\n");
-	//protect_m29f400bt (bios);
 
 	return 0;
 }
@@ -248,7 +244,6 @@ int write_coreboot_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	write_page_m29f400bt(bios, buf + 0x30000, bios + 0x30000, 64 * 1024);
 
 	printf("\n");
-	//protect_m29f400bt (bios);
 
 	return 0;
 }

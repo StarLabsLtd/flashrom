@@ -88,6 +88,9 @@ enum programmer {
 #if NIC3COM_SUPPORT == 1
 	PROGRAMMER_NIC3COM,
 #endif
+#if GFXNVIDIA_SUPPORT == 1
+	PROGRAMMER_GFXNVIDIA,
+#endif
 #if DRKAISER_SUPPORT == 1
 	PROGRAMMER_DRKAISER,
 #endif
@@ -100,6 +103,9 @@ enum programmer {
 #endif
 #if SERPROG_SUPPORT == 1
 	PROGRAMMER_SERPROG,
+#endif
+#if BUSPIRATE_SPI_SUPPORT == 1
+	PROGRAMMER_BUSPIRATESPI,
 #endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
 };
@@ -145,15 +151,15 @@ uint32_t chip_readl(const chipaddr addr);
 void chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void programmer_delay(int usecs);
 
-enum spi_bitbang_master {
-	SPI_BITBANG_INVALID /* This must always be the last entry. */
+enum bitbang_spi_master {
+	BITBANG_SPI_INVALID /* This must always be the last entry. */
 };
 
-extern const int spi_bitbang_master_count;
+extern const int bitbang_spi_master_count;
 
-extern enum spi_bitbang_master spi_bitbang_master;
+extern enum bitbang_spi_master bitbang_spi_master;
 
-struct spi_bitbang_master_entry {
+struct bitbang_spi_master_entry {
 	void (*set_cs) (int val);
 	void (*set_sck) (int val);
 	void (*set_mosi) (int val);
@@ -335,11 +341,9 @@ uint32_t pcidev_init(uint16_t vendor_id, uint32_t bar, struct pcidev_status *dev
 
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
-void print_supported_chips(void);
-void print_supported_chipsets(void);
-void print_supported_boards(void);
+void print_supported(void);
 void print_supported_pcidevs(struct pcidev_status *devs);
-void print_wiki_tables(void);
+void print_supported_wiki(void);
 
 /* board_enable.c */
 void w836xx_ext_enter(uint16_t port);
@@ -349,9 +353,17 @@ void sio_write(uint16_t port, uint8_t reg, uint8_t data);
 void sio_mask(uint16_t port, uint8_t reg, uint8_t data, uint8_t mask);
 int board_flash_enable(const char *vendor, const char *part);
 
+struct decode_sizes {
+	uint32_t parallel;
+	uint32_t lpc;
+	uint32_t fwh;
+	uint32_t spi;
+};
+
 /* chipset_enable.c */
 extern enum chipbustype buses_supported;
 int chipset_flash_enable(void);
+extern struct decode_sizes max_rom_decode;
 
 extern unsigned long flashbase;
 
@@ -378,6 +390,7 @@ int freebsd_wrmsr(int addr, msr_t msr);
 
 /* internal.c */
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
+struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t class);
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
@@ -437,6 +450,13 @@ void nic3com_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nic3com_chip_readb(const chipaddr addr);
 extern struct pcidev_status nics_3com[];
 
+/* gfxnvidia.c */
+int gfxnvidia_init(void);
+int gfxnvidia_shutdown(void);
+void gfxnvidia_chip_writeb(uint8_t val, chipaddr addr);
+uint8_t gfxnvidia_chip_readb(const chipaddr addr);
+extern struct pcidev_status gfx_nvidia[];
+
 /* drkaiser.c */
 int drkaiser_init(void);
 int drkaiser_shutdown(void);
@@ -460,12 +480,22 @@ int ft2232_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf);
 
 /* bitbang_spi.c */
-extern int bitbang_half_period;
-extern const struct spi_bitbang_master_entry spi_bitbang_master_table[];
+extern int bitbang_spi_half_period;
+extern const struct bitbang_spi_master_entry bitbang_spi_master_table[];
 int bitbang_spi_init(void);
 int bitbang_spi_send_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int bitbang_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int bitbang_spi_write_256(struct flashchip *flash, uint8_t *buf);
+
+/* buspirate_spi.c */
+struct buspirate_spispeeds {
+	const char *name;
+	const int speed;
+};
+int buspirate_spi_init(void);
+int buspirate_spi_shutdown(void);
+int buspirate_spi_send_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int buspirate_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 
 /* flashrom.c */
 extern char *programmer_param;
@@ -477,6 +507,7 @@ int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
 int erase_flash(struct flashchip *flash);
 int min(int a, int b);
 int max(int a, int b);
+char *extract_param(char **haystack, char *needle, char *delim);
 int check_erased_range(struct flashchip *flash, int start, int len);
 int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message);
 char *strcat_realloc(char *dest, const char *src);
@@ -509,6 +540,9 @@ enum spi_controller {
 #endif
 #if DUMMY_SUPPORT == 1
 	SPI_CONTROLLER_DUMMY,
+#endif
+#if BUSPIRATE_SPI_SUPPORT == 1
+	SPI_CONTROLLER_BUSPIRATE,
 #endif
 	SPI_CONTROLLER_INVALID /* This must always be the last entry. */
 };
@@ -613,13 +647,13 @@ extern uint8_t *sb600_spibar;
 uint8_t oddparity(uint8_t val);
 void toggle_ready_jedec(chipaddr dst);
 void data_polling_jedec(chipaddr dst, uint8_t data);
-void unprotect_jedec(chipaddr bios);
-void protect_jedec(chipaddr bios);
+void start_program_jedec(chipaddr bios);
 int write_byte_program_jedec(chipaddr bios, uint8_t *src,
 			     chipaddr dst);
 int probe_jedec(struct flashchip *flash);
 int erase_chip_jedec(struct flashchip *flash);
 int write_jedec(struct flashchip *flash, uint8_t *buf);
+int write_jedec_1(struct flashchip *flash, uint8_t *buf);
 int erase_sector_jedec(struct flashchip *flash, unsigned int page, unsigned int pagesize);
 int erase_block_jedec(struct flashchip *flash, unsigned int page, unsigned int blocksize);
 int write_sector_jedec(chipaddr bios, uint8_t *src,
@@ -719,5 +753,11 @@ void serprog_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t serprog_chip_readb(const chipaddr addr);
 void serprog_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void serprog_delay(int delay);
+
+/* serial.c */
+void sp_flush_incoming(void);
+int sp_openserport(char *dev, unsigned int baud);
+void __attribute__((noreturn)) sp_die(char *msg);
+extern int sp_fd;
 
 #endif				/* !__FLASH_H__ */

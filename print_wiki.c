@@ -104,6 +104,7 @@ const struct board_info_url boards_url[] = {
 	{ "Advantech",		"PCM-5820", 		"http://www.emacinc.com/sbc_pc_compatible/pcm_5820.htm" },
 	{ "ASI",		"MB-5BLMP",		"http://www.hojerteknik.com/winnet.htm" },
 	{ "ASRock",		"A770CrossFire",	"http://www.asrock.com/mb/overview.asp?Model=A770CrossFire&s=AM2\%2b" },
+	{ "ASRock",		"K8S8X",		"http://www.asrock.com/mb/overview.asp?Model=K8S8X" },
 	{ "ASUS",		"A7N8X Deluxe",		"http://www.asus.com/Product.aspx?P_ID=wAsRYm41KTp78MFC" },
 	{ "ASUS",		"A7N8X-E Deluxe",	"http://www.asus.com/products.aspx?l1=3&l2=13&l3=56&l4=0&model=217&modelmenu=1" },
 	{ "ASUS",		"A7V400-MX",		"http://www.asus.com.tw/products.aspx?l1=3&l2=13&l3=63&l4=0&model=228&modelmenu=1" },
@@ -115,6 +116,9 @@ const struct board_info_url boards_url[] = {
 	{ "ASUS",		"A8V Deluxe",		"http://www.asus.com/product.aspx?P_ID=tvpdgPNCPaABZRVU" },
 	{ "ASUS",		"A8V-E Deluxe",		"http://www.asus.com.tw/products.aspx?l1=3&l2=15&l3=143&l4=0&model=376&modelmenu=1" },
 	{ "ASUS",		"A8V-E SE",		"http://www.asus.com.tw/products.aspx?l1=3&l2=15&l3=143&l4=0&model=576&modelmenu=1" },
+	{ "ASUS",		"K8V",			"http://www.asus.com/product.aspx?P_ID=fG2KZOWF7v6MRFRm" },
+	{ "ASUS",		"K8V SE Deluxe",	"http://www.asus.com/product.aspx?P_ID=65HeDI8XM1u6Uy6o" },
+	{ "ASUS",		"K8V-X SE",		"http://asus.com/product.aspx?P_ID=lzDXlbBVHkdckHVr" },
 	{ "ASUS",		"M2A-MX",		"http://www.asus.com/products.aspx?l1=3&l2=101&l3=583&l4=0&model=1909&modelmenu=1" },
 	{ "ASUS",		"M2A-VM",		"http://www.asus.com.tw/products.aspx?l1=3&l2=101&l3=496&l4=0&model=1568&modelmenu=1" },
 	{ "ASUS",		"M2N-E",		"http://www.asus.com/products.aspx?l1=3&l2=101&l3=308&l4=0&model=1181&modelmenu=1" },
@@ -131,6 +135,8 @@ const struct board_info_url boards_url[] = {
 	{ "ASUS",		"P6T Deluxe V2",	"http://www.asus.com/product.aspx?P_ID=iRlP8RG9han6saZx" },
 	{ "A-Trend",		"ATC-6220",		"http://www.motherboard.cz/mb/atrend/atc6220.htm" },
 	{ "BCOM",		"WinNET100",		"http://www.coreboot.org/BCOM_WINNET100" },
+	{ "DFI",		"Blood-Iron P35 T2RL",	"http://lp.lanparty.com.tw/portal/CM/cmproduct/XX_cmproddetail/XX_WbProdsWindow?itemId=516&downloadFlag=false&action=1" },
+	{ "Elitegroup",		"K7S5A",		"http://www.ecs.com.tw/ECSWebSite/Products/ProductsDetail.aspx?detailid=279&CategoryID=1&DetailName=Specification&MenuID=1&LanID=0" },
 	{ "Elitegroup",		"P6VAP-A+",		"http://www.ecs.com.tw/ECSWebSite/Products/ProductsDetail.aspx?detailid=117&CategoryID=1&DetailName=Specification&MenuID=1&LanID=0" },
 	{ "GIGABYTE",		"GA-6BXC",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ClassValue=Motherboard&ProductID=1445&ProductName=GA-6BXC" },
 	{ "GIGABYTE",		"GA-6BXDU",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=1429" },
@@ -142,6 +148,8 @@ const struct board_info_url boards_url[] = {
 	{ "GIGABYTE",		"GA-MA770T-UD3P",	"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=3096" },
 	{ "Intel",		"EP80759",		NULL },
 	{ "Jetway",		"J7F4K1G5D-PB",		"http://www.jetway.com.tw/jetway/system/productshow2.asp?id=389&proname=J7F4K1G5D-P" },
+	{ "MSI",		"MS-6153",		"http://www.msi.com/index.php?func=proddesc&maincat_no=1&cat2_no=&cat3_no=&prod_no=336" },
+	{ "MSI",		"MS-6156",		"http://uk.ts.fujitsu.com/rl/servicesupport/techsupport/boards/Motherboards/MicroStar/Ms6156/MS6156.htm" },
 	{ "MSI",		"MS-6570 (K7N2)",	"http://www.msi-computer.de/index.php?func=proddesc&prod_no=519&maincat_no=1" },
 	{ "MSI",		"MS-7065",		"http://browse.geekbench.ca/geekbench2/view/53114" },
 	{ "MSI",		"MS-7168 (Orion)",	"http://support.packardbell.co.uk/uk/item/index.php?i=spec_orion&pi=platform_honeymoon_istart" },
@@ -190,6 +198,7 @@ const struct board_info_url boards_url[] = {
 	{ "VIA",		"VB700X",		"http://www.via.com.tw/en/products/mainboards/motherboards.jsp?motherboard_id=490" },
 
 	/* Verified working boards that DO need write-enables. */
+	{ "Abit",		"IP35",			"http://www.abit.com.tw/page/en/motherboard/motherboard_detail.php?fMTYPE=LGA775&pMODEL_NAME=IP35" },
 	{ "Acorp",		"6A815EPD",		"http://web.archive.org/web/20021206163652/www.acorp.com.tw/English/default.asp" },
 	{ "agami",		"Aruma",		"http://web.archive.org/web/20080212111524/http://www.agami.com/site/ais-6000-series" },
 	{ "Albatron",		"PM266A Pro",		"http://www.albatron.com.tw/English/Product/MB/pro_detail.asp?rlink=Overview&no=56" }, /* FIXME */
@@ -197,13 +206,17 @@ const struct board_info_url boards_url[] = {
 	{ "Artec Group",	"DBE61",		"http://wiki.thincan.org/DBE61" },
 	{ "Artec Group",	"DBE62",		"http://wiki.thincan.org/DBE62" },
 	{ "ASUS",		"A7V600-X",		"http://www.asus.com/product.aspx?P_ID=L2XYS0rmtCjeOr4k" },
+	{ "ASUS",		"A7V8X",		"http://www.asus.com/product.aspx?P_ID=qfpaGrAy2kLVo0f2" },
 	{ "ASUS",		"A7V8X-MX SE",		"http://www.asus.com/product.aspx?P_ID=1guVBT1qV5oqhHyZ" },
 	{ "ASUS",		"P4B266",		"http://www.ciao.co.uk/ASUS_Intel_845D_Chipset_P4B266__5409807#productdetail" },
 	{ "ASUS",		"P4P800-E Deluxe",	"http://www.asus.com/product.aspx?P_ID=INIJUvLlif7LHp3g" },
+	{ "ASUS",		"P5ND2-SLI Deluxe",	"http://www.asus.com/product.aspx?P_ID=WY7XroDuUImVbgp5" },
 	{ "ASUS",		"P5A",			"ftp://ftp.asus.com.tw/pub/ASUS/mb/sock7/ali/p5a/" },
 	{ "Biostar",		"P4M80-M4",		"http://www.biostar-usa.com/mbdetails.asp?model=p4m80-m4" },
+	{ "Dell",		"PowerEdge 1850",	"http://support.dell.com/support/edocs/systems/pe1850/en/index.htm" },
 	{ "Elitegroup",		"K7VTA3",		"http://www.ecs.com.tw/ECSWebSite/Products/ProductsDetail.aspx?detailid=264&CategoryID=1&DetailName=Specification&MenuID=52&LanID=0" },
 	{ "EPoX",		"EP-8K5A2",		"http://www.epox.com/product.asp?ID=EP-8K5A2" },
+	{ "EPoX",		"EP-8RDA3+",		"http://www.epox.com/product.asp?ID=EP-8RDA3plus" },
 	{ "EPoX",		"EP-BX3",		"http://www.epox.com/product.asp?ID=EP-BX3" },
 	{ "GIGABYTE",		"GA-2761GXDK",		"http://www.computerbase.de/news/hardware/mainboards/amd-systeme/2007/mai/gigabyte_dtx-mainboard/" },
 	{ "GIGABYTE",		"GA-7VT600",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=1666" },
@@ -272,10 +285,12 @@ const struct board_info_url boards_url[] = {
 const struct board_info_notes boards_notes[] = {
 	/* Verified working boards that don't need write-enables. */
 	{ "ASI",		"MB-5BLMP",		"Used in the IGEL WinNET III thin client." },
+	{ "ASRock",		"K8S8X",		"The Super I/O isn't found on this board. See http://www.flashrom.org/pipermail/flashrom/2009-November/000937.html." },
 	{ "ASUS",		"A8V-E SE",		"See http://www.coreboot.org/pipermail/coreboot/2007-October/026496.html." },
 	{ "ASUS",		"M2A-VM",		"See http://www.coreboot.org/pipermail/coreboot/2007-September/025281.html." },
 	{ "BCOM",		"WinNET100",		"Used in the IGEL-316 thin client." },
-	{ "GIGABYTE",		"GA-7ZM",		"Works fine iff you remove jumper JP9 on the board and disable the flash protection BIOS option." },
+	{ "GIGABYTE",		"GA-7ZM",		"Works fine if you remove jumper JP9 on the board and disable the flash protection BIOS option." },
+	{ "ASUS",		"M2N-E",		"If the machine doesn't come up again after flashing, try resetting the NVRAM(CMOS). The MAC address of the onboard network card will change to the value stored in the new image, so backup the old address first. See http://www.flashrom.org/pipermail/flashrom/2009-November/000879.html" },
 
 	/* Verified working boards that DO need write-enables. */
 	{ "Acer",		"Aspire One",		"See http://www.coreboot.org/pipermail/coreboot/2009-May/048041.html." },
@@ -528,7 +543,7 @@ void print_supported_pcidevs_wiki(struct pcidev_status *devs)
 	}
 }
 
-void print_wiki_tables(void)
+void print_supported_wiki(void)
 {
 	time_t t = time(NULL);
 
@@ -539,6 +554,9 @@ void print_wiki_tables(void)
 	printf("%s", programmer_section);
 #if NIC3COM_SUPPORT == 1
 	print_supported_pcidevs_wiki(nics_3com);
+#endif
+#if GFXNVIDIA_SUPPORT == 1
+	print_supported_pcidevs_wiki(gfx_nvidia);
 #endif
 #if DRKAISER_SUPPORT == 1
 	print_supported_pcidevs_wiki(drkaiser_pcidev);

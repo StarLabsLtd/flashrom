@@ -92,6 +92,25 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if GFXNVIDIA_SUPPORT == 1
+	{
+		.name			= "gfxnvidia",
+		.init			= gfxnvidia_init,
+		.shutdown		= gfxnvidia_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= gfxnvidia_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= gfxnvidia_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+#endif
+
 #if DRKAISER_SUPPORT == 1
 	{
 		.name			= "drkaiser",
@@ -182,6 +201,25 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writel		= fallback_chip_writel,
 		.chip_writen		= fallback_chip_writen,
 		.delay			= serprog_delay,
+	},
+#endif
+
+#if BUSPIRATE_SPI_SUPPORT == 1
+	{
+		.name			= "buspiratespi",
+		.init			= buspirate_spi_init,
+		.shutdown		= buspirate_spi_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= noop_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= noop_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
 	},
 #endif
 
@@ -280,6 +318,15 @@ int max(int a, int b)
 	return (a > b) ? a : b;
 }
 
+int bitcount(unsigned long a)
+{
+	int i = 0;
+	for (; a != 0; a >>= 1)
+		if (a & 1)
+			i++;
+	return i;
+}
+
 char *strcat_realloc(char *dest, const char *src)
 {
 	dest = realloc(dest, strlen(dest) + strlen(src) + 1);
@@ -287,6 +334,60 @@ char *strcat_realloc(char *dest, const char *src)
 		return NULL;
 	strcat(dest, src);
 	return dest;
+}
+
+/* This is a somewhat hacked function similar in some ways to strtok().
+ * It will look for needle in haystack, return a copy of needle and remove
+ * everything from the first occurrence of needle to the next delimiter
+ * from haystack.
+ */
+char *extract_param(char **haystack, char *needle, char *delim)
+{
+	char *param_pos, *rest, *tmp;
+	char *dev = NULL;
+	int devlen;
+
+	param_pos = strstr(*haystack, needle);
+	do {
+		if (!param_pos)
+			return NULL;
+		/* Beginning of the string? */
+		if (param_pos == *haystack)
+			break;
+		/* After a delimiter? */
+		if (strchr(delim, *(param_pos - 1)))
+			break;
+		/* Continue searching. */
+		param_pos++;
+		param_pos = strstr(param_pos, needle);
+	} while (1);
+		
+	if (param_pos) {
+		param_pos += strlen(needle);
+		devlen = strcspn(param_pos, delim);
+		if (devlen) {
+			dev = malloc(devlen + 1);
+			if (!dev) {
+				fprintf(stderr, "Out of memory!\n");
+				exit(1);
+			}
+			strncpy(dev, param_pos, devlen);
+			dev[devlen] = '\0';
+		}
+		rest = param_pos + devlen;
+		rest += strspn(rest, delim);
+		param_pos -= strlen(needle);
+		memmove(param_pos, rest, strlen(rest) + 1);
+		tmp = realloc(*haystack, strlen(*haystack) + 1);
+		if (!tmp) {
+			fprintf(stderr, "Out of memory!\n");
+			exit(1);
+		}
+		*haystack = tmp;
+	}
+	
+
+	return dev;
 }
 
 /* start is an offset to the base address of the flash chip */
@@ -306,7 +407,8 @@ int check_erased_range(struct flashchip *flash, int start, int len)
 }
 
 /**
- * @cmpbuf	buffer to compare against
+ * @cmpbuf	buffer to compare against, cmpbuf[0] is expected to match the
+		flash content at location start
  * @start	offset to the base address of the flash chip
  * @len		length of the verified area
  * @message	string to print in the "FAILED" message
@@ -379,10 +481,196 @@ out_free:
 	return ret;
 }
 
+/* This function generates various test patterns useful for testing controller
+ * and chip communication as well as chip behaviour.
+ *
+ * If a byte can be written multiple times, each time keeping 0-bits at 0
+ * and changing 1-bits to 0 if the new value for that bit is 0, the effect
+ * is essentially an AND operation. That's also the reason why this function
+ * provides the result of AND between various patterns.
+ *
+ * Below is a list of patterns (and their block length).
+ * Pattern 0 is 05 15 25 35 45 55 65 75 85 95 a5 b5 c5 d5 e5 f5 (16 Bytes)
+ * Pattern 1 is 0a 1a 2a 3a 4a 5a 6a 7a 8a 9a aa ba ca da ea fa (16 Bytes)
+ * Pattern 2 is 50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f (16 Bytes)
+ * Pattern 3 is a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af (16 Bytes)
+ * Pattern 4 is 00 10 20 30 40 50 60 70 80 90 a0 b0 c0 d0 e0 f0 (16 Bytes)
+ * Pattern 5 is 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f (16 Bytes)
+ * Pattern 6 is 00 (1 Byte)
+ * Pattern 7 is ff (1 Byte)
+ * Patterns 0-7 have a big-endian block number in the last 2 bytes of each 256
+ * byte block.
+ *
+ * Pattern 8 is 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11... (256 B)
+ * Pattern 9 is ff fe fd fc fb fa f9 f8 f7 f6 f5 f4 f3 f2 f1 f0 ef ee... (256 B)
+ * Pattern 10 is 00 00 00 01 00 02 00 03 00 04... (128 kB big-endian counter)
+ * Pattern 11 is ff ff ff fe ff fd ff fc ff fb... (128 kB big-endian downwards)
+ * Pattern 12 is 00 (1 Byte)
+ * Pattern 13 is ff (1 Byte)
+ * Patterns 8-13 have no block number.
+ *
+ * Patterns 0-3 are created to detect and efficiently diagnose communication
+ * slips like missed bits or bytes and their repetitive nature gives good visual
+ * cues to the person inspecting the results. In addition, the following holds:
+ * AND Pattern 0/1 == Pattern 4
+ * AND Pattern 2/3 == Pattern 5
+ * AND Pattern 0/1/2/3 == AND Pattern 4/5 == Pattern 6
+ * A weakness of pattern 0-5 is the inability to detect swaps/copies between
+ * any two 16-byte blocks except for the last 16-byte block in a 256-byte bloc.
+ * They work perfectly for detecting any swaps/aliasing of blocks >= 256 bytes.
+ * 0x5 and 0xa were picked because they are 0101 and 1010 binary.
+ * Patterns 8-9 are best for detecting swaps/aliasing of blocks < 256 bytes.
+ * Besides that, they provide for bit testing of the last two bytes of every
+ * 256 byte block which contains the block number for patterns 0-6.
+ * Patterns 10-11 are special purpose for detecting subblock aliasing with
+ * block sizes >256 bytes (some Dataflash chips etc.)
+ * AND Pattern 8/9 == Pattern 12
+ * AND Pattern 10/11 == Pattern 12
+ * Pattern 13 is the completely erased state.
+ * None of the patterns can detect aliasing at boundaries which are a multiple
+ * of 16 MBytes (but such chips do not exist anyway for Parallel/LPC/FWH/SPI).
+ */
+int generate_testpattern(uint8_t *buf, uint32_t size, int variant)
+{
+	int i;
+
+	if (!buf) {
+		fprintf(stderr, "Invalid buffer!\n");
+		return 1;
+	}
+
+	switch (variant) {
+	case 0:
+		for (i = 0; i < size; i++)
+			buf[i] = (i & 0xf) << 4 | 0x5;
+		break;
+	case 1:
+		for (i = 0; i < size; i++)
+			buf[i] = (i & 0xf) << 4 | 0xa;
+		break;
+	case 2:
+		for (i = 0; i < size; i++)
+			buf[i] = 0x50 | (i & 0xf);
+		break;
+	case 3:
+		for (i = 0; i < size; i++)
+			buf[i] = 0xa0 | (i & 0xf);
+		break;
+	case 4:
+		for (i = 0; i < size; i++)
+			buf[i] = (i & 0xf) << 4;
+		break;
+	case 5:
+		for (i = 0; i < size; i++)
+			buf[i] = i & 0xf;
+		break;
+	case 6:
+		memset(buf, 0x00, size);
+		break;
+	case 7:
+		memset(buf, 0xff, size);
+		break;
+	case 8:
+		for (i = 0; i < size; i++)
+			buf[i] = i & 0xff;
+		break;
+	case 9:
+		for (i = 0; i < size; i++)
+			buf[i] = ~(i & 0xff);
+		break;
+	case 10:
+		for (i = 0; i < size % 2; i++) {
+			buf[i * 2] = (i >> 8) & 0xff;
+			buf[i * 2 + 1] = i & 0xff;
+		}
+		if (size & 0x1)
+			buf[i * 2] = (i >> 8) & 0xff;
+		break;
+	case 11:
+		for (i = 0; i < size % 2; i++) {
+			buf[i * 2] = ~((i >> 8) & 0xff);
+			buf[i * 2 + 1] = ~(i & 0xff);
+		}
+		if (size & 0x1)
+			buf[i * 2] = ~((i >> 8) & 0xff);
+		break;
+	case 12:
+		memset(buf, 0x00, size);
+		break;
+	case 13:
+		memset(buf, 0xff, size);
+		break;
+	}
+
+	if ((variant >= 0) && (variant <= 7)) {
+		/* Write block number in the last two bytes of each 256-byte
+		 * block, big endian for easier reading of the hexdump.
+		 * Note that this wraps around for chips larger than 2^24 bytes
+		 * (16 MB).
+		 */
+		for (i = 0; i < size / 256; i++) {
+			buf[i * 256 + 254] = (i >> 8) & 0xff;
+			buf[i * 256 + 255] = i & 0xff;
+		}
+	}
+
+	return 0;
+}
+
+int check_max_decode(enum chipbustype buses, uint32_t size)
+{
+	int limitexceeded = 0;
+	if ((buses & CHIP_BUSTYPE_PARALLEL) &&
+	    (max_rom_decode.parallel < size)) {
+		limitexceeded++;
+		printf_debug("Chip size %u kB is bigger than supported "
+			     "size %u kB of chipset/board/programmer "
+			     "for %s interface, "
+			     "probe/read/erase/write may fail. ", size / 1024,
+			     max_rom_decode.parallel / 1024, "Parallel");
+	}
+	if ((buses & CHIP_BUSTYPE_LPC) && (max_rom_decode.lpc < size)) {
+		limitexceeded++;
+		printf_debug("Chip size %u kB is bigger than supported "
+			     "size %u kB of chipset/board/programmer "
+			     "for %s interface, "
+			     "probe/read/erase/write may fail. ", size / 1024,
+			     max_rom_decode.lpc / 1024, "LPC");
+	}
+	if ((buses & CHIP_BUSTYPE_FWH) && (max_rom_decode.fwh < size)) {
+		limitexceeded++;
+		printf_debug("Chip size %u kB is bigger than supported "
+			     "size %u kB of chipset/board/programmer "
+			     "for %s interface, "
+			     "probe/read/erase/write may fail. ", size / 1024,
+			     max_rom_decode.fwh / 1024, "FWH");
+	}
+	if ((buses & CHIP_BUSTYPE_SPI) && (max_rom_decode.spi < size)) {
+		limitexceeded++;
+		printf_debug("Chip size %u kB is bigger than supported "
+			     "size %u kB of chipset/board/programmer "
+			     "for %s interface, "
+			     "probe/read/erase/write may fail. ", size / 1024,
+			     max_rom_decode.spi / 1024, "SPI");
+	}
+	if (!limitexceeded)
+		return 0;
+	/* Sometimes chip and programmer have more than one bus in common,
+	 * and the limit is not exceeded on all buses. Tell the user.
+	 */
+	if (bitcount(buses) > limitexceeded)
+		printf_debug("There is at least one common chip/programmer "
+			     "interface which can support a chip of this size. "
+			     "You can try --force at your own risk.\n");
+	return 1;
+}
+
 struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 {
 	struct flashchip *flash;
-	unsigned long base = 0, size;
+	unsigned long base = 0;
+	uint32_t size;
+	enum chipbustype buses_common;
 	char *tmp;
 
 	for (flash = first_flash; flash && flash->name; flash++) {
@@ -394,7 +682,8 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			printf_debug("failed! flashrom has no probe function for this flash chip.\n");
 			continue;
 		}
-		if (!(buses_supported & flash->bustype)) {
+		buses_common = buses_supported & flash->bustype;
+		if (!buses_common) {
 			tmp = flashbuses_to_text(buses_supported);
 			printf_debug("skipped. Host bus type %s ", tmp);
 			free(tmp);
@@ -405,6 +694,7 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 		}
 
 		size = flash->total_size * 1024;
+		check_max_decode(buses_common, size);
 
 		base = flashbase ? flashbase : (0xffffffff - size + 1);
 		flash->virtual_memory = (chipaddr)programmer_map_flash_region("flash chip", base, size);
@@ -544,12 +834,12 @@ int erase_flash(struct flashchip *flash)
 	return ret;
 }
 
-void emergency_help_message()
+void emergency_help_message(void)
 {
 	fprintf(stderr, "Your flash chip is in an unknown state.\n"
-		"Get help on IRC at irc.freenode.net channel #flashrom or\n"
-		"mail flashrom@flashrom.org\n"
-		"------------------------------------------------------------\n"
+		"Get help on IRC at irc.freenode.net (channel #flashrom) or\n"
+		"mail flashrom@flashrom.org!\n--------------------"
+		"-----------------------------------------------------------\n"
 		"DO NOT REBOOT OR POWEROFF!\n");
 }
 
@@ -694,7 +984,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 #if BITBANG_SPI_SUPPORT == 1
-	if (spi_bitbang_master_count - 1 != SPI_BITBANG_INVALID) {
+	if (bitbang_spi_master_count - 1 != BITBANG_SPI_INVALID) {
 		fprintf(stderr, "Bitbanging SPI master table miscompilation!\n");
 		exit(1);
 	}
@@ -721,14 +1011,25 @@ int main(int argc, char *argv[])
 			write_it = 1;
 			break;
 		case 'v':
+			//FIXME: gracefully handle superfluous -v
 			if (++operation_specified > 1) {
 				fprintf(stderr, "More than one operation "
 					"specified. Aborting.\n");
 				exit(1);
 			}
+			if (dont_verify_it) {
+				fprintf(stderr, "--verify and --noverify are"
+					"mutually exclusive. Aborting.\n");
+				exit(1);
+			}
 			verify_it = 1;
 			break;
 		case 'n':
+			if (verify_it) {
+				fprintf(stderr, "--verify and --noverify are"
+					"mutually exclusive. Aborting.\n");
+				exit(1);
+			}
 			dont_verify_it = 1;
 			break;
 		case 'c':
@@ -816,26 +1117,13 @@ int main(int argc, char *argv[])
 	}
 
 	if (list_supported) {
-		print_supported_chips();
-		print_supported_chipsets();
-		print_supported_boards();
-		printf("\nSupported PCI devices flashrom can use "
-		       "as programmer:\n\n");
-#if NIC3COM_SUPPORT == 1
-		print_supported_pcidevs(nics_3com);
-#endif
-#if DRKAISER_SUPPORT == 1
-		print_supported_pcidevs(drkaiser_pcidev);
-#endif
-#if SATASII_SUPPORT == 1
-		print_supported_pcidevs(satas_sii);
-#endif
+		print_supported();
 		exit(0);
 	}
 
 #if PRINT_WIKI_SUPPORT == 1
 	if (list_supported_wiki) {
-		print_wiki_tables();
+		print_supported_wiki();
 		exit(0);
 	}
 #endif
@@ -847,6 +1135,11 @@ int main(int argc, char *argv[])
 
 	if (optind < argc)
 		filename = argv[optind++];
+	
+	if (optind < argc) {
+		printf("Error: Extra parameter found.\n");
+		usage(argv[0]);
+	}
 
 	if (programmer_init()) {
 		fprintf(stderr, "Error: Programmer initialization failed.\n");
@@ -868,6 +1161,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < ARRAY_SIZE(flashes) && flashes[i]; i++)
 			printf(" %s", flashes[i]->name);
 		printf("\nPlease specify which chip to use with the -c <chipname> option.\n");
+		programmer_shutdown();
 		exit(1);
 	} else if (!flashes[0]) {
 		printf("No EEPROM/flash device found.\n");
@@ -890,6 +1184,7 @@ int main(int argc, char *argv[])
 			return read_flash(flashes[0], filename);
 		}
 		// FIXME: flash writes stay enabled!
+		programmer_shutdown();
 		exit(1);
 	}
 
@@ -932,15 +1227,26 @@ int main(int argc, char *argv[])
 		       "mainboard you tested. Thanks for your help!\n===\n");
 	}
 
+	size = flash->total_size * 1024;
+	if (check_max_decode((buses_supported & flash->bustype), size) &&
+	    (!force)) {
+		fprintf(stderr, "Chip is too big for this programmer "
+			"(-V gives details). Use --force to override.\n");
+		programmer_shutdown();
+		return 1;
+	}
+
 	if (!(read_it | write_it | verify_it | erase_it)) {
 		printf("No operations were specified.\n");
 		// FIXME: flash writes stay enabled!
+		programmer_shutdown();
 		exit(1);
 	}
 
 	if (!filename && !erase_it) {
 		printf("Error: No filename specified.\n");
 		// FIXME: flash writes stay enabled!
+		programmer_shutdown();
 		exit(1);
 	}
 
@@ -948,7 +1254,6 @@ int main(int argc, char *argv[])
 	if (write_it && !dont_verify_it)
 		verify_it = 1;
 
-	size = flash->total_size * 1024;
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
@@ -956,6 +1261,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Erase is not working on this chip. ");
 			if (!force) {
 				fprintf(stderr, "Aborting.\n");
+				programmer_shutdown();
 				return 1;
 			} else {
 				fprintf(stderr, "Continuing anyway.\n");
@@ -963,11 +1269,14 @@ int main(int argc, char *argv[])
 		}
 		if (erase_flash(flash)) {
 			emergency_help_message();
+			programmer_shutdown();
 			return 1;
 		}
 	} else if (read_it) {
-		if (read_flash(flash, filename))
+		if (read_flash(flash, filename)) {
+			programmer_shutdown();
 			return 1;
+		}
 	} else {
 		struct stat image_stat;
 
@@ -976,6 +1285,7 @@ int main(int argc, char *argv[])
 				"and erase is needed for write. ");
 			if (!force) {
 				fprintf(stderr, "Aborting.\n");
+				programmer_shutdown();
 				return 1;
 			} else {
 				fprintf(stderr, "Continuing anyway.\n");
@@ -985,6 +1295,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Write is not working on this chip. ");
 			if (!force) {
 				fprintf(stderr, "Aborting.\n");
+				programmer_shutdown();
 				return 1;
 			} else {
 				fprintf(stderr, "Continuing anyway.\n");
@@ -992,14 +1303,17 @@ int main(int argc, char *argv[])
 		}
 		if ((image = fopen(filename, "r")) == NULL) {
 			perror(filename);
+			programmer_shutdown();
 			exit(1);
 		}
 		if (fstat(fileno(image), &image_stat) != 0) {
 			perror(filename);
+			programmer_shutdown();
 			exit(1);
 		}
 		if (image_stat.st_size != flash->total_size * 1024) {
 			fprintf(stderr, "Error: Image size doesn't match\n");
+			programmer_shutdown();
 			exit(1);
 		}
 
@@ -1008,6 +1322,7 @@ int main(int argc, char *argv[])
 		fclose(image);
 		if (numbytes != size) {
 			fprintf(stderr, "Error: Failed to read file. Got %ld bytes, wanted %ld!\n", numbytes, size);
+			programmer_shutdown();
 			return 1;
 		}
 	}
@@ -1022,12 +1337,14 @@ int main(int argc, char *argv[])
 		printf("Writing flash chip... ");
 		if (!flash->write) {
 			fprintf(stderr, "Error: flashrom has no write function for this flash chip.\n");
+			programmer_shutdown();
 			return 1;
 		}
 		ret = flash->write(flash, buf);
 		if (ret) {
 			fprintf(stderr, "FAILED!\n");
 			emergency_help_message();
+			programmer_shutdown();
 			return 1;
 		} else {
 			printf("COMPLETE.\n");
@@ -1039,7 +1356,7 @@ int main(int argc, char *argv[])
 		if (write_it)
 			programmer_delay(1000*1000);
 		ret = verify_flash(flash, buf);
-		/* If we tried to write, and now we don't properly verify, we
+		/* If we tried to write, and verification now fails, we
 		 * might have an emergency situation.
 		 */
 		if (ret && write_it)

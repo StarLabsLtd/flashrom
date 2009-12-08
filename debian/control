@@ -4,7 +4,7 @@ Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 5), libpci-dev, libftdi-dev
 Standards-Version: 3.8.3
-Homepage: http://coreboot.org/Flashrom
+Homepage: http://www.flashrom.org
 
 Package: flashrom
 Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 netbsd-alpha netbsd-i386
