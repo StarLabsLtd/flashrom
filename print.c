@@ -144,6 +144,7 @@ void print_supported_chips(void)
 	}
 }
 
+#if INTERNAL_SUPPORT == 1
 void print_supported_chipsets(void)
 {
 	int i, j, chipsetcount = 0;
@@ -221,14 +222,19 @@ void print_supported_boards(void)
 	print_supported_boards_helper(laptops_bad,
 		"Laptops which have been verified to NOT work yet");
 }
+#endif
 
 void print_supported(void)
 {
 		print_supported_chips();
+#if INTERNAL_SUPPORT == 1
 		print_supported_chipsets();
 		print_supported_boards();
+#endif
+#if (NIC3COM_SUPPORT == 1) || (GFXNVIDIA_SUPPORT == 1) || (DRKAISER_SUPPORT == 1) || (SATASII_SUPPORT == 1)
 		printf("\nSupported PCI devices flashrom can use "
 		       "as programmer:\n\n");
+#endif
 #if NIC3COM_SUPPORT == 1
 		print_supported_pcidevs(nics_3com);
 #endif
@@ -244,6 +250,7 @@ void print_supported(void)
 }
 
 
+#if INTERNAL_SUPPORT == 1
 /* Please keep this list alphabetically ordered by vendor/board. */
 const struct board_info boards_ok[] = {
 	/* Verified working boards that don't need write-enables. */
@@ -253,6 +260,7 @@ const struct board_info boards_ok[] = {
 	{ "ASI",		"MB-5BLMP", },
 	{ "ASRock",		"A770CrossFire", },
 	{ "ASRock",		"K8S8X", },
+	{ "ASRock",		"M3A790GXH/128M" },
 	{ "ASUS",		"A7N8X Deluxe", },
 	{ "ASUS",		"A7N8X-E Deluxe", },
 	{ "ASUS",		"A7V400-MX", },
@@ -338,10 +346,12 @@ const struct board_info boards_ok[] = {
 	{ "Tyan",		"S5376G2NR/S5376WAG2NR", },
 	{ "Tyan",		"S5377", },
 	{ "Tyan",		"S5397", },
+	{ "VIA",		"EPIA-CN", },
 	{ "VIA",		"EPIA-EX15000G", },
 	{ "VIA",		"EPIA-LN", },
 	{ "VIA",		"EPIA-M700", },
 	{ "VIA",		"EPIA-NX15000G", },
+	{ "VIA",		"EPIA-SP", },
 	{ "VIA",		"NAB74X0", },
 	{ "VIA",		"pc2500e", },
 	{ "VIA",		"VB700X", },
@@ -394,4 +404,5 @@ const struct board_info laptops_bad[] = {
 
 	{},
 };
+#endif
 

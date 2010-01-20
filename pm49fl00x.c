@@ -36,16 +36,6 @@ void write_lockbits_49fl00x(chipaddr bios, int size,
 	}
 }
 
-int probe_49fl00x(struct flashchip *flash)
-{
-	int ret = probe_jedec(flash);
-
-	if (ret == 1)
-		map_flash_registers(flash);
-
-	return ret;
-}
-
 int erase_49fl00x(struct flashchip *flash)
 {
 	int i;
@@ -101,8 +91,8 @@ int write_49fl00x(struct flashchip *flash, uint8_t *buf)
 
 		/* write to the sector */
 		printf("%04d at address: 0x%08x", i, i * page_size);
-		write_sector_jedec(bios, buf + i * page_size,
-				   bios + i * page_size, page_size);
+		write_sector_jedec_common(flash, buf + i * page_size,
+				   bios + i * page_size, page_size, 0xffff);
 		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 		fflush(stdout);
 	}

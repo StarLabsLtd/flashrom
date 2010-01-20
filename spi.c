@@ -40,6 +40,7 @@ const struct spi_programmer spi_programmer[] = {
 		.write_256 = NULL,
 	},
 
+#if INTERNAL_SUPPORT == 1
 	{ /* SPI_CONTROLLER_ICH7 */
 		.command = ich_spi_send_command,
 		.multicommand = ich_spi_send_multicommand,
@@ -81,6 +82,7 @@ const struct spi_programmer spi_programmer[] = {
 		.read = wbsio_spi_read,
 		.write_256 = wbsio_spi_write_1,
 	},
+#endif
 
 #if FT2232_SPI_SUPPORT == 1
 	{ /* SPI_CONTROLLER_FT2232 */
@@ -105,6 +107,15 @@ const struct spi_programmer spi_programmer[] = {
 		.command = buspirate_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
 		.read = buspirate_spi_read,
+		.write_256 = spi_chip_write_1,
+	},
+#endif
+
+#if DEDIPROG_SUPPORT == 1
+	{ /* SPI_CONTROLLER_DEDIPROG */
+		.command = dediprog_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = dediprog_spi_read,
 		.write_256 = spi_chip_write_1,
 	},
 #endif
@@ -308,11 +319,13 @@ int probe_spi_rdid4(struct flashchip *flash)
 {
 	/* only some SPI chipsets support 4 bytes commands */
 	switch (spi_controller) {
+#if INTERNAL_SUPPORT == 1
 	case SPI_CONTROLLER_ICH7:
 	case SPI_CONTROLLER_ICH9:
 	case SPI_CONTROLLER_VIA:
 	case SPI_CONTROLLER_SB600:
 	case SPI_CONTROLLER_WBSIO:
+#endif
 #if FT2232_SPI_SUPPORT == 1
 	case SPI_CONTROLLER_FT2232:
 #endif
@@ -697,6 +710,48 @@ int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int 
 	return 0;
 }
 
+/* Block size is usually
+ * 4k for PMC
+ */
+int spi_block_erase_d7(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
+{
+	int result;
+	struct spi_command cmds[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_BE_D7_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_BE_D7, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff) },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
+
+	result = spi_send_multicommand(cmds);
+	if (result) {
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
+		return result;
+	}
+	/* Wait until the Write-In-Progress bit is cleared.
+	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
+	 */
+	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+		programmer_delay(100 * 1000);
+	if (check_erased_range(flash, addr, blocklen)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
+	return 0;
+}
+
 int spi_chip_erase_d8(struct flashchip *flash)
 {
 	int i, rc = 0;
@@ -803,6 +858,7 @@ int spi_write_status_register(int status)
 	int result;
 	struct spi_command cmds[] = {
 	{
+	/* FIXME: WRSR requires either EWSR or WREN depending on chip type. */
 		.writecnt	= JEDEC_EWSR_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_EWSR },
 		.readcnt	= 0,
@@ -827,7 +883,7 @@ int spi_write_status_register(int status)
 	return result;
 }
 
-int spi_byte_program(int addr, uint8_t byte)
+int spi_byte_program(int addr, uint8_t databyte)
 {
 	int result;
 	struct spi_command cmds[] = {
@@ -838,7 +894,7 @@ int spi_byte_program(int addr, uint8_t byte)
 		.readarr	= NULL,
 	}, {
 		.writecnt	= JEDEC_BYTE_PROGRAM_OUTSIZE,
-		.writearr	= (const unsigned char[]){ JEDEC_BYTE_PROGRAM, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff), byte },
+		.writearr	= (const unsigned char[]){ JEDEC_BYTE_PROGRAM, (addr >> 16) & 0xff, (addr >> 8) & 0xff, (addr & 0xff), databyte },
 		.readcnt	= 0,
 		.readarr	= NULL,
 	}, {
@@ -1042,10 +1098,12 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 	int result;
 
 	switch (spi_controller) {
+#if INTERNAL_SUPPORT == 1
 	case SPI_CONTROLLER_WBSIO:
 		fprintf(stderr, "%s: impossible with Winbond SPI masters,"
 				" degrading to byte program\n", __func__);
 		return spi_chip_write_1(flash, buf);
+#endif
 	default:
 		break;
 	}
@@ -1053,6 +1111,7 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;
 	}
+	/* FIXME: This will fail on ICH/VIA SPI. */
 	result = spi_write_enable();
 	if (result)
 		return result;
