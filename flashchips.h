@@ -196,7 +196,7 @@
 #define EN_25F16		0x3115
 #define EN_25F32		0x3116
 #define EN_29F512		0x7F21
-#define EN_29F010		0x7F20
+#define EN_29F010		0x20
 #define EN_29F040A		0x7F04
 #define EN_29LV010		0x7F6E
 #define EN_29LV040A		0x7F4F	/* EN_29LV040(A) */
@@ -254,6 +254,9 @@
 #define INTEL_ID		0x89	/* Intel */
 #define I_82802AB		0xAD
 #define I_82802AC		0xAC
+#define E_28F004S5		0xA7
+#define E_28F008S5		0xA6
+#define E_28F016S5		0xAA
 #define P28F001BXT		0x94	/* 28F001BX-T */
 #define P28F001BXB		0x95	/* 28F001BX-B */
 #define SHARP_LH28F008SA	0xA2	/* Sharp chip, Intel Vendor ID */
@@ -406,6 +409,7 @@
 #define SST_29VF020		0x25
 #define SST_29SF040		0x13
 #define SST_29VF040		0x14
+#define SST_39SF512		0xB4
 #define SST_39SF010		0xB5
 #define SST_39SF020		0xB6	/* Same as 39SF020A */
 #define SST_39SF040		0xB7
@@ -472,6 +476,7 @@
 #define ST_M29F800DT		0xEC
 #define ST_M29W010B		0x23
 #define ST_M29W040B		0xE3
+#define ST_M29W512B		0x27
 
 #define SYNCMOS_ID		0x40	/* SyncMOS and Mosel Vitelic */
 #define S29C51001T		0x01

@@ -1,3 +1,14 @@
+flashrom (0.9.1+r946-1) unstable; urgency=high
+
+  * New upstream release.
+     + Urgency high, as it fixes multiple important bugs, including such bugs
+       which can potentially "brick" a user's mainboard. Details at
+       http://www.flashrom.org/pipermail/flashrom/2010-March/002507.html.
+     + This build should have a non-truncated manpage (Closes: #566217).
+  * Standards-Version: 3.8.4 (no changes required).
+
+ -- Uwe Hermann <uwe@debian.org>  Wed, 17 Mar 2010 09:50:05 +0100
+
 flashrom (0.9.1+r873-1) unstable; urgency=low
 
   * New upstream release.

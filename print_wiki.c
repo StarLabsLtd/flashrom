@@ -144,6 +144,7 @@ const struct board_info_url boards_url[] = {
 	{ "GIGABYTE",		"GA-6ZMA",		"http://www.gigabyte.de/Support/Motherboard/BIOS_Model.aspx?ProductID=3289" },
 	{ "GIGABYTE",		"GA-EX58-UD4P",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Overview.aspx?ProductID=2986" },
 	{ "GIGABYTE",		"GA-EP35-DS3L",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Overview.aspx?ProductID=2778" },
+	{ "GIGABYTE",		"GA-MA69VM-S2",		"http://www.gigabyte.com.tw/Products/Motherboard/Products_Overview.aspx?ProductID=2500" },
 	{ "GIGABYTE",		"GA-MA790GP-DS4H",	"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=2887" },
 	{ "GIGABYTE",		"GA-MA78GPM-DS2H",	"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=2859" },
 	{ "GIGABYTE",		"GA-MA770T-UD3P",	"http://www.gigabyte.com.tw/Products/Motherboard/Products_Spec.aspx?ProductID=3096" },
@@ -167,6 +168,7 @@ const struct board_info_url boards_url[] = {
 	{ "RCA",		"RM4100",		"http://www.settoplinux.org/index.php?title=RCA_RM4100" },
 	{ "Sun",		"Blade x6250",		"http://www.sun.com/servers/blades/x6250/" },
 	{ "Supermicro",		"H8QC8",		"http://www.supermicro.com/Aplus/motherboard/Opteron/nforce/H8QC8.cfm" },
+	{ "Tekram",		"P6Pro-A5",		"http://www.motherboard.cz/mb/tekram/P6Pro-A5.htm" },
 	{ "Thomson",		"IP1000",		"http://www.settoplinux.org/index.php?title=Thomson_IP1000" },
 	{ "TriGem",		"Lomita",		"http://www.e4allupgraders.info/dir1/motherboards/socket370/lomita.shtml" },
 	{ "T-Online",		"S-100",		"http://wiki.freifunk-hannover.de/T-Online_S_100" },
@@ -209,6 +211,7 @@ const struct board_info_url boards_url[] = {
 	{ "ASUS",		"A7V600-X",		"http://www.asus.com/product.aspx?P_ID=L2XYS0rmtCjeOr4k" },
 	{ "ASUS",		"A7V8X",		"http://www.asus.com/product.aspx?P_ID=qfpaGrAy2kLVo0f2" },
 	{ "ASUS",		"A7V8X-MX SE",		"http://www.asus.com/product.aspx?P_ID=1guVBT1qV5oqhHyZ" },
+	{ "ASUS",		"A7V8X-X",		"http://www.asus.com/product.aspx?P_ID=YcXfRrWHZ9RKoVmw" },
 	{ "ASUS",		"P4B266",		"http://www.ciao.co.uk/ASUS_Intel_845D_Chipset_P4B266__5409807#productdetail" },
 	{ "ASUS",		"P4P800-E Deluxe",	"http://www.asus.com/product.aspx?P_ID=INIJUvLlif7LHp3g" },
 	{ "ASUS",		"P5ND2-SLI Deluxe",	"http://www.asus.com/product.aspx?P_ID=WY7XroDuUImVbgp5" },
@@ -540,7 +543,7 @@ void print_supported_pcidevs_wiki(struct pcidev_status *devs)
 		       "%04x:%04x || {{%s}}\n", (c) ? "eeeeee" : "dddddd",
 		       devs[i].vendor_name, devs[i].device_name,
 		       devs[i].vendor_id, devs[i].device_id,
-		       (devs[i].status == PCI_NT) ? (c) ? "?2" : "?" : "OK");
+		       (devs[i].status == NT) ? (c) ? "?2" : "?" : "OK");
 	}
 }
 
@@ -564,6 +567,9 @@ void print_supported_wiki(void)
 #endif
 #if SATASII_SUPPORT == 1
 	print_supported_pcidevs_wiki(satas_sii);
+#endif
+#if ATAHPT_SUPPORT == 1
+	print_supported_pcidevs_wiki(ata_hpt);
 #endif
 	printf("\n|}\n");
 }

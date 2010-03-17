@@ -44,7 +44,7 @@ enum programmer programmer = PROGRAMMER_DUMMY;
  * if more than one of them is selected. If only one is selected, it is clear
  * that the user wants that one to become the default.
  */
-#if NIC3COM_SUPPORT+GFXNVIDIA_SUPPORT+DRKAISER_SUPPORT+SATASII_SUPPORT+FT2232_SPI_SUPPORT+SERPROG_SUPPORT+BUSPIRATE_SPI_SUPPORT+DEDIPROG_SUPPORT > 1
+#if NIC3COM_SUPPORT+GFXNVIDIA_SUPPORT+DRKAISER_SUPPORT+SATASII_SUPPORT+ATAHPT_SUPPORT+FT2232_SPI_SUPPORT+SERPROG_SUPPORT+BUSPIRATE_SPI_SUPPORT+DEDIPROG_SUPPORT > 1
 #error Please enable either CONFIG_DUMMY or CONFIG_INTERNAL or disable support for all external programmers except one.
 #endif
 enum programmer programmer =
@@ -59,6 +59,9 @@ enum programmer programmer =
 #endif
 #if SATASII_SUPPORT == 1
 	PROGRAMMER_SATASII
+#endif
+#if ATAHPT_SUPPORT == 1
+	PROGRAMMER_ATAHPT
 #endif
 #if FT2232_SPI_SUPPORT == 1
 	PROGRAMMER_FT2232SPI
@@ -210,6 +213,25 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if ATAHPT_SUPPORT == 1
+	{
+		.name			= "atahpt",
+		.init			= atahpt_init,
+		.shutdown		= atahpt_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= atahpt_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= atahpt_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+#endif
+
 #if INTERNAL_SUPPORT == 1
 	{
 		.name			= "it87spi",
@@ -308,6 +330,35 @@ const struct programmer_entry programmer_table[] = {
 	{}, /* This entry corresponds to PROGRAMMER_INVALID. */
 };
 
+#define SHUTDOWN_MAXFN 4
+static int shutdown_fn_count = 0;
+struct shutdown_func_data {
+	void (*func) (void *data);
+	void *data;
+} shutdown_fn[SHUTDOWN_MAXFN];
+
+/* Register a function to be executed on programmer shutdown.
+ * The advantage over atexit() is that you can supply a void pointer which will
+ * be used as parameter to the registered function upon programmer shutdown.
+ * This pointer can point to arbitrary data used by said function, e.g. undo
+ * information for GPIO settings etc. If unneeded, set data=NULL.
+ * Please note that the first (void *data) belongs to the function signature of
+ * the function passed as first parameter.
+ */
+int register_shutdown(void (*function) (void *data), void *data)
+{
+	if (shutdown_fn_count >= SHUTDOWN_MAXFN) {
+		msg_perr("Tried to register more than %n shutdown functions.\n",
+			 SHUTDOWN_MAXFN);
+		return 1;
+	}
+	shutdown_fn[shutdown_fn_count].func = function;
+	shutdown_fn[shutdown_fn_count].data = data;
+	shutdown_fn_count++;
+
+	return 0;
+}
+
 int programmer_init(void)
 {
 	return programmer_table[programmer].init();
@@ -315,6 +366,10 @@ int programmer_init(void)
 
 int programmer_shutdown(void)
 {
+	int i;
+
+	for (i = shutdown_fn_count - 1; i >= 0; i--)
+		shutdown_fn[i].func(shutdown_fn[i].data);
 	return programmer_table[programmer].shutdown();
 }
 
@@ -565,6 +620,67 @@ out_free:
 	return ret;
 }
 
+/**
+ * Check if the buffer @have can be programmed to the content of @want without
+ * erasing. This is only possible if all chunks of size @gran are either kept
+ * as-is or changed from an all-ones state to any other state.
+ * The following write granularities (enum @gran) are known:
+ * - 1 bit. Each bit can be cleared individually.
+ * - 1 byte. A byte can be written once. Further writes to an already written
+ *   byte cause the contents to be either undefined or to stay unchanged.
+ * - 128 bytes. If less than 128 bytes are written, the rest will be
+ *   erased. Each write to a 128-byte region will trigger an automatic erase
+ *   before anything is written. Very uncommon behaviour and unsupported by
+ *   this function.
+ * - 256 bytes. If less than 256 bytes are written, the contents of the
+ *   unwritten bytes are undefined.
+ *
+ * @have        buffer with current content
+ * @want        buffer with desired content
+ * @len         length of the verified area
+ * @gran	write granularity (enum, not count)
+ * @return      0 if no erase is needed, 1 otherwise
+ */
+int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gran)
+{
+	int result = 0;
+	int i, j, limit;
+
+	switch (gran) {
+	case write_gran_1bit:
+		for (i = 0; i < len; i++)
+			if ((have[i] & want[i]) != want[i]) {
+				result = 1;
+				break;
+			}
+		break;
+	case write_gran_1byte:
+		for (i = 0; i < len; i++)
+			if ((have[i] != want[i]) && (have[i] != 0xff)) {
+				result = 1;
+				break;
+			}
+		break;
+	case write_gran_256bytes:
+		for (j = 0; j < len / 256; j++) {
+			limit = min (256, len - j * 256);
+			/* Are 'have' and 'want' identical? */
+			if (!memcmp(have + j * 256, want + j * 256, limit))
+				continue;
+			/* have needs to be in erased state. */
+			for (i = 0; i < limit; i++)
+				if (have[i] != 0xff) {
+					result = 1;
+					break;
+				}
+			if (result)
+				break;
+		}
+		break;
+	}
+	return result;
+}
+
 /* This function generates various test patterns useful for testing controller
  * and chip communication as well as chip behaviour.
  *
@@ -805,6 +921,9 @@ notfound:
 	       flash->vendor, flash->name, flash->total_size,
 	       flashbuses_to_text(flash->bustype), base);
 
+	if (flash->printlock)
+		flash->printlock(flash);
+
 	return flash;
 }
 
@@ -834,7 +953,7 @@ int read_flash(struct flashchip *flash, char *filename)
 		printf("Error: No filename specified.\n");
 		return 1;
 	}
-	if ((image = fopen(filename, "w")) == NULL) {
+	if ((image = fopen(filename, "wb")) == NULL) {
 		perror(filename);
 		exit(1);
 	}
@@ -909,7 +1028,7 @@ int selfcheck_eraseblocks(struct flashchip *flash)
 		 * layouts. That would imply "magic" erase functions. The
 		 * easiest way to check this is with function pointers.
 		 */
-		for (j = k + 1; j < NUM_ERASEFUNCTIONS; j++)
+		for (j = k + 1; j < NUM_ERASEFUNCTIONS; j++) {
 			if (eraser.block_erase ==
 			    flash->block_erasers[j].block_erase) {
 				msg_gerr("ERROR: Flash chip %s erase function "
@@ -918,6 +1037,7 @@ int selfcheck_eraseblocks(struct flashchip *flash)
 					flash->name, k, j);
 				ret = 1;
 			}
+		}
 	}
 	return ret;
 }
@@ -974,12 +1094,6 @@ int erase_flash(struct flashchip *flash)
 		/* If everything is OK, don't try another erase function. */
 		if (!ret)
 			break;
-	}
-	/* If no block erase function was found or block erase failed, retry. */
-	if ((!found || ret) && (flash->erase)) {
-		found = 1;
-		printf_debug("Trying whole-chip erase function... ");
-		ret = flash->erase(flash);
 	}
 	if (!found) {
 		fprintf(stderr, "ERROR: flashrom has no erase function for this flash chip.\n");
@@ -1085,7 +1199,7 @@ void check_chip_supported(struct flashchip *flash)
 		       "this flash part. Please include the flashrom\noutput "
 		       "with the additional -V option for all operations you "
 		       "tested (-V, -rV,\n-wV, -EV), and mention which "
-		       "mainboard or programmer you tested. Thanks for your "
+		       "mainboard or programmer you tested.\nThanks for your "
 		       "help!\n===\n");
 	}
 }
@@ -1120,18 +1234,27 @@ int doit(struct flashchip *flash, int force, char *filename, int read_it, int wr
 				fprintf(stderr, "Continuing anyway.\n");
 			}
 		}
+		if (flash->unlock)
+			flash->unlock(flash);
+
 		if (erase_flash(flash)) {
 			emergency_help_message();
 			programmer_shutdown();
 			return 1;
 		}
 	} else if (read_it) {
+		if (flash->unlock)
+			flash->unlock(flash);
+
 		if (read_flash(flash, filename)) {
 			programmer_shutdown();
 			return 1;
 		}
 	} else {
 		struct stat image_stat;
+
+		if (flash->unlock)
+			flash->unlock(flash);
 
 		if (flash->tested & TEST_BAD_ERASE) {
 			fprintf(stderr, "Erase is not working on this chip "
@@ -1154,7 +1277,7 @@ int doit(struct flashchip *flash, int force, char *filename, int read_it, int wr
 				fprintf(stderr, "Continuing anyway.\n");
 			}
 		}
-		if ((image = fopen(filename, "r")) == NULL) {
+		if ((image = fopen(filename, "rb")) == NULL) {
 			perror(filename);
 			programmer_shutdown();
 			exit(1);

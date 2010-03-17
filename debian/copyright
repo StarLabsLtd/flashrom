@@ -233,7 +233,7 @@ License: GPL-2+
 -------------------------------------------------------------------------------
 
 Files: debian/*
-Copyright: © 2006-2009 Uwe Hermann <uwe@debian.org>
+Copyright: © 2006-2010 Uwe Hermann <uwe@debian.org>
 License: PD
    The packaging done by Uwe Hermann <uwe@debian.org> is hereby
    released as public domain.

@@ -19,15 +19,12 @@
  */
 
 #include "flash.h"
+#include "chipdrivers.h"
 
-int probe_w39v040c(struct flashchip *flash)
+int printlock_w39v040c(struct flashchip *flash)
 {
 	chipaddr bios = flash->virtual_memory;
-	int result = probe_jedec(flash);
 	uint8_t lock;
-
-	if (!result)
-		return result;
 
 	chip_writeb(0xAA, bios + 0x5555);
 	programmer_delay(10);
@@ -47,44 +44,5 @@ int probe_w39v040c(struct flashchip *flash)
 
 	printf("%s: Boot block #TBL is %slocked, rest of chip #WP is %slocked.\n",
 		__func__, lock & 0x4 ? "" : "un", lock & 0x8 ? "" : "un");
-	return 1;
-}
-
-int erase_w39v040c(struct flashchip *flash)
-{
-	int i;
-	unsigned int total_size = flash->total_size * 1024;
-
-	for (i = 0; i < total_size; i += flash->page_size) {
-		if (erase_sector_jedec(flash, i, flash->page_size)) {
-			fprintf(stderr, "ERASE FAILED!\n");
-			return -1;
-		}
-	}
-
-	return 0;
-}
-
-int write_w39v040c(struct flashchip *flash, uint8_t *buf)
-{
-	int i;
-	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
-	chipaddr bios = flash->virtual_memory;
-
-	if (erase_flash(flash)) {
-		fprintf(stderr, "ERASE FAILED!\n");
-		return -1;
-	}
-
-	printf("Programming page: ");
-	for (i = 0; i < total_size / page_size; i++) {
-		printf("%04d at address: 0x%08x", i, i * page_size);
-		write_sector_jedec_common(flash, buf + i * page_size,
-				   bios + i * page_size, page_size, 0xffff);
-		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
-	}
-	printf("\n");
-
 	return 0;
 }

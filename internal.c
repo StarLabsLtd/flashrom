@@ -27,10 +27,6 @@
 #include <errno.h>
 #include "flash.h"
 
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-int io_fd;
-#endif
-
 #if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
 {
@@ -102,44 +98,45 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 }
 #endif
 
-void get_io_perms(void)
-{
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
-	if (sysi86(SI86V86, V86SC_IOPL, PS_IOPL) != 0) {
-#elif defined(__FreeBSD__) || defined (__DragonFly__)
-	if ((io_fd = open("/dev/io", O_RDWR)) < 0) {
-#else
-	if (iopl(3) != 0) {
-#endif
-		fprintf(stderr, "ERROR: Could not get I/O privileges (%s).\n"
-			"You need to be root.\n", strerror(errno));
-		exit(1);
-	}
-}
-
-void release_io_perms(void)
-{
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-	close(io_fd);
-#endif
-}
-
 #if INTERNAL_SUPPORT == 1
 struct superio superio = {};
+int force_boardenable = 0;
 
 void probe_superio(void)
 {
 	superio = probe_superio_ite();
-#if 0	/* Winbond SuperI/O code is not yet available. */
+#if 0
+	/* Winbond Super I/O code is not yet available. */
 	if (superio.vendor == SUPERIO_VENDOR_NONE)
 		superio = probe_superio_winbond();
 #endif
 }
 
+int is_laptop;
+
 int internal_init(void)
 {
 	int ret = 0;
 
+	if (programmer_param && !strlen(programmer_param)) {
+		free(programmer_param);
+		programmer_param = NULL;
+	}
+	if (programmer_param) {
+		char *arg;
+		arg = extract_param(&programmer_param, "boardenable=", ",:");
+		if (arg && !strcmp(arg,"force"))
+			force_boardenable = 1;
+		else if (arg)
+			msg_perr("Unknown argument for boardenable: %s\n", arg);
+		free(arg);
+
+		if (strlen(programmer_param))
+			msg_perr("Unhandled programmer parameters: %s\n",
+				programmer_param);
+		free(programmer_param);
+		programmer_param = NULL;
+	}
 	get_io_perms();
 
 	/* Initialize PCI access for flash enables */
@@ -152,9 +149,20 @@ int internal_init(void)
 	 * mainboard specific flash enable sequence.
 	 */
 	coreboot_init();
+	dmi_init();
 
-	/* Probe for the SuperI/O chip and fill global struct superio. */
+	/* Probe for the Super I/O chip and fill global struct superio. */
 	probe_superio();
+
+	/* Warn if a laptop is detected. */
+	if (is_laptop)
+		printf("========================================================================\n"
+		       "WARNING! You seem to be running flashrom on a laptop.\n"
+		       "Laptops, notebooks and netbooks are difficult to support and we recommend\n"
+		       "to use the vendor flashing utility. The embedded controller (EC) in these\n"
+		       "machines often interacts badly with flashing.\n"
+		       "See http://www.flashrom.org/Laptops for details.\n"
+		       "========================================================================\n");
 
 	/* try to enable it. Failure IS an option, since not all motherboards
 	 * really need this to be done, etc., etc.
@@ -216,34 +224,4 @@ void internal_chip_readn(uint8_t *buf, const chipaddr addr, size_t len)
 {
 	memcpy(buf, (void *)addr, len);
 	return;
-}
-
-void mmio_writeb(uint8_t val, void *addr)
-{
-	*(volatile uint8_t *) addr = val;
-}
-
-void mmio_writew(uint16_t val, void *addr)
-{
-	*(volatile uint16_t *) addr = val;
-}
-
-void mmio_writel(uint32_t val, void *addr)
-{
-	*(volatile uint32_t *) addr = val;
-}
-
-uint8_t mmio_readb(void *addr)
-{
-	return *(volatile uint8_t *) addr;
-}
-
-uint16_t mmio_readw(void *addr)
-{
-	return *(volatile uint16_t *) addr;
-}
-
-uint32_t mmio_readl(void *addr)
-{
-	return *(volatile uint32_t *) addr;
 }

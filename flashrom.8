@@ -22,7 +22,11 @@ checking that your flashrom version won't interpret options in a different way.
 .PP
 You can specify one of \-E, \-r, \-w, \-v or no operation.
 If no operation is specified, then all that happens
-is that flash info is dumped and the flash chip is set to writable.
+is that flash info is dumped and the flash chip is set to writable. It is
+recommended that if you try flashrom the first time on a system, you run it
+in probe only mode and check the output. Also you are advised to make a
+backup of your current ROM contents with \-r before you try to write a new
+image.
 .TP
 .B "\-r, \-\-read <file>"
 Read flash ROM contents and save them into the given
@@ -58,6 +62,30 @@ More verbose output.
 .TP
 .B "\-c, \-\-chip" <chipname>
 Probe only for specified flash ROM chip.
+.TP
+.B "\-m, \-\-mainboard" <[vendor:]part>
+Override mainboard settings.
+.sp
+flashrom reads the coreboot table to determine the current mainboard. If no
+coreboot table could be read or if you want to override these values, you can
+specify \-m, e.g.:
+.sp
+.B "  flashrom -w --mainboard AGAMI:ARUMA agami_aruma.rom"
+.sp
+See the 'Supported mainboards' section in the output of 'flashrom \-L' for
+a list of boards which require the specification of the board name, if no
+coreboot table is found.
+.TP
+.B "\-f, \-\-force"
+Force write without checking whether the ROM image file is really meant
+to be used on this board.
+.sp
+Note: This check only works while coreboot is running, and only for those
+boards where the coreboot code supports it.
+.TP
+.B "\-l, \-\-layout <file>"
+Read ROM layout from
+.BR <file> .
 .sp
 flashrom supports ROM layouts. This allows you to flash certain parts of
 the flash chip only. A ROM layout file looks like follows:
@@ -86,30 +114,6 @@ ROM layouts should replace the \-s and \-e option since they are more
 flexible and they should lead to a ROM update file format with the
 ROM layout and the ROM image in one file (cpio, zip or something?).
 .TP
-.B "\-m, \-\-mainboard" <[vendor:]part>
-Override mainboard settings.
-.sp
-flashrom reads the coreboot table to determine the current mainboard. If no
-coreboot table could be read or if you want to override these values, you can
-specify \-m, e.g.:
-.sp
-.B "  flashrom -w --mainboard AGAMI:ARUMA agami_aruma.rom"
-.sp
-See the 'Supported mainboards' section in the output of 'flashrom \-L' for
-a list of boards which require the specification of the board name, if no
-coreboot table is found.
-.TP
-.B "\-f, \-\-force"
-Force write without checking whether the ROM image file is really meant
-to be used on this board.
-.sp
-Note: This check only works while coreboot is running, and only for those
-boards where the coreboot code supports it.
-.TP
-.B "\-l, \-\-layout <file>"
-Read ROM layout from
-.BR <file> .
-.TP
 .B "\-i, \-\-image <name>"
 Only flash image
 .B <name>
@@ -131,7 +135,7 @@ Same as
 but outputs the supported hardware in MediaWiki syntax, so that it can be
 easily pasted into the wiki page at http://www.flashrom.org/.
 .TP
-.B "\-p, \-\-programmer <name>"
+.B "\-p, \-\-programmer <name>[:parameters]"
 Specify the programmer device. Currently supported are:
 .sp
 .BR "* internal" " (default, for in-system flashing in the mainboard)"
@@ -146,6 +150,8 @@ Specify the programmer device. Currently supported are:
 .sp
 .BR "* satasii" " (for flash ROMs on Silicon Image SATA/IDE controllers)"
 .sp
+.BR "* atahpt" " (for flash ROMs on Highpoint ATA/RAID controllers)"
+.sp
 .BR "* it87spi" " (for flash ROMs behind an ITE IT87xx Super I/O LPC/SPI translation unit)"
 .sp
 .BR "* ft2232spi" " (for flash ROMs attached to a FT2232H/FT4232H based USB SPI programmer)"
@@ -154,7 +160,68 @@ Specify the programmer device. Currently supported are:
 .sp
 .BR "* buspiratespi" " (for flash ROMs attached to a Bus Pirate)"
 .sp
-The dummy programmer has an optional parameter specifying the bus types it
+Some programmers have optional or mandatory parameters which are described
+in detail in the
+.B PROGRAMMER SPECIFIC INFO
+section. Support for some programmers can be disabled at compile time.
+.B "flashrom -h"
+lists all supported programmers.
+.TP
+.B "\-h, \-\-help"
+Show a help text and exit.
+.TP
+.B "\-R, \-\-version"
+Show version information and exit.
+.SH PROGRAMMER SPECIFIC INFO
+Some programmer drivers accept further parameters to set programmer-specific
+parameters. These parameters are seperated from the programmer name by a
+colon. While some programmers take arguments at fixed positions, other
+programmers use a key/value interface in which the key and value is separated
+by an equal sign and different pairs are separated by a comma or a colon.
+.TP
+.BR "internal " programmer
+Some mainboards require to run mainboard specific code to enable flash erase
+and write support (and probe support on old systems with parallel flash).
+The mainboard brand and model (if it requires specific code) is usually
+autodetected using one of the following mechanisms: If your system is
+running coreboot, the mainboard type is determined from the coreboot table,
+otherwise, the mainboard is detected by examining the onboard PCI devices
+and possibly DMI info. If PCI and DMI do not contain information to uniquely
+identify the mainboard (which is the exception), it might be necessary to
+specify the mainboard using the \-m switch (see above).
+.sp
+Some of these board-specific flash enabling functions (called board enables)
+in flashrom have not yet been tested. If your mainboard is detected needing
+an untested board enable function, a warning message is printed and the
+board enable is not executed, because a wrong board enable function might
+cause the system to behave erratically, as board enable functions touch the
+low-level internals of a mainboard. Not executing a board enable function
+(if one is needed) might cause detection or erasing failure. If your board
+protects only part of the flash (commonly the top end, called boot block),
+flashrom might encounter an error only after erasing the unprotected part,
+so running without the board-enable function might be dangerous for erase
+and write (which includes erase).
+.sp
+The suggested procedure for a mainboard with untested board specific code is
+to first try to probe the ROM (just invoke flashrom and check that it
+detects your flash chip type) without running the board enable code (i.e.
+without any parameters). If it finds your chip, fine, otherwise, retry
+probing your chip with the board-enable code running, using
+.sp
+.B "flashrom -p internal:boardenable=force"
+.sp
+If your chip is still not detected, the board enable code seems to be broken
+or the flash chip unsupported. Otherwise, make a backup of your current ROM
+contents (using \-r) and store it to a medium outside of your computer, like
+an USB drive or a network share. If you needed to run the board enable code
+already for probing, use it for reading too. Now you can try to write the
+new image. You should enable the board enable code in any case now, as it
+has been written because it is known that writing/erasing without the board
+enable is going to fail. In any case (success or failure), please report to
+the flashrom mailing list, see below.
+.sp
+.BR "dummy " programmer
+An optional parameter specifies the bus types it
 should support. For that you have to use the
 .B "flashrom -p dummy:type"
 syntax where
@@ -165,11 +232,13 @@ in any order.
 .sp
 Example:
 .B "flashrom -p dummy:lpc,fwh"
-.sp
-If you have multiple supported PCI cards which can program flash chips
-(NICs, SATA/IDE controllers, etc.) in your system, you must use the
+.TP
+.BR "nic3com" , " gfxnvidia" , " satasii" and " atahpt " programmers
+These programmers have an option to specify the PCI address of the card
+your want to use, which must be specified if more than one card supported
+by the selected programmer is installed in your system. The syntax is
 .B "flashrom -p xxxx:bb:dd.f"
-syntax to explicitly select one of them, where
+, where
 .B xxxx
 is the name of the programmer
 .B bb
@@ -181,21 +250,18 @@ is the PCI function number of the desired NIC.
 .sp
 Example:
 .B "flashrom -p nic3com:05:04.0"
-.sp
-Currently the following programmers support this mechanism:
-.BR nic3com ,
-.BR gfxnvidia ,
-.BR satasii .
-.sp
-The it87spi programmer has an optional parameter which will set the I/O base
-port of the IT87* SPI controller interface to the port specified in the
-parameter. For that you have to use the
+.TP
+.BR "it87spi " programmer
+An optional parameter sets the I/O base port of the IT87* SPI controller
+interface to the port specified in the parameter instead of using the port
+address set by the BIOS. For that you have to use the
 .B "flashrom -p it87spi:port=portnum"
 syntax where
 .B portnum
 is an I/O port number which must be a multiple of 8.
-.sp
-The ft2232spi programmer has an optional parameter specifying the controller
+.TP
+.BR "ft2232spi " programmer
+An optional parameter species the controller
 type and interface/port it should support. For that you have to use the
 .B "flashrom -p ft2232spi:model,port=interface"
 syntax where
@@ -205,41 +271,35 @@ can be any of
 and
 .B interface
 can be any of
-.B A
-.BR B .
+.BR "A B" .
 The default model is
 .B 4232H
 and the default interface is
 .BR B .
-.sp
-The serprog programmer has an optional parameter specifying either a serial
+.TP
+.BR "serprog " programmer
+A mandatory parameter specifies either a serial
 device/baud combination or an IP/port combination for communication with the
-programmer. For serial, you have to use the
+programmer. In the device/baud combination, the device has to start with a
+slash. For serial, you have to use the
 .B "flashrom -p serprog:/dev/device:baud"
 syntax and for IP, you have to use
 .B "flashrom -p serprog:ip:port"
 instead. More information about serprog is available in serprog-protocol.txt in
 the source distribution.
+.TP
+.BR "buspiratespi " programmer
+A required dev parameter specifyies the Bus Pirate device node and an optional
+spispeed parameter specifyies the frequency of the SPI bus. The parameter
+delimiter is a comma. Syntax is
 .sp
-The buspiratespi programmer has a required dev parameter specifying the Bus
-Pirate device node and an optional spispeed parameter specifying the frequency
-of the SPI bus. The parameter delimiter is a comma. Syntax is
 .B "flashrom -p buspiratespi:dev=/dev/device,spispeed=frequency"
+.sp
 where
 .B frequency
 can be any of
 .B 30k 125k 250k 1M 2M 2.6M 4M 8M
-(in Hz).
-.sp
-Support for some programmers can be disabled at compile time.
-.B "flashrom -h"
-lists all supported programmers.
-.TP
-.B "\-h, \-\-help"
-Show a help text and exit.
-.TP
-.B "\-R, \-\-version"
-Show version information and exit.
+(in Hz). The default is the maximum frequency of 8 MHz.
 .SH EXIT STATUS
 flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
 (/dev/xsvc on Solaris) can not be opened and with 3 if a call to mmap() fails.

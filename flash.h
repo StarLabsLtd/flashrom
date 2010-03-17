@@ -55,6 +55,9 @@ enum programmer {
 #if SATASII_SUPPORT == 1
 	PROGRAMMER_SATASII,
 #endif
+#if ATAHPT_SUPPORT == 1
+	PROGRAMMER_ATAHPT,
+#endif
 #if INTERNAL_SUPPORT == 1
 	PROGRAMMER_IT87SPI,
 #endif
@@ -98,6 +101,8 @@ struct programmer_entry {
 };
 
 extern const struct programmer_entry programmer_table[];
+
+int register_shutdown(void (*function) (void *data), void *data);
 
 int programmer_init(void);
 int programmer_shutdown(void);
@@ -154,8 +159,14 @@ enum chipbustype {
 
 #define FEATURE_REGISTERMAP	(1 << 0)
 #define FEATURE_BYTEWRITES	(1 << 1)
+#define FEATURE_LONG_RESET	(0 << 4)
+#define FEATURE_SHORT_RESET	(1 << 4)
+#define FEATURE_EITHER_RESET	FEATURE_LONG_RESET
 #define FEATURE_ADDR_FULL	(0 << 2)
 #define FEATURE_ADDR_MASK	(3 << 2)
+#define FEATURE_ADDR_2AA	(1 << 2)
+#define FEATURE_ADDR_AAA	(2 << 2)
+#define FEATURE_ADDR_SHIFTED	0
 
 struct flashchip {
 	const char *vendor;
@@ -185,7 +196,6 @@ struct flashchip {
 
 	/* Delay after "enter/exit ID mode" commands in microseconds. */
 	int probe_timing;
-	int (*erase) (struct flashchip *flash);
 
 	/*
 	 * Erase blocks and associated erase function. Any chip erase function
@@ -199,6 +209,8 @@ struct flashchip {
 		int (*block_erase) (struct flashchip *flash, unsigned int blockaddr, unsigned int blocklen);
 	} block_erasers[NUM_ERASEFUNCTIONS];
 
+	int (*printlock) (struct flashchip *flash);
+	int (*unlock) (struct flashchip *flash);
 	int (*write) (struct flashchip *flash, uint8_t *buf);
 	int (*read) (struct flashchip *flash, uint8_t *buf, int start, int len);
 
@@ -265,6 +277,9 @@ struct board_pciid_enable {
 	uint16_t second_card_vendor;
 	uint16_t second_card_device;
 
+	/* Pattern to match DMI entries */
+	const char *dmi_pattern;
+
 	/* The vendor / part name from the coreboot table. */
 	const char *lb_vendor;
 	const char *lb_part;
@@ -272,6 +287,8 @@ struct board_pciid_enable {
 	const char *vendor_name;
 	const char *board_name;
 
+	int max_rom_decode_parallel;
+	int status;
 	int (*enable) (const char *name);
 };
 
@@ -295,8 +312,6 @@ void internal_delay(int usecs);
 
 #if NEED_PCI == 1
 /* pcidev.c */
-#define PCI_OK 0
-#define PCI_NT 1    /* Not tested */
 
 extern uint32_t io_base_addr;
 extern struct pci_access *pacc;
@@ -315,7 +330,7 @@ uint32_t pcidev_init(uint16_t vendor_id, uint32_t bar, struct pcidev_status *dev
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
 void print_supported(void);
-#if (NIC3COM_SUPPORT == 1) || (GFXNVIDIA_SUPPORT == 1) || (DRKAISER_SUPPORT == 1) || (SATASII_SUPPORT == 1)
+#if (NIC3COM_SUPPORT == 1) || (GFXNVIDIA_SUPPORT == 1) || (DRKAISER_SUPPORT == 1) || (SATASII_SUPPORT == 1) || (ATAHPT_SUPPORT == 1)
 void print_supported_pcidevs(struct pcidev_status *devs);
 #endif
 void print_supported_wiki(void);
@@ -333,6 +348,7 @@ int chipset_flash_enable(void);
 
 /* physmap.c */
 void *physmap(const char *descr, unsigned long phys_addr, size_t len);
+void *physmap_try_ro(const char *descr, unsigned long phys_addr, size_t len);
 void physunmap(void *virt_addr, size_t len);
 int setup_cpu_msr(int cpu);
 void cleanup_cpu_msr(void);
@@ -342,6 +358,11 @@ void lb_vendor_dev_from_string(char *boardstring);
 int coreboot_init(void);
 extern char *lb_part, *lb_vendor;
 extern int partvendor_from_cbtable;
+
+/* dmi.c */
+extern int has_dmi_support;
+void dmi_init(void);
+int dmi_match(const char *pattern);
 
 /* internal.c */
 #if NEED_PCI == 1
@@ -362,6 +383,8 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 void get_io_perms(void);
 void release_io_perms(void);
 #if INTERNAL_SUPPORT == 1
+extern int is_laptop;
+extern int force_boardenable;
 void probe_superio(void);
 int internal_init(void);
 int internal_shutdown(void);
@@ -447,6 +470,15 @@ uint8_t satasii_chip_readb(const chipaddr addr);
 extern struct pcidev_status satas_sii[];
 #endif
 
+/* atahpt.c */
+#if ATAHPT_SUPPORT == 1
+int atahpt_init(void);
+int atahpt_shutdown(void);
+void atahpt_chip_writeb(uint8_t val, chipaddr addr);
+uint8_t atahpt_chip_readb(const chipaddr addr);
+extern struct pcidev_status ata_hpt[];
+#endif
+
 /* ft2232_spi.c */
 #define FTDI_FT2232H 0x6010
 #define FTDI_FT4232H 0x6011
@@ -480,6 +512,11 @@ int dediprog_spi_send_command(unsigned int writecnt, unsigned int readcnt, const
 int dediprog_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 
 /* flashrom.c */
+enum write_granularity {
+	write_gran_1bit,
+	write_gran_1byte,
+	write_gran_256bytes,
+};
 extern enum chipbustype buses_supported;
 struct decode_sizes {
 	uint32_t parallel;
@@ -506,6 +543,7 @@ int max(int a, int b);
 char *extract_param(char **haystack, char *needle, char *delim);
 int check_erased_range(struct flashchip *flash, int start, int len);
 int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message);
+int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gran);
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
 int selfcheck(void);
@@ -651,7 +689,5 @@ extern fdtype sp_fd;
 int serialport_shutdown(void);
 int serialport_write(unsigned char *buf, unsigned int writecnt);
 int serialport_read(unsigned char *buf, unsigned int readcnt);
-
-#include "chipdrivers.h"
 
 #endif				/* !__FLASH_H__ */

@@ -33,18 +33,17 @@ ifneq ($(OS_ARCH), SunOS)
 STRIP_ARGS = -s
 endif
 ifeq ($(OS_ARCH), Darwin)
-CFLAGS += -I/usr/local/include
-LDFLAGS += -framework IOKit -framework DirectIO -L/usr/local/lib
+CPPFLAGS += -I/opt/local/include -I/usr/local/include
+LDFLAGS += -framework IOKit -framework DirectIO -L/opt/local/lib -L/usr/local/lib
 endif
 ifeq ($(OS_ARCH), FreeBSD)
-CFLAGS += -I/usr/local/include
+CPPFLAGS += -I/usr/local/include
 LDFLAGS += -L/usr/local/lib
 endif
 
-CHIP_OBJS = jedec.o stm50flw0x0x.o w39v080fa.o sharplhf00l04.o w29ee011.o \
-	sst28sf040.o am29f040b.o mx29f002.o m29f400bt.o pm29f002.o w39v040c.o \
-	w49f002u.o 82802ab.o pm49fl00x.o sst49lf040.o en29f002a.o m29f002.o \
-	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o
+CHIP_OBJS = jedec.o stm50flw0x0x.o w39v040c.o w39v080fa.o sharplhf00l04.o w29ee011.o \
+	sst28sf040.o m29f400bt.o 82802ab.o pm49fl00x.o \
+	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o
 
 LIB_OBJS = layout.o
 
@@ -58,7 +57,7 @@ all: pciutils features dep $(PROGRAM)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 873
+SVNVERSION := 946
 
 RELEASE := 0.9.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
@@ -84,6 +83,10 @@ CONFIG_GFXNVIDIA ?= no
 # Always enable SiI SATA controllers for now.
 CONFIG_SATASII ?= yes
 
+# Highpoint (HPT) ATA/RAID controller support.
+# IMPORTANT: This code is not yet working!
+CONFIG_ATAHPT ?= no
+
 # Always enable FT2232 SPI dongles for now.
 CONFIG_FT2232SPI ?= yes
 
@@ -104,7 +107,7 @@ CONFIG_PRINT_WIKI ?= no
 
 ifeq ($(CONFIG_INTERNAL), yes)
 FEATURE_CFLAGS += -D'INTERNAL_SUPPORT=1'
-PROGRAMMER_OBJS += chipset_enable.o board_enable.o cbtable.o it87spi.o ichspi.o sb600spi.o wbsio_spi.o
+PROGRAMMER_OBJS += chipset_enable.o board_enable.o cbtable.o dmi.o it87spi.o ichspi.o sb600spi.o wbsio_spi.o internal.o
 NEED_PCI := yes
 endif
 
@@ -136,6 +139,12 @@ endif
 ifeq ($(CONFIG_SATASII), yes)
 FEATURE_CFLAGS += -D'SATASII_SUPPORT=1'
 PROGRAMMER_OBJS += satasii.o
+NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_ATAHPT), yes)
+FEATURE_CFLAGS += -D'ATAHPT_SUPPORT=1'
+PROGRAMMER_OBJS += atahpt.o
 NEED_PCI := yes
 endif
 
@@ -181,15 +190,10 @@ endif
 ifeq ($(NEED_PCI), yes)
 LIBS += -lpci
 FEATURE_CFLAGS += -D'NEED_PCI=1'
-PROGRAMMER_OBJS += pcidev.o physmap.o internal.o #FIXME: We need to move stuff
- 						# from internal.c and pcidev.c to pci.c
-						# internal.c needs to be split
-						# into internal-programmer-only stuff
-						# and a support lib for all internal+pci
-						# based stuff.
+PROGRAMMER_OBJS += pcidev.o physmap.o hwaccess.o
 ifeq ($(OS_ARCH), NetBSD)
 LIBS += -lpciutils #		The libpci we want.
-LIBS += -l$(shell uname -m) #	For (i386|x86_64)_iopl(2).
+LIBS += -l$(shell uname -p) #	For (i386|x86_64)_iopl(2).
 endif
 endif
 
@@ -230,7 +234,7 @@ compiler:
 	@printf "Checking for a C compiler... "
 	@$(shell ( echo "int main(int argc, char **argv)"; \
 		   echo "{ return 0; }"; ) > .test.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .test.c -o .test >/dev/null &&	\
+	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .test.c -o .test >/dev/null &&	\
 		echo "found." || ( echo "not found."; \
 		rm -f .test.c .test; exit 1)
 	@rm -f .test.c .test
@@ -242,7 +246,7 @@ pciutils: compiler
 		   echo "struct pci_access *pacc;";	   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
-	@$(CC) -c $(CFLAGS) .test.c -o .test.o >/dev/null 2>&1 &&		\
+	@$(CC) -c $(CPPFLAGS) $(CFLAGS) .test.c -o .test.o >/dev/null 2>&1 &&		\
 		echo "found." || ( echo "not found."; echo;			\
 		echo "Please install libpci headers (package pciutils-devel).";	\
 		echo "See README for more information."; echo;			\
@@ -251,7 +255,7 @@ pciutils: compiler
 	@$(shell ( echo "#include <pci/pci.h>";		   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ return 0; }"; ) > .test1.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .test1.c -o .test1 -lpci $(LIBS) >/dev/null 2>&1 &&	\
+	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .test1.c -o .test1 -lpci $(LIBS) >/dev/null 2>&1 &&	\
 		echo "found." || ( echo "not found."; echo;				\
 		echo "Please install libpci (package pciutils).";			\
 		echo "See README for more information."; echo;				\
@@ -282,7 +286,7 @@ features: compiler
 		   echo "struct ftdi_context *ftdic = NULL;";	   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ return ftdi_init(ftdic); }"; ) > .featuretest.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest $(FTDILIBS) $(LIBS) >/dev/null 2>&1 &&	\
+	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest $(FTDILIBS) $(LIBS) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "FTDISUPPORT := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp )
 	@$(DIFF) -q .features.tmp .features >/dev/null 2>&1 && rm .features.tmp || mv .features.tmp .features
