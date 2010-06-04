@@ -24,9 +24,8 @@
 #ifndef __FLASH_H__
 #define __FLASH_H__ 1
 
-#include <unistd.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stddef.h>
 #include "hwaccess.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -37,40 +36,46 @@
 typedef unsigned long chipaddr;
 
 enum programmer {
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
 	PROGRAMMER_INTERNAL,
 #endif
-#if DUMMY_SUPPORT == 1
+#if CONFIG_DUMMY == 1
 	PROGRAMMER_DUMMY,
 #endif
-#if NIC3COM_SUPPORT == 1
+#if CONFIG_NIC3COM == 1
 	PROGRAMMER_NIC3COM,
 #endif
-#if GFXNVIDIA_SUPPORT == 1
+#if CONFIG_NICREALTEK == 1
+	PROGRAMMER_NICREALTEK,
+	PROGRAMMER_NICREALTEK2,
+#endif	
+#if CONFIG_GFXNVIDIA == 1
 	PROGRAMMER_GFXNVIDIA,
 #endif
-#if DRKAISER_SUPPORT == 1
+#if CONFIG_DRKAISER == 1
 	PROGRAMMER_DRKAISER,
 #endif
-#if SATASII_SUPPORT == 1
+#if CONFIG_SATASII == 1
 	PROGRAMMER_SATASII,
 #endif
-#if ATAHPT_SUPPORT == 1
+#if CONFIG_ATAHPT == 1
 	PROGRAMMER_ATAHPT,
 #endif
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
+#if defined(__i386__) || defined(__x86_64__)
 	PROGRAMMER_IT87SPI,
 #endif
-#if FT2232_SPI_SUPPORT == 1
-	PROGRAMMER_FT2232SPI,
 #endif
-#if SERPROG_SUPPORT == 1
+#if CONFIG_FT2232_SPI == 1
+	PROGRAMMER_FT2232_SPI,
+#endif
+#if CONFIG_SERPROG == 1
 	PROGRAMMER_SERPROG,
 #endif
-#if BUSPIRATE_SPI_SUPPORT == 1
-	PROGRAMMER_BUSPIRATESPI,
+#if CONFIG_BUSPIRATE_SPI == 1
+	PROGRAMMER_BUSPIRATE_SPI,
 #endif
-#if DEDIPROG_SUPPORT == 1
+#if CONFIG_DEDIPROG == 1
 	PROGRAMMER_DEDIPROG,
 #endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
@@ -166,7 +171,7 @@ enum chipbustype {
 #define FEATURE_ADDR_MASK	(3 << 2)
 #define FEATURE_ADDR_2AA	(1 << 2)
 #define FEATURE_ADDR_AAA	(2 << 2)
-#define FEATURE_ADDR_SHIFTED	0
+#define FEATURE_ADDR_SHIFTED	(1 << 5)
 
 struct flashchip {
 	const char *vendor;
@@ -250,7 +255,7 @@ struct flashchip {
 
 extern struct flashchip flashchips[];
 
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
 struct penable {
 	uint16_t vendor_id;
 	uint16_t device_id;
@@ -297,12 +302,22 @@ extern struct board_pciid_enable board_pciid_enables[];
 struct board_info {
 	const char *vendor;
 	const char *name;
+	const int working;
+#ifdef CONFIG_PRINT_WIKI
+	const char *url;
+	const char *note;
+#endif
 };
 
-extern const struct board_info boards_ok[];
-extern const struct board_info boards_bad[];
-extern const struct board_info laptops_ok[];
-extern const struct board_info laptops_bad[];
+#ifdef CONFIG_PRINT_WIKI
+#define B(vendor, name, status, url, note) { vendor, name, status, url, note }
+#else
+#define B(vendor, name, status, url, note) { vendor, name, status }
+#endif
+
+extern const struct board_info boards_known[];
+extern const struct board_info laptops_known[];
+
 #endif
 
 /* udelay.c */
@@ -330,7 +345,7 @@ uint32_t pcidev_init(uint16_t vendor_id, uint32_t bar, struct pcidev_status *dev
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
 void print_supported(void);
-#if (NIC3COM_SUPPORT == 1) || (GFXNVIDIA_SUPPORT == 1) || (DRKAISER_SUPPORT == 1) || (SATASII_SUPPORT == 1) || (ATAHPT_SUPPORT == 1)
+#if CONFIG_NIC3COM+CONFIG_NICREALTEK+CONFIG_GFXNVIDIA+CONFIG_DRKAISER+CONFIG_SATASII+CONFIG_ATAHPT >= 1
 void print_supported_pcidevs(struct pcidev_status *devs);
 #endif
 void print_supported_wiki(void);
@@ -382,9 +397,10 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 #endif
 void get_io_perms(void);
 void release_io_perms(void);
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
 extern int is_laptop;
 extern int force_boardenable;
+extern int force_boardmismatch;
 void probe_superio(void);
 int internal_init(void);
 int internal_shutdown(void);
@@ -402,6 +418,12 @@ void mmio_writel(uint32_t val, void *addr);
 uint8_t mmio_readb(void *addr);
 uint16_t mmio_readw(void *addr);
 uint32_t mmio_readl(void *addr);
+void mmio_le_writeb(uint8_t val, void *addr);
+void mmio_le_writew(uint16_t val, void *addr);
+void mmio_le_writel(uint32_t val, void *addr);
+uint8_t mmio_le_readb(void *addr);
+uint16_t mmio_le_readw(void *addr);
+uint32_t mmio_le_readl(void *addr);
 
 /* programmer.c */
 int noop_shutdown(void);
@@ -417,7 +439,7 @@ uint32_t fallback_chip_readl(const chipaddr addr);
 void fallback_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 
 /* dummyflasher.c */
-#if DUMMY_SUPPORT == 1
+#if CONFIG_DUMMY == 1
 int dummy_init(void);
 int dummy_shutdown(void);
 void *dummy_map(const char *descr, unsigned long phys_addr, size_t len);
@@ -435,7 +457,7 @@ int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 #endif
 
 /* nic3com.c */
-#if NIC3COM_SUPPORT == 1
+#if CONFIG_NIC3COM == 1
 int nic3com_init(void);
 int nic3com_shutdown(void);
 void nic3com_chip_writeb(uint8_t val, chipaddr addr);
@@ -444,7 +466,7 @@ extern struct pcidev_status nics_3com[];
 #endif
 
 /* gfxnvidia.c */
-#if GFXNVIDIA_SUPPORT == 1
+#if CONFIG_GFXNVIDIA == 1
 int gfxnvidia_init(void);
 int gfxnvidia_shutdown(void);
 void gfxnvidia_chip_writeb(uint8_t val, chipaddr addr);
@@ -453,7 +475,7 @@ extern struct pcidev_status gfx_nvidia[];
 #endif
 
 /* drkaiser.c */
-#if DRKAISER_SUPPORT == 1
+#if CONFIG_DRKAISER == 1
 int drkaiser_init(void);
 int drkaiser_shutdown(void);
 void drkaiser_chip_writeb(uint8_t val, chipaddr addr);
@@ -461,8 +483,20 @@ uint8_t drkaiser_chip_readb(const chipaddr addr);
 extern struct pcidev_status drkaiser_pcidev[];
 #endif
 
+/* nicrealtek.c */
+#if CONFIG_NICREALTEK == 1
+int nicrealtek_init(void);
+int nicsmc1211_init(void);
+int nicrealtek_shutdown(void);
+void nicrealtek_chip_writeb(uint8_t val, chipaddr addr);
+uint8_t nicrealtek_chip_readb(const chipaddr addr);
+extern struct pcidev_status nics_realtek[];
+extern struct pcidev_status nics_realteksmc1211[];
+#endif
+
+
 /* satasii.c */
-#if SATASII_SUPPORT == 1
+#if CONFIG_SATASII == 1
 int satasii_init(void);
 int satasii_shutdown(void);
 void satasii_chip_writeb(uint8_t val, chipaddr addr);
@@ -471,7 +505,7 @@ extern struct pcidev_status satas_sii[];
 #endif
 
 /* atahpt.c */
-#if ATAHPT_SUPPORT == 1
+#if CONFIG_ATAHPT == 1
 int atahpt_init(void);
 int atahpt_shutdown(void);
 void atahpt_chip_writeb(uint8_t val, chipaddr addr);
@@ -504,6 +538,7 @@ int buspirate_spi_init(void);
 int buspirate_spi_shutdown(void);
 int buspirate_spi_send_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int buspirate_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
+int buspirate_spi_write_256(struct flashchip *flash, uint8_t *buf);
 
 /* dediprog.c */
 int dediprog_init(void);
@@ -530,7 +565,6 @@ extern unsigned long flashbase;
 extern int verbose;
 extern const char *flashrom_version;
 extern char *chip_to_probe;
-#define printf_debug(x...) { if (verbose) printf(x); }
 void map_flash_registers(struct flashchip *flash);
 int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
 int erase_flash(struct flashchip *flash);
@@ -546,6 +580,7 @@ int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, c
 int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gran);
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
+void print_banner(void);
 int selfcheck(void);
 int doit(struct flashchip *flash, int force, char *filename, int read_it, int write_it, int erase_it, int verify_it);
 
@@ -583,7 +618,8 @@ int handle_romentries(uint8_t *buffer, struct flashchip *flash);
 /* spi.c */
 enum spi_controller {
 	SPI_CONTROLLER_NONE,
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
+#if defined(__i386__) || defined(__x86_64__)
 	SPI_CONTROLLER_ICH7,
 	SPI_CONTROLLER_ICH9,
 	SPI_CONTROLLER_IT87XX,
@@ -591,16 +627,17 @@ enum spi_controller {
 	SPI_CONTROLLER_VIA,
 	SPI_CONTROLLER_WBSIO,
 #endif
-#if FT2232_SPI_SUPPORT == 1
+#endif
+#if CONFIG_FT2232_SPI == 1
 	SPI_CONTROLLER_FT2232,
 #endif
-#if DUMMY_SUPPORT == 1
+#if CONFIG_DUMMY == 1
 	SPI_CONTROLLER_DUMMY,
 #endif
-#if BUSPIRATE_SPI_SUPPORT == 1
+#if CONFIG_BUSPIRATE_SPI == 1
 	SPI_CONTROLLER_BUSPIRATE,
 #endif
-#if DEDIPROG_SUPPORT == 1
+#if CONFIG_DEDIPROG == 1
 	SPI_CONTROLLER_DEDIPROG,
 #endif
 	SPI_CONTROLLER_INVALID /* This must always be the last entry. */
@@ -634,6 +671,8 @@ int default_spi_send_multicommand(struct spi_command *cmds);
 uint32_t spi_get_valid_read_addr(void);
 
 /* ichspi.c */
+extern int ichspi_lock;
+extern uint32_t ichspi_bbar;
 int ich_init_opcodes(void);
 int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		    const unsigned char *writearr, unsigned char *readarr);

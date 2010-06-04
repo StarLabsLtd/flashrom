@@ -259,6 +259,10 @@
 #define E_28F016S5		0xAA
 #define P28F001BXT		0x94	/* 28F001BX-T */
 #define P28F001BXB		0x95	/* 28F001BX-B */
+#define P28F004BT		0x78	/* 28F004BV/BE-T */
+#define P28F004BB		0x79	/* 28F004BV/BE-B */
+#define P28F400BT		0x70	/* 28F400BV/CV/CE-T */
+#define P28F400BB		0x71	/* 28F400BV/CV/CE-B */
 #define SHARP_LH28F008SA	0xA2	/* Sharp chip, Intel Vendor ID */
 #define SHARP_LH28F008SC	0xA6	/* Sharp chip, Intel Vendor ID */
 
@@ -502,6 +506,9 @@
 #define W_25X16			0x3015
 #define W_25X32			0x3016
 #define W_25X64			0x3017
+#define W_25Q80			0x4014
+#define W_25Q16			0x4015
+#define W_25Q32			0x4016
 #define W_29C011		0xC1
 #define W_29C020C		0x45	/* Same as W29C020 and ASD AE29F2008 */
 #define W_29C040P		0x46	/* Same as W29C040 */

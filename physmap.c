@@ -20,6 +20,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#include <unistd.h>
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -30,20 +32,45 @@
 
 #ifdef __DJGPP__
 #include <dpmi.h>
+#include <sys/nearptr.h>
 
 #define MEM_DEV "dpmi"
 
-unsigned short  segFS = 0;
+static void *realmem_map;
+
+static void *map_first_meg(unsigned long phys_addr, size_t len)
+{
+
+	if (realmem_map) {
+		return realmem_map + phys_addr;
+	}
+
+	realmem_map = valloc(1024 * 1024);
+
+	if (!realmem_map) {
+		return NULL;
+	}
+
+	if (__djgpp_map_physical_memory(realmem_map, (1024 * 1024), 0)) {
+		return NULL;
+	}
+
+	return realmem_map + phys_addr;
+}
 
 void *sys_physmap(unsigned long phys_addr, size_t len)
 {
 	int ret;
 	__dpmi_meminfo mi;
 
-	if (segFS == 0)  {
-		segFS = __dpmi_allocate_ldt_descriptors (1);
-		__dpmi_set_segment_base_address (segFS, 0x0);
-		__dpmi_set_segment_limit (segFS, 0xffffffff);
+	/* enable 4GB limit on DS descriptor */
+	if (!__djgpp_nearptr_enable()) {
+		return NULL;
+	}
+
+	if ((phys_addr + len - 1) < (1024 * 1024)) {
+	/* we need to use another method to map first 1MB */
+		return map_first_meg(phys_addr, len);
 	}
 
 	mi.address = phys_addr;
@@ -54,42 +81,18 @@ void *sys_physmap(unsigned long phys_addr, size_t len)
 		return NULL;
 	}
 
-	return (void *) mi.address;
+	return (void *) mi.address + __djgpp_conventional_base;
 }
 
 #define sys_physmap_rw_uncached	sys_physmap
-
-#include <sys/movedata.h>
-#include <sys/segments.h>
-#include <go32.h>
-
-static void *realmem_cpy;
-
-void *sys_physmap_ro_cached(unsigned long phys_addr, size_t len)
-{
-	/* no support for not a 1MB of mem */
-	if ((phys_addr + len) > 1024*1024)
-		return NULL;
-
-	if (realmem_cpy)
-		return realmem_cpy + phys_addr;
-
-	realmem_cpy = valloc(1024*1024);
-
-	if (!realmem_cpy)
-		return NULL;
-
-	movedata(_dos_ds, 0, _my_ds(), (unsigned long) realmem_cpy, 1024*1024);
-	return realmem_cpy + phys_addr;
-}
-
+#define sys_physmap_ro_cached	sys_physmap
 
 void physunmap(void *virt_addr, size_t len)
 {
 	__dpmi_meminfo mi;
 
-	/* we ignore unmaps for our cheat 1MB copy */
-	if ((virt_addr >= realmem_cpy) && ((virt_addr + len) <= (realmem_cpy + 1024*1024))) {
+	/* we ignore unmaps for our first 1MB */
+	if ((virt_addr >= realmem_map) && ((virt_addr + len) <= (realmem_map + (1024 * 1024)))) {
 		return;
 	}
 
@@ -157,7 +160,7 @@ void *sys_physmap_ro_cached(unsigned long phys_addr, size_t len)
 	if (-1 == fd_mem_cached) {
 		/* Open the memory device CACHED. */
 		if (-1 == (fd_mem_cached = open(MEM_DEV, O_RDWR))) {
-			perror("Critical error: open(" MEM_DEV ")");
+			msg_perr("Critical error: open(" MEM_DEV "): %s", strerror(errno));
 			exit(2);
 		}
 	}
@@ -170,7 +173,7 @@ void *sys_physmap_ro_cached(unsigned long phys_addr, size_t len)
 void physunmap(void *virt_addr, size_t len)
 {
 	if (len == 0) {
-		printf_debug("Not unmapping zero size at %p\n", virt_addr);
+		msg_pspew("Not unmapping zero size at %p\n", virt_addr);
 		return;
 	}
 		
@@ -188,18 +191,18 @@ void *physmap_common(const char *descr, unsigned long phys_addr, size_t len, int
 	void *virt_addr;
 
 	if (len == 0) {
-		printf_debug("Not mapping %s, zero size at 0x%08lx.\n",
+		msg_pspew("Not mapping %s, zero size at 0x%08lx.\n",
 			     descr, phys_addr);
 		return NULL;
 	}
 		
 	if ((getpagesize() - 1) & len) {
-		fprintf(stderr, "Mapping %s at 0x%08lx, unaligned size 0x%lx.\n",
+		msg_perr("Mapping %s at 0x%08lx, unaligned size 0x%lx.\n",
 			descr, phys_addr, (unsigned long)len);
 	}
 
 	if ((getpagesize() - 1) & phys_addr) {
-		fprintf(stderr, "Mapping %s, 0x%lx bytes at unaligned 0x%08lx.\n",
+		msg_perr("Mapping %s, 0x%lx bytes at unaligned 0x%08lx.\n",
 			descr, (unsigned long)len, phys_addr);
 	}
 
@@ -212,15 +215,17 @@ void *physmap_common(const char *descr, unsigned long phys_addr, size_t len, int
 	if (NULL == virt_addr) {
 		if (NULL == descr)
 			descr = "memory";
-		fprintf(stderr, "Error accessing %s, 0x%lx bytes at 0x%08lx\n", descr, (unsigned long)len, phys_addr);
+		msg_perr("Error accessing %s, 0x%lx bytes at 0x%08lx\n", descr, (unsigned long)len, phys_addr);
 		perror(MEM_DEV " mmap failed");
+#ifdef __linux__
 		if (EINVAL == errno) {
-			fprintf(stderr, "In Linux this error can be caused by the CONFIG_NONPROMISC_DEVMEM (<2.6.27),\n");
-			fprintf(stderr, "CONFIG_STRICT_DEVMEM (>=2.6.27) and CONFIG_X86_PAT kernel options.\n");
-			fprintf(stderr, "Please check if either is enabled in your kernel before reporting a failure.\n");
-			fprintf(stderr, "You can override CONFIG_X86_PAT at boot with the nopat kernel parameter but\n");
-			fprintf(stderr, "disabling the other option unfortunately requires a kernel recompile. Sorry!\n");
+			msg_perr("In Linux this error can be caused by the CONFIG_NONPROMISC_DEVMEM (<2.6.27),\n");
+			msg_perr("CONFIG_STRICT_DEVMEM (>=2.6.27) and CONFIG_X86_PAT kernel options.\n");
+			msg_perr("Please check if either is enabled in your kernel before reporting a failure.\n");
+			msg_perr("You can override CONFIG_X86_PAT at boot with the nopat kernel parameter but\n");
+			msg_perr("disabling the other option unfortunately requires a kernel recompile. Sorry!\n");
 		}
+#endif
 		if (!mayfail)
 			exit(3);
 	}
@@ -237,6 +242,8 @@ void *physmap_try_ro(const char *descr, unsigned long phys_addr, size_t len)
 {
 	return physmap_common(descr, phys_addr, len, PHYSMAP_MAYFAIL, PHYSMAP_RO);
 }
+
+#if defined(__i386__) || defined(__x86_64__)
 
 #ifdef __linux__
 /*
@@ -279,13 +286,17 @@ msr_t rdmsr(int addr)
 
 int wrmsr(int addr, msr_t msr)
 {
+	uint32_t buf[2];
+	buf[0] = msr.lo;
+	buf[1] = msr.hi;
+
 	if (lseek(fd_msr, (off_t) addr, SEEK_SET) == -1) {
 		perror("Could not lseek() to MSR");
 		close(fd_msr);
 		exit(1);
 	}
 
-	if (write(fd_msr, &msr, 8) != 8 && errno != EIO) {
+	if (write(fd_msr, buf, 8) != 8 && errno != EIO) {
 		perror("Could not write() MSR");
 		close(fd_msr);
 		exit(1);
@@ -301,11 +312,11 @@ int wrmsr(int addr, msr_t msr)
 int setup_cpu_msr(int cpu)
 {
 	char msrfilename[64];
-	memset(msrfilename, 0, 64);
-	sprintf(msrfilename, "/dev/cpu/%d/msr", cpu);
+	memset(msrfilename, 0, sizeof(msrfilename));
+	snprintf(msrfilename, sizeof(msrfilename), "/dev/cpu/%d/msr", cpu);
 
 	if (fd_msr != -1) {
-		printf("MSR was already initialized\n");
+		msg_pinfo("MSR was already initialized\n");
 		return -1;
 	}
 
@@ -313,7 +324,7 @@ int setup_cpu_msr(int cpu)
 
 	if (fd_msr < 0) {
 		perror("Error while opening /dev/cpu/0/msr");
-		printf("Did you run 'modprobe msr'?\n");
+		msg_pinfo("Did you run 'modprobe msr'?\n");
 		return -1;
 	}
 
@@ -323,7 +334,7 @@ int setup_cpu_msr(int cpu)
 void cleanup_cpu_msr(void)
 {
 	if (fd_msr == -1) {
-		printf("No MSR initialized.\n");
+		msg_pinfo("No MSR initialized.\n");
 		return;
 	}
 
@@ -384,11 +395,11 @@ int wrmsr(int addr, msr_t msr)
 int setup_cpu_msr(int cpu)
 {
 	char msrfilename[64];
-	memset(msrfilename, 0, 64);
-	sprintf(msrfilename, "/dev/cpu%d", cpu);
+	memset(msrfilename, 0, sizeof(msrfilename));
+	snprintf(msrfilename, sizeof(msrfilename), "/dev/cpu%d", cpu);
 
 	if (fd_msr != -1) {
-		printf("MSR was already initialized\n");
+		msg_pinfo("MSR was already initialized\n");
 		return -1;
 	}
 
@@ -396,7 +407,7 @@ int setup_cpu_msr(int cpu)
 
 	if (fd_msr < 0) {
 		perror("Error while opening /dev/cpu0");
-		printf("Did you install ports/sysutils/devcpu?\n");
+		msg_pinfo("Did you install ports/sysutils/devcpu?\n");
 		return -1;
 	}
 
@@ -406,7 +417,7 @@ int setup_cpu_msr(int cpu)
 void cleanup_cpu_msr(void)
 {
 	if (fd_msr == -1) {
-		printf("No MSR initialized.\n");
+		msg_pinfo("No MSR initialized.\n");
 		return;
 	}
 
@@ -444,7 +455,7 @@ int wrmsr(int addr, msr_t msr)
 
 int setup_cpu_msr(int cpu)
 {
-	printf("No MSR support for your OS yet.\n");
+	msg_pinfo("No MSR support for your OS yet.\n");
 	return -1;
 }
 
@@ -455,4 +466,6 @@ void cleanup_cpu_msr(void)
 #endif
 #endif
 #endif
-
+#else
+/* Does MSR exist on non-x86 architectures? */
+#endif

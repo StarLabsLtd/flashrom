@@ -1,7 +1,7 @@
 /*
  * This file is part of the flashrom project.
  *
- * Copyright (C) 2007, 2008, 2009 Carl-Daniel Hailfinger
+ * Copyright (C) 2007, 2008, 2009, 2010 Carl-Daniel Hailfinger
  * Copyright (C) 2008 coresystems GmbH
  *
  * This program is free software; you can redistribute it and/or modify
@@ -39,10 +39,10 @@ static int spi_rdid(unsigned char *readarr, int bytes)
 	ret = spi_send_command(sizeof(cmd), bytes, cmd, readarr);
 	if (ret)
 		return ret;
-	printf_debug("RDID returned");
+	msg_cspew("RDID returned");
 	for (i = 0; i < bytes; i++)
-		printf_debug(" 0x%02x", readarr[i]);
-	printf_debug(". ");
+		msg_cspew(" 0x%02x", readarr[i]);
+	msg_cspew(". ");
 	return 0;
 }
 
@@ -63,28 +63,28 @@ static int spi_rems(unsigned char *readarr)
 	}
 	if (ret)
 		return ret;
-	printf_debug("REMS returned %02x %02x. ", readarr[0], readarr[1]);
+	msg_cspew("REMS returned %02x %02x. ", readarr[0], readarr[1]);
 	return 0;
 }
 
-static int spi_res(unsigned char *readarr)
+static int spi_res(unsigned char *readarr, int bytes)
 {
 	unsigned char cmd[JEDEC_RES_OUTSIZE] = { JEDEC_RES, 0, 0, 0 };
 	uint32_t readaddr;
 	int ret;
 
-	ret = spi_send_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
+	ret = spi_send_command(sizeof(cmd), bytes, cmd, readarr);
 	if (ret == SPI_INVALID_ADDRESS) {
 		/* Find the lowest even address allowed for reads. */
 		readaddr = (spi_get_valid_read_addr() + 1) & ~1;
 		cmd[1] = (readaddr >> 16) & 0xff,
 		cmd[2] = (readaddr >> 8) & 0xff,
 		cmd[3] = (readaddr >> 0) & 0xff,
-		ret = spi_send_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr);
+		ret = spi_send_command(sizeof(cmd), bytes, cmd, readarr);
 	}
 	if (ret)
 		return ret;
-	printf_debug("RES returned %02x. ", readarr[0]);
+	msg_cspew("RES returned %02x. ", readarr[0]);
 	return 0;
 }
 
@@ -97,7 +97,7 @@ int spi_write_enable(void)
 	result = spi_send_command(sizeof(cmd), 0, cmd, NULL);
 
 	if (result)
-		fprintf(stderr, "%s failed\n", __func__);
+		msg_cerr("%s failed\n", __func__);
 
 	return result;
 }
@@ -120,12 +120,12 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 		return 0;
 
 	if (!oddparity(readarr[0]))
-		printf_debug("RDID byte 0 parity violation. ");
+		msg_cdbg("RDID byte 0 parity violation. ");
 
 	/* Check if this is a continuation vendor ID */
 	if (readarr[0] == 0x7f) {
 		if (!oddparity(readarr[1]))
-			printf_debug("RDID byte 1 parity violation. ");
+			msg_cdbg("RDID byte 1 parity violation. ");
 		id1 = (readarr[0] << 8) | readarr[1];
 		id2 = readarr[2];
 		if (bytes > 3) {
@@ -137,7 +137,7 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 		id2 = (readarr[1] << 8) | readarr[2];
 	}
 
-	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __func__, id1, id2);
+	msg_cdbg("%s: id1 0x%02x, id2 0x%02x\n", __func__, id1, id2);
 
 	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
@@ -171,28 +171,30 @@ int probe_spi_rdid4(struct flashchip *flash)
 {
 	/* only some SPI chipsets support 4 bytes commands */
 	switch (spi_controller) {
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
+#if defined(__i386__) || defined(__x86_64__)
 	case SPI_CONTROLLER_ICH7:
 	case SPI_CONTROLLER_ICH9:
 	case SPI_CONTROLLER_VIA:
 	case SPI_CONTROLLER_SB600:
 	case SPI_CONTROLLER_WBSIO:
 #endif
-#if FT2232_SPI_SUPPORT == 1
+#endif
+#if CONFIG_FT2232_SPI == 1
 	case SPI_CONTROLLER_FT2232:
 #endif
-#if DUMMY_SUPPORT == 1
+#if CONFIG_DUMMY == 1
 	case SPI_CONTROLLER_DUMMY:
 #endif
-#if BUSPIRATE_SPI_SUPPORT == 1
+#if CONFIG_BUSPIRATE_SPI == 1
 	case SPI_CONTROLLER_BUSPIRATE:
 #endif
-#if DEDIPROG_SUPPORT == 1
+#if CONFIG_DEDIPROG == 1
 	case SPI_CONTROLLER_DEDIPROG:
 #endif
 		return probe_spi_rdid_generic(flash, 4);
 	default:
-		printf_debug("4b ID not supported on this SPI controller\n");
+		msg_cinfo("4b ID not supported on this SPI controller\n");
 	}
 
 	return 0;
@@ -209,7 +211,7 @@ int probe_spi_rems(struct flashchip *flash)
 	id1 = readarr[0];
 	id2 = readarr[1];
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __func__, id1, id2);
+	msg_cdbg("%s: id1 0x%x, id2 0x%x\n", __func__, id1, id2);
 
 	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
@@ -233,12 +235,14 @@ int probe_spi_rems(struct flashchip *flash)
 	return 0;
 }
 
-int probe_spi_res(struct flashchip *flash)
+int probe_spi_res1(struct flashchip *flash)
 {
 	unsigned char readarr[3];
 	uint32_t id2;
 	const unsigned char allff[] = {0xff, 0xff, 0xff};
 	const unsigned char all00[] = {0x00, 0x00, 0x00};
+
+	/* We only want one-byte RES if RDID and REMS are unusable. */
 
 	/* Check if RDID is usable and does not return 0xff 0xff 0xff or
 	 * 0x00 0x00 0x00. In that case, RES is pointless.
@@ -257,13 +261,37 @@ int probe_spi_res(struct flashchip *flash)
 		return 0;
 	}
 
-	if (spi_res(readarr))
+	if (spi_res(readarr, 1))
 		return 0;
 
-	/* FIXME: Handle the case where RES gives a 2-byte response. */
 	id2 = readarr[0];
-	printf_debug("%s: id 0x%x\n", __func__, id2);
+
+	msg_cdbg("%s: id 0x%x\n", __func__, id2);
+
 	if (id2 != flash->model_id)
+		return 0;
+
+	/* Print the status register to tell the
+	 * user about possible write protection.
+	 */
+	spi_prettyprint_status_register(flash);
+	return 1;
+}
+
+int probe_spi_res2(struct flashchip *flash)
+{
+	unsigned char readarr[2];
+	uint32_t id1, id2;
+
+	if (spi_res(readarr, 2))
+		return 0;
+
+	id1 = readarr[0];
+	id2 = readarr[1];
+
+	msg_cdbg("%s: id1 0x%x, id2 0x%x\n", __func__, id1, id2);
+
+	if (id1 != flash->manufacture_id || id2 != flash->model_id)
 		return 0;
 
 	/* Print the status register to tell the
@@ -283,7 +311,7 @@ uint8_t spi_read_status_register(void)
 	/* Read Status Register */
 	ret = spi_send_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
 	if (ret)
-		fprintf(stderr, "RDSR failed!\n");
+		msg_cerr("RDSR failed!\n");
 
 	return readarr[0];
 }
@@ -291,17 +319,17 @@ uint8_t spi_read_status_register(void)
 /* Prettyprint the status register. Common definitions. */
 void spi_prettyprint_status_register_common(uint8_t status)
 {
-	printf_debug("Chip status register: Bit 5 / Block Protect 3 (BP3) is "
+	msg_cdbg("Chip status register: Bit 5 / Block Protect 3 (BP3) is "
 		     "%sset\n", (status & (1 << 5)) ? "" : "not ");
-	printf_debug("Chip status register: Bit 4 / Block Protect 2 (BP2) is "
+	msg_cdbg("Chip status register: Bit 4 / Block Protect 2 (BP2) is "
 		     "%sset\n", (status & (1 << 4)) ? "" : "not ");
-	printf_debug("Chip status register: Bit 3 / Block Protect 1 (BP1) is "
+	msg_cdbg("Chip status register: Bit 3 / Block Protect 1 (BP1) is "
 		     "%sset\n", (status & (1 << 3)) ? "" : "not ");
-	printf_debug("Chip status register: Bit 2 / Block Protect 0 (BP0) is "
+	msg_cdbg("Chip status register: Bit 2 / Block Protect 0 (BP0) is "
 		     "%sset\n", (status & (1 << 2)) ? "" : "not ");
-	printf_debug("Chip status register: Write Enable Latch (WEL) is "
+	msg_cdbg("Chip status register: Write Enable Latch (WEL) is "
 		     "%sset\n", (status & (1 << 1)) ? "" : "not ");
-	printf_debug("Chip status register: Write In Progress (WIP/BUSY) is "
+	msg_cdbg("Chip status register: Write In Progress (WIP/BUSY) is "
 		     "%sset\n", (status & (1 << 0)) ? "" : "not ");
 }
 
@@ -311,18 +339,18 @@ void spi_prettyprint_status_register_common(uint8_t status)
  */
 void spi_prettyprint_status_register_st_m25p(uint8_t status)
 {
-	printf_debug("Chip status register: Status Register Write Disable "
+	msg_cdbg("Chip status register: Status Register Write Disable "
 		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
-	printf_debug("Chip status register: Bit 6 is "
+	msg_cdbg("Chip status register: Bit 6 is "
 		     "%sset\n", (status & (1 << 6)) ? "" : "not ");
 	spi_prettyprint_status_register_common(status);
 }
 
 void spi_prettyprint_status_register_sst25(uint8_t status)
 {
-	printf_debug("Chip status register: Block Protect Write Disable "
+	msg_cdbg("Chip status register: Block Protect Write Disable "
 		     "(BPL) is %sset\n", (status & (1 << 7)) ? "" : "not ");
-	printf_debug("Chip status register: Auto Address Increment Programming "
+	msg_cdbg("Chip status register: Auto Address Increment Programming "
 		     "(AAI) is %sset\n", (status & (1 << 6)) ? "" : "not ");
 	spi_prettyprint_status_register_common(status);
 }
@@ -342,7 +370,7 @@ void spi_prettyprint_status_register_sst25vf016(uint8_t status)
 		"all", "all"
 	};
 	spi_prettyprint_status_register_sst25(status);
-	printf_debug("Resulting block protection : %s\n",
+	msg_cdbg("Resulting block protection : %s\n",
 		     bpt[(status & 0x1c) >> 2]);
 }
 
@@ -356,7 +384,7 @@ void spi_prettyprint_status_register_sst25vf040b(uint8_t status)
 		"all blocks", "all blocks", "all blocks", "all blocks"
 	};
 	spi_prettyprint_status_register_sst25(status);
-	printf_debug("Resulting block protection : %s\n",
+	msg_cdbg("Resulting block protection : %s\n",
 		bpt[(status & 0x1c) >> 2]);
 }
 
@@ -365,7 +393,7 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 	uint8_t status;
 
 	status = spi_read_status_register();
-	printf_debug("Chip status register is %02x\n", status);
+	msg_cdbg("Chip status register is %02x\n", status);
 	switch (flash->manufacture_id) {
 	case ST_ID:
 		if (((flash->model_id & 0xff00) == 0x2000) ||
@@ -416,13 +444,13 @@ int spi_chip_erase_60(struct flashchip *flash)
 	
 	result = spi_disable_blockprotect();
 	if (result) {
-		fprintf(stderr, "spi_disable_blockprotect failed\n");
+		msg_cerr("spi_disable_blockprotect failed\n");
 		return result;
 	}
 	
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
+		msg_cerr("%s failed during command execution\n",
 			__func__);
 		return result;
 	}
@@ -433,7 +461,7 @@ int spi_chip_erase_60(struct flashchip *flash)
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(1000 * 1000);
 	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
@@ -462,13 +490,13 @@ int spi_chip_erase_c7(struct flashchip *flash)
 
 	result = spi_disable_blockprotect();
 	if (result) {
-		fprintf(stderr, "spi_disable_blockprotect failed\n");
+		msg_cerr("spi_disable_blockprotect failed\n");
 		return result;
 	}
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n", __func__);
+		msg_cerr("%s failed during command execution\n", __func__);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -478,21 +506,10 @@ int spi_chip_erase_c7(struct flashchip *flash)
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(1000 * 1000);
 	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
-}
-
-int spi_chip_erase_60_c7(struct flashchip *flash)
-{
-	int result;
-	result = spi_chip_erase_60(flash);
-	if (result) {
-		printf_debug("spi_chip_erase_60 failed, trying c7\n");
-		result = spi_chip_erase_c7(flash);
-	}
-	return result;
 }
 
 int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
@@ -523,7 +540,7 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 		return result;
 	}
@@ -533,7 +550,7 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(100 * 1000);
 	if (check_erased_range(flash, addr, blocklen)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
@@ -572,7 +589,7 @@ int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 		return result;
 	}
@@ -582,7 +599,7 @@ int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int 
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(100 * 1000);
 	if (check_erased_range(flash, addr, blocklen)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
@@ -619,7 +636,7 @@ int spi_block_erase_d7(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 		return result;
 	}
@@ -629,7 +646,7 @@ int spi_block_erase_d7(struct flashchip *flash, unsigned int addr, unsigned int 
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(100 * 1000);
 	if (check_erased_range(flash, addr, blocklen)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
@@ -643,17 +660,17 @@ int spi_chip_erase_d8(struct flashchip *flash)
 
 	spi_disable_blockprotect();
 
-	printf("Erasing chip: \n");
+	msg_cinfo("Erasing chip: \n");
 
 	for (i = 0; i < total_size / erase_size; i++) {
 		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
 		if (rc) {
-			fprintf(stderr, "Error erasing block at 0x%x\n", i);
+			msg_cerr("Error erasing block at 0x%x\n", i);
 			break;
 		}
 	}
 
-	printf("\n");
+	msg_cinfo("\n");
 
 	return rc;
 }
@@ -687,7 +704,7 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 		return result;
 	}
@@ -697,7 +714,7 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(10 * 1000);
 	if (check_erased_range(flash, addr, blocklen)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	return 0;
@@ -706,7 +723,7 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 int spi_block_erase_60(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
-		fprintf(stderr, "%s called with incorrect arguments\n",
+		msg_cerr("%s called with incorrect arguments\n",
 			__func__);
 		return -1;
 	}
@@ -716,7 +733,7 @@ int spi_block_erase_60(struct flashchip *flash, unsigned int addr, unsigned int 
 int spi_block_erase_c7(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
-		fprintf(stderr, "%s called with incorrect arguments\n",
+		msg_cerr("%s called with incorrect arguments\n",
 			__func__);
 		return -1;
 	}
@@ -732,7 +749,7 @@ int spi_write_status_enable(void)
 	result = spi_send_command(sizeof(cmd), JEDEC_EWSR_INSIZE, cmd, NULL);
 
 	if (result)
-		fprintf(stderr, "%s failed\n", __func__);
+		msg_cerr("%s failed\n", __func__);
 
 	return result;
 }
@@ -765,7 +782,7 @@ int spi_write_status_register(int status)
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
+		msg_cerr("%s failed during command execution\n",
 			__func__);
 	}
 	return result;
@@ -800,7 +817,7 @@ int spi_byte_program(int addr, uint8_t databyte)
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 	}
 	return result;
@@ -835,11 +852,11 @@ int spi_nbyte_program(int addr, uint8_t *bytes, int len)
 	}};
 
 	if (!len) {
-		fprintf(stderr, "%s called for zero-length write\n", __func__);
+		msg_cerr("%s called for zero-length write\n", __func__);
 		return 1;
 	}
 	if (len > 256) {
-		fprintf(stderr, "%s called for too long a write\n", __func__);
+		msg_cerr("%s called for too long a write\n", __func__);
 		return 1;
 	}
 
@@ -847,7 +864,7 @@ int spi_nbyte_program(int addr, uint8_t *bytes, int len)
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+		msg_cerr("%s failed during command execution at address 0x%x\n",
 			__func__, addr);
 	}
 	return result;
@@ -861,10 +878,10 @@ int spi_disable_blockprotect(void)
 	status = spi_read_status_register();
 	/* If there is block protection in effect, unprotect it first. */
 	if ((status & 0x3c) != 0) {
-		printf_debug("Some block protection in effect, disabling\n");
+		msg_cdbg("Some block protection in effect, disabling\n");
 		result = spi_write_status_register(status & ~0x3c);
 		if (result) {
-			fprintf(stderr, "spi_write_status_register failed\n");
+			msg_cerr("spi_write_status_register failed\n");
 			return result;
 		}
 	}
@@ -885,7 +902,7 @@ int spi_nbyte_read(int address, uint8_t *bytes, int len)
 }
 
 /*
- * Read a complete flash chip.
+ * Read a part of the flash chip.
  * Each page is read separately in chunks with a maximum size of chunksize.
  */
 int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize)
@@ -924,6 +941,52 @@ int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, 
 }
 
 /*
+ * Write a part of the flash chip.
+ * Each page is written separately in chunks with a maximum size of chunksize.
+ */
+int spi_write_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize)
+{
+	int rc = 0;
+	int i, j, starthere, lenhere;
+	/* FIXME: page_size is the wrong variable. We need max_writechunk_size
+	 * in struct flashchip to do this properly. All chips using
+	 * spi_chip_write_256 have page_size set to max_writechunk_size, so
+	 * we're OK for now.
+	 */
+	int page_size = flash->page_size;
+	int towrite;
+
+	/* Warning: This loop has a very unusual condition and body.
+	 * The loop needs to go through each page with at least one affected
+	 * byte. The lowest page number is (start / page_size) since that
+	 * division rounds down. The highest page number we want is the page
+	 * where the last byte of the range lives. That last byte has the
+	 * address (start + len - 1), thus the highest page number is
+	 * (start + len - 1) / page_size. Since we want to include that last
+	 * page as well, the loop condition uses <=.
+	 */
+	for (i = start / page_size; i <= (start + len - 1) / page_size; i++) {
+		/* Byte position of the first byte in the range in this page. */
+		/* starthere is an offset to the base address of the chip. */
+		starthere = max(start, i * page_size);
+		/* Length of bytes in the range in this page. */
+		lenhere = min(start + len, (i + 1) * page_size) - starthere;
+		for (j = 0; j < lenhere; j += chunksize) {
+			towrite = min(chunksize, lenhere - j);
+			rc = spi_nbyte_program(starthere + j, buf + starthere - start + j, towrite);
+			if (rc)
+				break;
+			while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+				programmer_delay(10);
+		}
+		if (rc)
+			break;
+	}
+
+	return rc;
+}
+
+/*
  * Program chip using byte programming. (SLOW!)
  * This is for chips which can only handle one byte writes
  * and for chips where memory mapped programming is impossible
@@ -936,12 +999,12 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 
 	spi_disable_blockprotect();
 	/* Erase first */
-	printf("Erasing flash before programming... ");
+	msg_cinfo("Erasing flash before programming... ");
 	if (erase_flash(flash)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
-	printf("done.\n");
+	msg_cinfo("done.\n");
 	for (i = 0; i < total_size; i++) {
 		result = spi_byte_program(i, buf[i]);
 		if (result)
@@ -960,17 +1023,19 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 	int result;
 
 	switch (spi_controller) {
-#if INTERNAL_SUPPORT == 1
+#if CONFIG_INTERNAL == 1
+#if defined(__i386__) || defined(__x86_64__)
 	case SPI_CONTROLLER_WBSIO:
-		fprintf(stderr, "%s: impossible with Winbond SPI masters,"
+		msg_cerr("%s: impossible with Winbond SPI masters,"
 				" degrading to byte program\n", __func__);
 		return spi_chip_write_1(flash, buf);
+#endif
 #endif
 	default:
 		break;
 	}
 	if (erase_flash(flash)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
 	/* FIXME: This will fail on ICH/VIA SPI. */
