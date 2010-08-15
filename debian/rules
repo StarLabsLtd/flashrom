@@ -10,8 +10,13 @@ DEB_MAKE_INSTALL_TARGET := install PREFIX=$(CURDIR)/debian/flashrom/usr
 # Reduce the number of unneeded dependencies with --as-needed.
 LDFLAGS += "-Wl,--as-needed"
 
+post-patches::
+	@# Copy udev rules file into debian/ so that dh_installudev finds it.
+	cp util/z60_flashrom.rules debian/flashrom.udev
+
 clean::
 	rm -f .dependencies .features
+	rm -f debian/flashrom.udev
 
 common-binary-post-install-arch:: list-missing
 

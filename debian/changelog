@@ -1,3 +1,22 @@
+flashrom (0.9.2+r1141-1) unstable; urgency=high
+
+  * New upstream release. Urgency high due to multiple critical bugfixes that
+    could potentially brick the PC (or worse: laptop) of users.
+    Other important fixes include:
+    + Properly writing Atmel AT25 chips would fail on some SPI controllers.
+    + Fix breakage with brick-potential on various non-x86 architectures.
+    + Fix broken reads on Winbond W25x16, especially on some ICH SPI chipsets.
+    + Fix write failure on 3COM NICs with parallel flash.
+    + Fix "byte merge" related corruption on some VIA chipsets.
+    + Fix some format string bugs.
+    + Fix hard hang on some recent (e.g. QM57) Intel chipsets.
+  * Install new upstream udev rules file to allow users to use flashrom
+    without root permissions on some (USB-based) programmers.
+  * Standards-Version: 3.9.1 (no changes required).
+  * debian/copyright: Updates.
+
+ -- Uwe Hermann <uwe@debian.org>  Sun, 15 Aug 2010 19:07:19 +0200
+
 flashrom (0.9.2+r1028-1) unstable; urgency=low
 
   * New upstream release.

@@ -31,7 +31,14 @@
 #endif
 
 #if NEED_PCI == 1
+/*
+ * libpci headers use the variable name "index" which triggers shadowing
+ * warnings on systems which have the index() function in a default #include
+ * or as builtin.
+ */
+#define index shadow_workaround_index
 #include <pci/pci.h>
+#undef index
 #endif
 
 #if defined (__i386__) || defined (__x86_64__)
@@ -153,6 +160,7 @@ cpu_to_be(64)
 #define le_to_cpu32 cpu_to_le32
 #define le_to_cpu64 cpu_to_le64
 
+#if NEED_PCI == 1
 #if defined (__i386__) || defined (__x86_64__)
 
 #define __FLASHROM_HAVE_OUTB__ 1
@@ -168,6 +176,10 @@ cpu_to_be(64)
 #if (defined(__MACH__) && defined(__APPLE__))
 #define __DARWIN__
 #endif
+
+/* Clarification about OUTB/OUTW/OUTL argument order:
+ * OUT[BWL](val, port)
+ */
 
 #if defined(__FreeBSD__) || defined(__DragonFly__)
   #include <machine/cpufunc.h>
@@ -221,17 +233,25 @@ cpu_to_be(64)
 #endif
 #endif
 
-#if defined(__NetBSD__)
+#if defined(__NetBSD__) || defined (__OpenBSD__)
   #define off64_t off_t
   #define lseek64 lseek
   #if defined(__i386__) || defined(__x86_64__)
     #include <sys/types.h>
     #include <machine/sysarch.h>
+#if defined(__NetBSD__)
     #if defined(__i386__)
       #define iopl i386_iopl
     #elif defined(__x86_64__)
       #define iopl x86_64_iopl
     #endif
+#elif defined (__OpenBSD__)
+    #if defined(__i386__)
+      #define iopl i386_iopl
+    #elif defined(__amd64__)
+      #define iopl amd64_iopl
+    #endif
+#endif
   #include <stdint.h>
 
 static inline void outb(uint8_t value, uint16_t port)
@@ -300,6 +320,7 @@ int freebsd_wrmsr(int addr, msr_t msr);
 
 #error Unknown architecture, please check if it supports PCI port IO.
 
+#endif
 #endif
 
 #endif /* !__HWACCESS_H__ */

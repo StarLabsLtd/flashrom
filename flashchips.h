@@ -75,7 +75,27 @@
 
 #define AMIC_ID			0x7F37	/* AMIC */
 #define AMIC_ID_NOPREFIX	0x37	/* AMIC */
-#define AMIC_A25L40P		0x2013
+#define AMIC_A25L05PT		0x2020
+#define AMIC_A25L05PU		0x2010
+#define AMIC_A25L10PT		0x2021
+#define AMIC_A25L10PU		0x2011
+#define AMIC_A25L20PT		0x2022
+#define AMIC_A25L20PU		0x2012
+#define AMIC_A25L40PT		0x2013	/* Datasheet says T and U have
+					   same device ID. Confirmed by
+					   hardware testing. */
+#define AMIC_A25L40PU		0x2013
+#define AMIC_A25L80P		0x2014	/* Seems that no A25L80PT exists */
+#define AMIC_A25L16PT		0x2025
+#define AMIC_A25L16PU		0x2015
+#define AMIC_A25L512		0x3010
+#define AMIC_A25L010		0x3011
+#define AMIC_A25L020		0x3012
+#define AMIC_A25L040		0x3013
+#define AMIC_A25L080		0x3014
+#define AMIC_A25L016		0x3015
+#define AMIC_A25L032		0x3016
+#define AMIC_A25LQ032		0x4016
 #define AMIC_A29002B		0x0d
 #define AMIC_A29002T		0x8C	/* Same as A290021T */
 #define AMIC_A29040B		0x86
@@ -98,12 +118,19 @@
 #define AT_25DF021		0x4300
 #define AT_25DF041A		0x4401
 #define AT_25DF081		0x4502
+#define AT_25DF081A		0x4501	/* Yes, 81A has a lower number than 81 */
 #define AT_25DF161		0x4602
 #define AT_25DF321		0x4700	/* Same as 26DF321 */
 #define AT_25DF321A		0x4701
 #define AT_25DF641		0x4800
-#define AT_25F512A		0x65 /* Needs special RDID. AT25F512A_RDID 15 1d */
+#define AT_25DQ161		0x8600
+#define AT25F512		/* No device ID found in datasheet. Vendor ID
+				 * can be read with AT25F512A_RDID */
+#define AT_25F512A		0x65 /* Needs AT25F512A_RDID */
 #define AT_25F512B		0x6500
+#define AT25F1024		/* No device ID found in datasheet. Vendor ID
+				 * can be read with AT25F512A_RDID */
+#define AT_25F1024A		0x60 /* Needs AT25F512A_RDID */
 #define AT_25FS010		0x6601
 #define AT_25FS040		0x6604
 #define AT_26DF041		0x4400
@@ -144,12 +171,14 @@
 #define AT_45DB642		/* No ID available */
 #define AT_45DB642D		0x2800
 #define AT_49BV512		0x03
+#define AT_49F020		0x0B
 #define AT_49F002N		0x07	/* for AT49F002(N)  */
 #define AT_49F002NT		0x08	/* for AT49F002(N)T */
 
 #define CATALYST_ID		0x31	/* Catalyst */
 
 #define EMST_ID			0x8C	/* EMST / EFST Elite Flash Storage */
+#define EMST_F25L008A		0x2014
 #define EMST_F49B002UA		0x00
 
 /*
@@ -240,7 +269,8 @@
 #define HY_29LV800B		0x5B
 #define HY_29F040A		0xA4
 #define HY_29F400B		0xAB	/* Same as HY_29F400AB */
-#define HY_29F002		0xB0
+#define HY_29F002B		0x34
+#define HY_29F002T		0xB0
 #define HY_29LV400T		0xB9
 #define HY_29LV400B		0xBA
 #define HY_29F080		0xD5
@@ -259,6 +289,7 @@
 #define E_28F016S5		0xAA
 #define P28F001BXT		0x94	/* 28F001BX-T */
 #define P28F001BXB		0x95	/* 28F001BX-B */
+#define P28F002BC		0x7C	/* 28F002BC-T */
 #define P28F004BT		0x78	/* 28F004BV/BE-T */
 #define P28F004BB		0x79	/* 28F004BV/BE-B */
 #define P28F400BT		0x70	/* 28F400BV/CV/CE-T */
@@ -387,7 +418,7 @@
 #define SST_25VF512A_REMS	0x48	/* REMS or RES opcode */
 #define SST_25VF010_REMS	0x49	/* REMS or RES opcode */
 #define SST_25VF020_REMS	0x43	/* REMS or RES opcode */
-#define SST_25VF040_REMS	0x44	/* REMS or RES opcode */
+#define SST_25VF040_REMS	0x44	/* REMS or RES opcode, same as SST25LF040A */
 #define SST_25VF040B		0x258D
 #define SST_25VF040B_REMS	0x8D	/* REMS or RES opcode */
 #define SST_25VF080_REMS	0x80	/* REMS or RES opcode */
@@ -396,6 +427,7 @@
 #define SST_25VF016B		0x2541
 #define SST_25VF032B		0x254A
 #define SST_25VF032B_REMS	0x4A	/* REMS or RES opcode */
+#define SST_25VF064C		0x254B
 #define SST_26VF016		0x2601
 #define SST_26VF032		0x2602
 #define SST_27SF512		0xA4
@@ -482,11 +514,22 @@
 #define ST_M29W040B		0xE3
 #define ST_M29W512B		0x27
 
-#define SYNCMOS_ID		0x40	/* SyncMOS and Mosel Vitelic */
-#define S29C51001T		0x01
-#define S29C51002T		0x02
-#define S29C51004T		0x03
-#define S29C31004T		0x63
+#define SYNCMOS_MVC_ID		0x40	/* SyncMOS (SM) and Mosel Vitelic Corporation (MVC) */
+#define MVC_V29C51000T		0x00
+#define MVC_V29C51400T		0x13
+#define MVC_V29LC51000		0x20
+#define MVC_V29LC51001		0x60
+#define MVC_V29LC51002		0x82
+#define MVC_V29C51000B		0xA0
+#define MVC_V29C51400B		0xB3
+#define SM_MVC_29C51001T	0x01	/* Identical chips: {F,S,V}29C51001T */
+#define SM_MVC_29C51002T	0x02	/* Identical chips: {F,S,V}29C51002T */
+#define SM_MVC_29C51004T	0x03	/* Identical chips: {F,S,V}29C51004T */
+#define SM_MVC_29C31004T	0x63	/* Identical chips: {S,V}29C31004T */
+#define SM_MVC_29C31004B	0x73	/* Identical chips: {S,V}29C31004B */
+#define SM_MVC_29C51001B	0xA1	/* Identical chips: {F,S,V}29C51001B */
+#define SM_MVC_29C51002B	0xA2	/* Identical chips: {F,S,V}29C51002B */
+#define SM_MVC_29C51004B	0xA3	/* Identical chips: {F,S,V}29C51004B */
 
 #define TI_ID			0x97	/* Texas Instruments */
 #define TI_OLD_ID		0x01	/* TI chips from last century */
@@ -509,6 +552,7 @@
 #define W_25Q80			0x4014
 #define W_25Q16			0x4015
 #define W_25Q32			0x4016
+#define W_25Q64			0x4017
 #define W_29C011		0xC1
 #define W_29C020C		0x45	/* Same as W29C020 and ASD AE29F2008 */
 #define W_29C040P		0x46	/* Same as W29C040 */

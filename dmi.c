@@ -23,8 +23,29 @@
 #include <stdlib.h>
 
 #include "flash.h"
+#include "programmer.h"
 
-const char *dmidecode_names[] = {
+int has_dmi_support = 0;
+
+#if STANDALONE
+
+/* Stub to indicate missing DMI functionality.
+ * has_dmi_support is 0 by default, so nothing to do here.
+ * Because dmidecode is not available on all systems, the goal is to implement
+ * the DMI subset we need directly in this file.
+ */
+void dmi_init(void)
+{
+}
+
+int dmi_match(const char *pattern)
+{
+	return 0;
+}
+
+#else /* STANDALONE */
+
+static const char *dmidecode_names[] = {
 	"system-manufacturer",
 	"system-product-name",
 	"system-version",
@@ -34,10 +55,9 @@ const char *dmidecode_names[] = {
 };
 
 #define DMI_COMMAND_LEN_MAX 260
-const char *dmidecode_command = "dmidecode";
+static const char *dmidecode_command = "dmidecode";
 
-int has_dmi_support = 0;
-char *dmistrings[ARRAY_SIZE(dmidecode_names)];
+static char *dmistrings[ARRAY_SIZE(dmidecode_names)];
 
 /* Strings longer than 4096 in DMI are just insane. */
 #define DMI_MAX_ANSWER_LEN 4096
@@ -56,15 +76,24 @@ static char *get_dmi_string(const char *string_name)
 		msg_perr("DMI pipe open error\n");
 		return NULL;
 	}
-	if (!fgets(answerbuf, DMI_MAX_ANSWER_LEN, dmidecode_pipe)) {
-		if(ferror(dmidecode_pipe)) {
-			msg_perr("DMI pipe read error\n");
-			pclose(dmidecode_pipe);
-			return NULL;
-		} else {
-			answerbuf[0] = 0;	/* Hit EOF */
+
+	/* Kill lines starting with '#', as recent dmidecode versions
+	   have the quirk to emit a "# SMBIOS implementations newer..."
+	   message even on "-s" if the SMBIOS declares a
+	   newer-than-supported version number, while it *should* only print
+	   the requested string. */
+	do {
+		if (!fgets(answerbuf, DMI_MAX_ANSWER_LEN, dmidecode_pipe)) {
+			if(ferror(dmidecode_pipe)) {
+				msg_perr("DMI pipe read error\n");
+				pclose(dmidecode_pipe);
+				return NULL;
+			} else {
+				answerbuf[0] = 0;	/* Hit EOF */
+			}
 		}
-	}
+	} while(answerbuf[0] == '#');
+
 	/* Toss all output above DMI_MAX_ANSWER_LEN away to prevent
 	   deadlock on pclose. */
 	while (!feof(dmidecode_pipe))
@@ -172,3 +201,5 @@ int dmi_match(const char *pattern)
 
 	return 0;
 }
+
+#endif /* STANDALONE */

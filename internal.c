@@ -21,11 +21,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include "flash.h"
+#include "programmer.h"
 
 #if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
@@ -124,36 +122,45 @@ int internal_init(void)
 	int force_laptop = 0;
 	char *arg;
 
-	arg = extract_param(&programmer_param, "boardenable=", ",:");
+	arg = extract_programmer_param("boardenable");
 	if (arg && !strcmp(arg,"force")) {
 		force_boardenable = 1;
 	} else if (arg && !strlen(arg)) {
 		msg_perr("Missing argument for boardenable.\n");
+		free(arg);
+		return 1;
 	} else if (arg) {
 		msg_perr("Unknown argument for boardenable: %s\n", arg);
-		exit(1);
+		free(arg);
+		return 1;
 	}
 	free(arg);
 
-	arg = extract_param(&programmer_param, "boardmismatch=", ",:");
+	arg = extract_programmer_param("boardmismatch");
 	if (arg && !strcmp(arg,"force")) {
 		force_boardmismatch = 1;
 	} else if (arg && !strlen(arg)) {
 		msg_perr("Missing argument for boardmismatch.\n");
+		free(arg);
+		return 1;
 	} else if (arg) {
 		msg_perr("Unknown argument for boardmismatch: %s\n", arg);
-		exit(1);
+		free(arg);
+		return 1;
 	}
 	free(arg);
 
-	arg = extract_param(&programmer_param, "laptop=", ",:");
+	arg = extract_programmer_param("laptop");
 	if (arg && !strcmp(arg,"force_I_want_a_brick")) {
 		force_laptop = 1;
 	} else if (arg && !strlen(arg)) {
 		msg_perr("Missing argument for laptop.\n");
+		free(arg);
+		return 1;
 	} else if (arg) {
 		msg_perr("Unknown argument for laptop: %s\n", arg);
-		exit(1);
+		free(arg);
+		return 1;
 	}
 	free(arg);
 
@@ -165,16 +172,28 @@ int internal_init(void)
 	pci_init(pacc);		/* Initialize the PCI library */
 	pci_scan_bus(pacc);	/* We want to get the list of devices */
 
-	/* We look at the lbtable first to see if we need a
+	if (processor_flash_enable()) {
+		msg_perr("Processor detection/init failed.\n"
+			 "Aborting.\n");
+		return 1;
+	}
+
+#if defined(__i386__) || defined(__x86_64__)
+	/* We look at the cbtable first to see if we need a
 	 * mainboard specific flash enable sequence.
 	 */
 	coreboot_init();
 
-#if defined(__i386__) || defined(__x86_64__)
 	dmi_init();
 
 	/* Probe for the Super I/O chip and fill global struct superio. */
 	probe_superio();
+#else
+	/* FIXME: Enable cbtable searching on all non-x86 platforms supported
+	 *        by coreboot.
+	 * FIXME: Find a replacement for DMI on non-x86.
+	 * FIXME: Enable Super I/O probing once port I/O is possible.
+	 */
 #endif
 
 	/* Warn if a laptop is detected. */
@@ -200,6 +219,7 @@ int internal_init(void)
 		}
 	}
 
+#if __FLASHROM_LITTLE_ENDIAN__
 	/* try to enable it. Failure IS an option, since not all motherboards
 	 * really need this to be done, etc., etc.
 	 */
@@ -210,8 +230,10 @@ int internal_init(void)
 	}
 
 #if defined(__i386__) || defined(__x86_64__)
-	/* Probe for IT87* LPC->SPI translation unconditionally. */
-	it87xx_probe_spi_flash(NULL);
+	/* Probe unconditionally for IT87* LPC->SPI translation and for
+	 * IT87* Parallel write enable.
+	 */
+	init_superio_ite();
 #endif
 
 	board_flash_enable(lb_vendor, lb_part);
@@ -220,7 +242,26 @@ int internal_init(void)
 	 * The error code might have been a warning only.
 	 * Besides that, we don't check the board enable return code either.
 	 */
+#if defined(__i386__) || defined(__x86_64__)
 	return 0;
+#else
+	msg_perr("Your platform is not supported yet for the internal "
+		 "programmer due to missing\n"
+		 "flash_base and top/bottom alignment information.\n"
+		 "Aborting.\n");
+	return 1;
+#endif
+#else
+	/* FIXME: Remove this unconditional abort once all PCI drivers are
+	 * converted to use little-endian accesses for memory BARs.
+	 */
+	msg_perr("Your platform is not supported yet for the internal "
+		 "programmer because it has\n"
+		 "not been converted from native endian to little endian "
+		 "access yet.\n"
+		 "Aborting.\n");
+	return 1;
+#endif
 }
 
 int internal_shutdown(void)
