@@ -7,7 +7,7 @@ Standards-Version: 3.9.1
 Homepage: http://www.flashrom.org
 
 Package: flashrom
-Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 alpha hurd-i386 netbsd-alpha netbsd-i386
+Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 hurd-i386 netbsd-i386
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: dmidecode [i386 ia64 amd64 kfreebsd-i386 knetbsd-i386 kfreebsd-amd64]
 Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips

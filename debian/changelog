@@ -1,3 +1,22 @@
+flashrom (0.9.2+r1141-2~bpo50+1) lenny-backports; urgency=low
+
+  * Rebuild for lenny-backports.
+
+ -- Matt Taggart <taggart@debian.org>  Tue, 16 Nov 2010 15:15:08 -0800
+
+flashrom (0.9.2+r1141-2) unstable; urgency=high
+
+  * Drop alpha and netbsd-alpha from the arch list for now (builds fail).
+    + Keeping "urgency=high" due to high-priority fixes in the last upload,
+      in order to allow those fixes to migrate to testing.
+    + It's unclear how well alpha (if at all) is supported upstream at this
+      point. There's a compile-time #error in the upstream code breaking
+      the build intentionally on alpha right now.
+      Alpha support will be re-enabled as soon as this has been sorted out
+      upstream, but it may take quite a while.
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 17 Aug 2010 00:50:27 +0200
+
 flashrom (0.9.2+r1141-1) unstable; urgency=high
 
   * New upstream release. Urgency high due to multiple critical bugfixes that
