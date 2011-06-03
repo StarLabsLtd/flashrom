@@ -97,7 +97,7 @@ Force one or more of the following actions:
 .sp
 * Force chip read and pretend the chip is there.
 .sp
-* Force chip access even if the chip is bigger than the maximum supported\
+* Force chip access even if the chip is bigger than the maximum supported \
 size for the flash bus.
 .sp
 * Force erase even if erase is known bad.
@@ -169,6 +169,9 @@ Specify the programmer device. Currently supported are:
 .sp
 .BR "* nicsmc1211" " (for flash ROMs on RTL8139-compatible SMC2 network cards)"
 .sp
+.BR "* nicnatsemi" " (for flash ROMs on National Semiconductor DP838* network \
+cards)"
+.sp
 .BR "* gfxnvidia" " (for flash ROMs on NVIDIA graphics cards)"
 .sp
 .BR "* drkaiser" " (for flash ROMs on Dr. Kaiser PC-Waechter PCI cards)"
@@ -187,8 +190,16 @@ based USB SPI programmer)"
 .sp
 .BR "* buspirate_spi" " (for SPI flash ROMs attached to a Bus Pirate)"
 .sp
+.BR "* dediprog" " (for SPI flash ROMs attached to a Dediprog SF100)"
+.sp
 .BR "* rayer_spi" " (for SPI flash ROMs attached to a RayeR parport \
 based programmer)"
+.sp
+.BR "* nicintel_spi" " (for SPI flash ROMs attached to an Intel Gigabit \
+network cards)"
+.sp
+.BR "* ogp_spi" " (for SPI flash ROMs attached to an Open Graphics Project \
+graphics card)"
 .sp
 Some programmers have optional or mandatory parameters which are described
 in detail in the
@@ -310,8 +321,8 @@ If you do not specify bus, all buses will be enabled.
 Example:
 .B "flashrom \-p dummy:bus=lpc+fwh"
 .TP
-.BR "nic3com" , " nicrealtek" , " nicsmc1211" , " gfxnvidia" , " satasii \
-" and " atahpt " programmers
+.BR "nic3com" , " nicrealtek" , " nicsmc1211" , " nicnatsemi" , " gfxnvidia\
+" , " satasii " and " atahpt " programmers
 These programmers have an option to specify the PCI address of the card
 your want to use, which must be specified if more than one card supported
 by the selected programmer is installed in your system. The syntax is
@@ -393,9 +404,65 @@ can be any of
 .BR 30k ", " 125k ", " 250k ", " 1M ", " 2M ", " 2.6M ", " 4M ", " 8M
 (in Hz). The default is the maximum frequency of 8 MHz.
 .TP
+.BR "dediprog " programmer
+An optional
+.B voltage
+parameter specifies the voltage the Dediprog should use. The default unit is
+Volt if no unit is specified. You can use
+.BR mV ", " milliVolt ", " V " or " Volt
+as unit specifier. Syntax is
+.sp
+.B "flashrom \-p dediprog:voltage=value"
+.sp
+where
+.B value
+can be any of
+.BR 0V ", " 1.8V ", " 2.5V ", " 3.5V
+or the equivalent in mV.
+.TP
 .BR "rayer_spi " programmer
-No parameters defined yet. More information about the hardware is available at
+The default I/O base address used for the parallel port is 0x378 and you can use
+the optional
+.B iobase
+parameter to specify an alternate base I/O address with the
+.sp
+.B "  flashrom \-p rayer_spi:iobase=baseaddr"
+.sp
+syntax where
+.B baseaddr
+is base I/O port address of the parallel port, which must be a multiple of
+four. Make sure to not forget the "0x" prefix for hexadecimal port addresses.
+.sp
+More information about the hardware is available at
 http://rayer.ic.cz/elektro/spipgm.htm
+.TP
+.BR "ogp_spi " programmer
+The FLASH ROM chip to access must be specified with the 
+.B rom
+parameter.
+.sp
+.B "  flashrom \-p ogp_spi:rom=name"
+.sp
+Where
+.B name
+is either
+.B cprom
+or
+.B s3
+for the configuration ROM and 
+.B bprom
+or
+.B bios
+for the BIOS ROM.  If more than one card supported by the ogp_spi programmer
+is installed in your system, you have to specify the PCI address of the card
+you want to use with the
+.B pci=
+parameter as explained in the
+.B nic3com
+section above.
+.sp
+More information about the hardware is available at
+http://wiki.opengraphics.org
 .SH EXIT STATUS
 flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
 (/dev/xsvc on Solaris) can not be opened and with 3 if a call to mmap() fails.
@@ -444,6 +511,9 @@ have to be run as superuser/root, and need additional raw access permission.
 can be run as normal user on most operating systems if appropriate device
 permissions are set.
 .sp
+.B ogp
+needs PCI configuration space read access and raw memory access.
+.sp
 On OpenBSD, you can obtain raw access permission by setting
 securelevel=-1 in /etc/rc.securelevel and rebooting, or rebooting into single
 user mode.
@@ -453,6 +523,9 @@ Please report any bugs at
 .B "  http://www.flashrom.org/trac/flashrom/newticket"
 .sp
 or on the flashrom mailing list at
+.B "<flashrom@flashrom.org>"
+.sp
+We recommend to subscribe first at
 .sp
 .B "  http://www.flashrom.org/mailman/listinfo/flashrom"
 .sp
@@ -469,51 +542,77 @@ additionally available under the GPL (version 2, or any later version).
 .br
 Please see the individual files.
 .SH AUTHORS
+Andrew Morgan
+.br
 Carl-Daniel Hailfinger
 .br
-Claus Gindhart <claus.gindhart@kontron.com>
+Claus Gindhart
 .br
-Dominik Geyer <dominik.geyer@kontron.com>
+David Borg
+.br
+David Hendricks
+.br
+Dominik Geyer
 .br
 Eric Biederman
 .br
-Giampiero Giancipoli <gianci@email.it>
+Giampiero Giancipoli
 .br
-Joe Bao <Zheng.Bao@amd.com>
+Helge Wagner
 .br
-Luc Verhaegen <libv@skynet.be>
+Idwer Vollering
+.br
+Joe Bao
+.br
+Joerg Fischer
+.br
+Joshua Roys
+.br
+Luc Verhaegen
 .br
 Li-Ta Lo
 .br
-Markus Boas <ryven@ryven.de>
+Mark Marshall
 .br
-Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Markus Boas
 .br
-Nikolay Petukhov <nikolay.petukhov@gmail.com>
+Mattias Mattsson
 .br
-Peter Stuge <peter@stuge.se>
+Michael Karcher
 .br
-Reinder E.N. de Haan <lb_reha@mveas.com>
+Nikolay Petukhov
 .br
-Ronald G. Minnich <rminnich@gmail.com>
+Patrick Georgi
 .br
-Ronald Hoogenboom <ronald@zonnet.nl>
+Peter Lemenkov
 .br
-Sean Nelson <audiohacked@gmail.com>
+Peter Stuge
 .br
-Stefan Reinauer <stepan@coresystems.de>
+Reinder E.N. de Haan
 .br
-Stefan Wildemann <stefan.wildemann@kontron.com>
+Ronald G. Minnich
 .br
-Steven James <pyro@linuxlabs.com>
+Ronald Hoogenboom
 .br
-Uwe Hermann <uwe@hermann-uwe.de>
+Sean Nelson
+.br
+Stefan Reinauer
+.br
+Stefan Wildemann
+.br
+Stephan Guilloux
+.br
+Steven James
+.br
+Uwe Hermann
 .br
 Wang Qingpei
 .br
 Yinghai Lu
 .br
-some others 
+some others, please see the flashrom svn changelog for details.
+.br
+All authors can be reached via e-mail at <flashrom@flashrom.org>.
 .PP
 This manual page was written by Uwe Hermann <uwe@hermann-uwe.de>
 and Carl-Daniel Hailfinger.

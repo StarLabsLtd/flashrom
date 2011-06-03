@@ -35,7 +35,7 @@ const struct pcidev_status satas_sii[] = {
 	{0x1095, 0x3114, OK, "Silicon Image", "SiI 3114 [SATALink/SATARaid] SATA Ctrl"},
 	{0x1095, 0x3124, OK, "Silicon Image", "SiI 3124 PCI-X SATA Ctrl"},
 	{0x1095, 0x3132, OK, "Silicon Image", "SiI 3132 SATA Raid II Ctrl"},
-	{0x1095, 0x3512, NT, "Silicon Image", "SiI 3512 [SATALink/SATARaid] SATA Ctrl"},
+	{0x1095, 0x3512, OK, "Silicon Image", "SiI 3512 [SATALink/SATARaid] SATA Ctrl"},
 
 	{},
 };
@@ -47,7 +47,7 @@ int satasii_init(void)
 
 	get_io_perms();
 
-	pcidev_init(PCI_VENDOR_ID_SII, PCI_BASE_ADDRESS_0, satas_sii);
+	pcidev_init(PCI_BASE_ADDRESS_0, satas_sii);
 
 	id = pcidev_dev->device_id;
 

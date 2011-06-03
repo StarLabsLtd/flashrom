@@ -19,6 +19,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#ifndef __LIBPAYLOAD__
+
 #include <unistd.h>
 #include <sys/time.h>
 #include <stdlib.h>
@@ -43,11 +45,11 @@ static unsigned long measure_os_delay_resolution(void)
 	struct timeval start, end;
 	unsigned long counter = 0;
 	
-	gettimeofday(&start, 0);
+	gettimeofday(&start, NULL);
 	timeusec = 0;
 	
 	while (!timeusec && (++counter < 1000000000)) {
-		gettimeofday(&end, 0);
+		gettimeofday(&end, NULL);
 		timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
 			   (end.tv_usec - start.tv_usec);
 		/* Protect against time going forward too much. */
@@ -66,9 +68,9 @@ static unsigned long measure_delay(int usecs)
 	unsigned long timeusec;
 	struct timeval start, end;
 	
-	gettimeofday(&start, 0);
+	gettimeofday(&start, NULL);
 	myusec_delay(usecs);
-	gettimeofday(&end, 0);
+	gettimeofday(&end, NULL);
 	timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
 		   (end.tv_usec - start.tv_usec);
 	/* Protect against time going forward too much. */
@@ -179,3 +181,16 @@ void internal_delay(int usecs)
 	}
 }
 
+#else 
+#include <libpayload.h>
+
+void myusec_calibrate_delay(void)
+{
+	get_cpu_speed();
+}
+
+void internal_delay(int usecs)
+{
+	udelay(usecs);
+}
+#endif

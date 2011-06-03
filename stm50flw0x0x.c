@@ -39,7 +39,7 @@
 static int unlock_block_stm50flw0x0x(struct flashchip *flash, int offset)
 {
 	chipaddr wrprotect = flash->virtual_registers + 2;
-	const uint8_t unlock_sector = 0x00;
+	static const uint8_t unlock_sector = 0x00;
 	int j;
 
 	/*
@@ -93,55 +93,24 @@ int unlock_stm50flw0x0x(struct flashchip *flash)
 	return 0;
 }
 
+/* This function is unused. */
 int erase_sector_stm50flw0x0x(struct flashchip *flash, unsigned int sector, unsigned int sectorsize)
 {
 	chipaddr bios = flash->virtual_memory + sector;
 
 	// clear status register
 	chip_writeb(0x50, bios);
-	msg_cdbg("Erase at 0x%lx\n", bios);
 	// now start it
 	chip_writeb(0x32, bios);
 	chip_writeb(0xd0, bios);
 	programmer_delay(10);
 
-	wait_82802ab(flash->virtual_memory);
+	wait_82802ab(flash);
 
 	if (check_erased_range(flash, sector, sectorsize)) {
 		msg_cerr("ERASE FAILED!\n");
 		return -1;
 	}
-	msg_cinfo("DONE BLOCK 0x%x\n", sector);
-
-	return 0;
-}
-
-int erase_chip_stm50flw0x0x(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
-{
-	int i;
-	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
-
-	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
-		msg_cerr("%s called with incorrect arguments\n",
-			__func__);
-		return -1;
-	}
-
-	msg_cinfo("Erasing page:\n");
-	for (i = 0; i < total_size / page_size; i++) {
-		msg_cinfo("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
-		msg_cinfo("%04d at address: 0x%08x ", i, i * page_size);
-		//if (unlock_block_stm50flw0x0x(flash, i * page_size)) {
-		//	msg_cerr("UNLOCK FAILED!\n");
-		//	return -1;
-		//}
-		if (erase_block_82802ab(flash, i * page_size, page_size)) {
-			msg_cerr("ERASE FAILED!\n");
-			return -1;
-		}
-	}
-	msg_cinfo("\n");
 
 	return 0;
 }

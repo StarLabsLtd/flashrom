@@ -1,3 +1,11 @@
+flashrom (0.9.3+r1323-1) unstable; urgency=low
+
+  * New upstream release.
+  * Standards-Version: 3.9.2 (no changes required).
+  * debian/rules: Delete .libdeps file in 'clean' target.
+
+ -- Uwe Hermann <uwe@debian.org>  Fri, 03 Jun 2011 16:53:47 +0200
+
 flashrom (0.9.2+r1141-2) unstable; urgency=high
 
   * Drop alpha and netbsd-alpha from the arch list for now (builds fail).

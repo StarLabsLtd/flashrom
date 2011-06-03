@@ -43,14 +43,13 @@ int drkaiser_init(void)
 
 	get_io_perms();
 
-	addr = pcidev_init(PCI_VENDOR_ID_DRKAISER, PCI_BASE_ADDRESS_2,
-			   drkaiser_pcidev);
+	addr = pcidev_init(PCI_BASE_ADDRESS_2, drkaiser_pcidev);
 
 	/* Write magic register to enable flash write. */
-	pci_write_word(pcidev_dev, PCI_MAGIC_DRKAISER_ADDR,
+	rpci_write_word(pcidev_dev, PCI_MAGIC_DRKAISER_ADDR,
 		       PCI_MAGIC_DRKAISER_VALUE);
 
-	/* Map 128KB flash memory window. */
+	/* Map 128kB flash memory window. */
 	drkaiser_bar = physmap("Dr. Kaiser PC-Waechter flash memory",
 			       addr, 128 * 1024);
 
@@ -61,8 +60,7 @@ int drkaiser_init(void)
 
 int drkaiser_shutdown(void)
 {
-	/* Write protect the flash again. */
-	pci_write_word(pcidev_dev, PCI_MAGIC_DRKAISER_ADDR, 0);
+	/* Flash write is disabled automatically by PCI restore. */
 	pci_cleanup(pacc);
 	release_io_perms();
 	return 0;

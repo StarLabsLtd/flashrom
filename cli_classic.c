@@ -23,7 +23,6 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <string.h>
 #include <stdlib.h>
@@ -34,11 +33,6 @@
 
 static void cli_classic_usage(const char *name)
 {
-	const char *pname;
-	int pnamelen;
-	int remaining = 0;
-	enum programmer p;
-
 	printf("Usage: flashrom [-n] [-V] [-f] [-h|-R|-L|"
 #if CONFIG_PRINT_WIKI == 1
 	         "-z|"
@@ -84,32 +78,9 @@ static void cli_classic_usage(const char *name)
 	         "in wiki syntax\n"
 #endif
 	       "   -p | --programmer <name>[:<param>] specify the programmer "
-	         "device");
+	         "device\n");
 
-	for (p = 0; p < PROGRAMMER_INVALID; p++) {
-		pname = programmer_table[p].name;
-		pnamelen = strlen(pname);
-		if (remaining - pnamelen - 2 < 0) {
-			printf("\n                                     ");
-			remaining = 43;
-		} else {
-			printf(" ");
-			remaining--;
-		}
-		if (p == 0) {
-			printf("(");
-			remaining--;
-		}
-		printf("%s", pname);
-		remaining -= pnamelen;
-		if (p < PROGRAMMER_INVALID - 1) {
-			printf(",");
-			remaining--;
-		} else {
-			printf(")\n");
-		}
-	}
-
+	list_programmers_linebreak(37, 80, 1);
 	printf("\nYou can specify one of -h, -R, -L, "
 #if CONFIG_PRINT_WIKI == 1
 	         "-z, "
@@ -129,7 +100,11 @@ int cli_classic(int argc, char *argv[])
 {
 	unsigned long size;
 	/* Probe for up to three flash chips. */
-	struct flashchip *flash, *flashes[3];
+	const struct flashchip *flash;
+	struct flashchip flashes[3];
+	struct flashchip *fill_flash;
+	int startchip = 0;
+	int chipcount = 0;
 	const char *name;
 	int namelen;
 	int opt;
@@ -143,25 +118,25 @@ int cli_classic(int argc, char *argv[])
 	int operation_specified = 0;
 	int i;
 
-	const char *optstring = "r:Rw:v:nVEfc:m:l:i:p:Lzh";
-	static struct option long_options[] = {
-		{"read", 1, 0, 'r'},
-		{"write", 1, 0, 'w'},
-		{"erase", 0, 0, 'E'},
-		{"verify", 1, 0, 'v'},
-		{"noverify", 0, 0, 'n'},
-		{"chip", 1, 0, 'c'},
-		{"mainboard", 1, 0, 'm'},
-		{"verbose", 0, 0, 'V'},
-		{"force", 0, 0, 'f'},
-		{"layout", 1, 0, 'l'},
-		{"image", 1, 0, 'i'},
-		{"list-supported", 0, 0, 'L'},
-		{"list-supported-wiki", 0, 0, 'z'},
-		{"programmer", 1, 0, 'p'},
-		{"help", 0, 0, 'h'},
-		{"version", 0, 0, 'R'},
-		{0, 0, 0, 0}
+	static const char optstring[] = "r:Rw:v:nVEfc:m:l:i:p:Lzh";
+	static const struct option long_options[] = {
+		{"read", 1, NULL, 'r'},
+		{"write", 1, NULL, 'w'},
+		{"erase", 0, NULL, 'E'},
+		{"verify", 1, NULL, 'v'},
+		{"noverify", 0, NULL, 'n'},
+		{"chip", 1, NULL, 'c'},
+		{"mainboard", 1, NULL, 'm'},
+		{"verbose", 0, NULL, 'V'},
+		{"force", 0, NULL, 'f'},
+		{"layout", 1, NULL, 'l'},
+		{"image", 1, NULL, 'i'},
+		{"list-supported", 0, NULL, 'L'},
+		{"list-supported-wiki", 0, NULL, 'z'},
+		{"programmer", 1, NULL, 'p'},
+		{"help", 0, NULL, 'h'},
+		{"version", 0, NULL, 'R'},
+		{NULL, 0, NULL, 0}
 	};
 
 	char *filename = NULL;
@@ -388,49 +363,48 @@ int cli_classic(int argc, char *argv[])
 		exit(1);
 	}
 
-	/* FIXME: Delay calibration should happen in programmer code. */
 	for (i = 0; i < ARRAY_SIZE(flashes); i++) {
-		flashes[i] =
-		    probe_flash(i ? flashes[i - 1] + 1 : flashchips, 0);
-		if (!flashes[i])
-			for (i++; i < ARRAY_SIZE(flashes); i++)
-				flashes[i] = NULL;
+		startchip = probe_flash(startchip, &flashes[i], 0);
+		if (startchip == -1)
+			break;
+		chipcount++;
+		startchip++;
 	}
 
-	if (flashes[1]) {
+	if (chipcount > 1) {
 		printf("Multiple flash chips were detected:");
-		for (i = 0; i < ARRAY_SIZE(flashes) && flashes[i]; i++)
-			printf(" %s", flashes[i]->name);
+		for (i = 0; i < chipcount; i++)
+			printf(" %s", flashes[i].name);
 		printf("\nPlease specify which chip to use with the -c <chipname> option.\n");
 		programmer_shutdown();
 		exit(1);
-	} else if (!flashes[0]) {
+	} else if (!chipcount) {
 		printf("No EEPROM/flash device found.\n");
 		if (!force || !chip_to_probe) {
 			printf("Note: flashrom can never write if the flash chip isn't found automatically.\n");
 		}
 		if (force && read_it && chip_to_probe) {
 			printf("Force read (-f -r -c) requested, pretending the chip is there:\n");
-			flashes[0] = probe_flash(flashchips, 1);
-			if (!flashes[0]) {
+			startchip = probe_flash(0, &flashes[0], 1);
+			if (startchip == -1) {
 				printf("Probing for flash chip '%s' failed.\n", chip_to_probe);
 				programmer_shutdown();
 				exit(1);
 			}
 			printf("Please note that forced reads most likely contain garbage.\n");
-			return read_flash_to_file(flashes[0], filename);
+			return read_flash_to_file(&flashes[0], filename);
 		}
 		// FIXME: flash writes stay enabled!
 		programmer_shutdown();
 		exit(1);
 	}
 
-	flash = flashes[0];
+	fill_flash = &flashes[0];
 
-	check_chip_supported(flash);
+	check_chip_supported(fill_flash);
 
-	size = flash->total_size * 1024;
-	if (check_max_decode((buses_supported & flash->bustype), size) &&
+	size = fill_flash->total_size * 1024;
+	if (check_max_decode((buses_supported & fill_flash->bustype), size) &&
 	    (!force)) {
 		fprintf(stderr, "Chip is too big for this programmer "
 			"(-V gives details). Use --force to override.\n");
@@ -456,5 +430,10 @@ int cli_classic(int argc, char *argv[])
 	if (write_it && !dont_verify_it)
 		verify_it = 1;
 
-	return doit(flash, force, filename, read_it, write_it, erase_it, verify_it);
+	/* FIXME: We should issue an unconditional chip reset here. This can be
+	 * done once we have a .reset function in struct flashchip.
+	 * Give the chip time to settle.
+	 */
+	programmer_delay(100000);
+	return doit(fill_flash, force, filename, read_it, write_it, erase_it, verify_it);
 }

@@ -1,0 +1,13 @@
+Hardcode svn revision, otherwise (e.g.) "v0.9.3-runknown" will be used as version strings.
+
+--- a/Makefile.orig	2011-06-03 16:49:57.000000000 +0200
++++ b/Makefile	2011-06-03 16:50:03.000000000 +0200
+@@ -134,7 +134,7 @@
+ # of the checked out flashrom files.
+ # Note to packagers: Any tree exported with "make export" or "make tarball"
+ # will not require subversion. The downloadable snapshots are already exported.
+-SVNVERSION := $(shell LC_ALL=C svnversion -cn . 2>/dev/null | sed -e "s/.*://" -e "s/\([0-9]*\).*/\1/" | grep "[0-9]" || LC_ALL=C svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || LC_ALL=C git svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || echo unknown)
++SVNVERSION := 1323
+ 
+ RELEASE := 0.9.3
+ VERSION := $(RELEASE)-r$(SVNVERSION)

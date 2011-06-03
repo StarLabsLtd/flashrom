@@ -25,7 +25,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <string.h>
 #include "flash.h"
 #include "programmer.h"
@@ -142,7 +141,7 @@ static struct lb_header *find_lb_table(void *base, unsigned long start,
 
 	};
 
-	return 0;
+	return NULL;
 }
 
 static void find_mainboard(struct lb_record *ptr, unsigned long addr)
@@ -204,7 +203,7 @@ int coreboot_init(void)
 	struct lb_record *rec, *last;
 
 #ifdef __DARWIN__
-	/* This is a hack. DirectIO fails to map physical address 0x00000000.
+	/* This is a hack. DirectHW fails to map physical address 0x00000000.
 	 * Why?
 	 */
 	start = 0x400;
@@ -212,7 +211,7 @@ int coreboot_init(void)
 	start = 0x0;
 #endif
 	table_area = physmap_try_ro("low megabyte", start, BYTES_TO_MAP - start);
-	if (!table_area) {
+	if (ERROR_PTR == table_area) {
 		msg_perr("Failed getting access to coreboot low tables.\n");
 		return -1;
 	}
@@ -228,7 +227,7 @@ int coreboot_init(void)
 			start &= ~(getpagesize() - 1);
 			physunmap(table_area, BYTES_TO_MAP);
 			table_area = physmap_try_ro("high tables", start, BYTES_TO_MAP);
-			if (!table_area) {
+			if (ERROR_PTR == table_area) {
 				msg_perr("Failed getting access to coreboot "
 					 "high tables.\n");
 				return -1;
@@ -238,7 +237,7 @@ int coreboot_init(void)
 	}
 
 	if (!lb_table) {
-		msg_pinfo("No coreboot table found.\n");
+		msg_pdbg("No coreboot table found.\n");
 		return -1;
 	}
 
