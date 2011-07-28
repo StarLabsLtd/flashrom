@@ -39,6 +39,13 @@
 
 #define MSGHEADER "serprog:"
 
+/*
+ * FIXME: This prototype was added to help reduce diffs for the shutdown
+ * registration patch, which shifted many lines of code to place
+ * serprog_shutdown() before serprog_init(). It should be removed soon.
+ */
+static int serprog_shutdown(void *data);
+
 #define S_ACK 0x06
 #define S_NAK 0x15
 #define S_CMD_NOP		0x00	/* No operation                                 */
@@ -49,7 +56,7 @@
 #define S_CMD_Q_BUSTYPE		0x05	/* Query supported bustypes                     */
 #define S_CMD_Q_CHIPSIZE	0x06	/* Query supported chipsize (2^n format)        */
 #define S_CMD_Q_OPBUF		0x07	/* Query operation buffer size                  */
-#define S_CMD_Q_WRNMAXLEN	0x08	/* Query opbuf-write-N maximum lenght           */
+#define S_CMD_Q_WRNMAXLEN	0x08	/* Query opbuf-write-N maximum length           */
 #define S_CMD_R_BYTE		0x09	/* Read a single byte                           */
 #define S_CMD_R_NBYTES		0x0A	/* Read n bytes                                 */
 #define S_CMD_O_INIT		0x0B	/* Initialize operation buffer                  */
@@ -161,10 +168,10 @@ static void sp_synchronize(void)
 	usleep(1000 * 1000);
 	sp_flush_incoming();
 
-	/* Then try upto 8 times to send syncnop and get the correct special *
-	 * return of NAK+ACK. Timing note: upto 10 characters, 10*50ms =     *
-	 * upto 500ms per try, 8*0.5s = 4s; +1s (above) = upto 5s sync       *
-	 * attempt, ~1s if immediate success.                                */
+	/* Then try up to 8 times to send syncnop and get the correct special *
+	 * return of NAK+ACK. Timing note: up to 10 characters, 10*50ms =     *
+	 * up to 500ms per try, 8*0.5s = 4s; +1s (above) = up to 5s sync      *
+	 * attempt, ~1s if immediate success.                                 */
 	for (i = 0; i < 8; i++) {
 		int n;
 		unsigned char c = S_CMD_SYNCNOP;
@@ -173,7 +180,7 @@ static void sp_synchronize(void)
 		msg_pdbg(".");
 		fflush(stdout);
 		for (n = 0; n < 10; n++) {
-			c = sp_sync_read_timeout(5);	/* wait upto 50ms */
+			c = sp_sync_read_timeout(5);	/* wait up to 50ms */
 			if (c != S_NAK)
 				continue;
 			c = sp_sync_read_timeout(2);
@@ -373,6 +380,9 @@ int serprog_init(void)
 		return 1;
 	}
 
+	if (register_shutdown(serprog_shutdown, NULL))
+		return 1;
+
 	msg_pdbg(MSGHEADER "connected - attempting to synchronize\n");
 
 	sp_check_avail_automatic = 0;
@@ -555,7 +565,7 @@ static void sp_execute_opbuf(void)
 	sp_flush_stream();
 }
 
-int serprog_shutdown(void)
+static int serprog_shutdown(void *data)
 {
 	msg_pspew("%s\n", __func__);
 	if ((sp_opbuf_usage) || (sp_max_write_n && sp_write_n_bytes))

@@ -19,6 +19,7 @@
  */
 
 /* Datasheets are not public (yet?) */
+#if defined(__i386__) || defined(__x86_64__)
 
 #include <stdlib.h>
 #include "flash.h"
@@ -39,6 +40,14 @@ const struct pcidev_status satas_mv[] = {
 #define EXPANSION_ROM_BAR_CONTROL	0x00d2c
 #define PCI_BAR2_CONTROL		0x00c08
 #define GPIO_PORT_CONTROL		0x104f0
+
+static int satamv_shutdown(void *data)
+{
+	physunmap(mv_bar, 0x20000);
+	pci_cleanup(pacc);
+	release_io_perms();
+	return 0;
+}
 
 /*
  * Random notes:
@@ -72,6 +81,9 @@ int satamv_init(void)
 	mv_bar = physmap("Marvell 88SX7042 registers", addr, 0x20000);
 	if (mv_bar == ERROR_PTR)
 		goto error_out;
+
+	if (register_shutdown(satamv_shutdown, NULL))
+		return 1;
 
 	tmp = pci_mmio_readl(mv_bar + FLASH_PARAM);
 	msg_pspew("Flash Parameters:\n");
@@ -139,14 +151,6 @@ error_out:
 	return 1;
 }
 
-int satamv_shutdown(void)
-{
-	physunmap(mv_bar, 0x20000);
-	pci_cleanup(pacc);
-	release_io_perms();
-	return 0;
-}
-
 /* BAR2 (MEM) can map NVRAM and flash. We set it to flash in the init function.
  * If BAR2 is disabled, it still can be accessed indirectly via BAR1 (I/O).
  * This code only supports indirect accesses for now.
@@ -179,3 +183,7 @@ uint8_t satamv_chip_readb(const chipaddr addr)
 {
 	return satamv_indirect_chip_readb(addr);
 }
+
+#else
+#error PCI port I/O access is not supported on this architecture yet.
+#endif

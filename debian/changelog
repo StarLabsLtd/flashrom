@@ -1,3 +1,10 @@
+flashrom (0.9.4+r1394-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/patches/10_svnversion.patch: Drop, no longer needed.
+
+ -- Uwe Hermann <uwe@debian.org>  Thu, 28 Jul 2011 21:29:32 +0200
+
 flashrom (0.9.3+r1323-1) unstable; urgency=low
 
   * New upstream release.

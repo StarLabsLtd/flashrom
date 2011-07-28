@@ -110,6 +110,8 @@ fdtype sp_openserport(char *dev, unsigned int baud)
 	    (tolower((unsigned char)dev[1]) == 'o') &&
 	    (tolower((unsigned char)dev[2]) == 'm')) {
 		dev2 = malloc(strlen(dev) + 5);
+		if (!dev2)
+			sp_die("Error: Out of memory");
 		strcpy(dev2, "\\\\.\\");
 		strcpy(dev2 + 4, dev);
 	}
@@ -180,7 +182,7 @@ void sp_flush_incoming(void)
 	return;
 }
 
-int serialport_shutdown(void)
+int serialport_shutdown(void *data)
 {
 #ifdef _WIN32
 	CloseHandle(sp_fd);
@@ -192,7 +194,11 @@ int serialport_shutdown(void)
 
 int serialport_write(unsigned char *buf, unsigned int writecnt)
 {
-	long tmp = 0;
+#ifdef _WIN32
+	DWORD tmp = 0;
+#else
+	ssize_t tmp = 0;
+#endif
 
 	while (writecnt > 0) {
 #ifdef _WIN32
@@ -215,7 +221,11 @@ int serialport_write(unsigned char *buf, unsigned int writecnt)
 
 int serialport_read(unsigned char *buf, unsigned int readcnt)
 {
-	long tmp = 0;
+#ifdef _WIN32
+	DWORD tmp = 0;
+#else
+	ssize_t tmp = 0;
+#endif
 
 	while (readcnt > 0) {
 #ifdef _WIN32

@@ -12,13 +12,13 @@ Depends: ${shlibs:Depends}, ${misc:Depends}
 Recommends: dmidecode [i386 ia64 amd64 kfreebsd-i386 knetbsd-i386 kfreebsd-amd64]
 Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
  flashrom is a tool for identifying, reading, writing, verifying and erasing
- flash chips. It's often used to flash BIOS/EFI/coreboot/firmware images
- in-system using a supported mainboard, but it also supports flashing of
+ flash chips. It's often used to flash BIOS/EFI/coreboot/firmware/optionROM
+ images in-system using a supported mainboard, but it also supports flashing of
  network cards (NICs), SATA controller cards, and other external devices which
  can program flash chips.
  .
- It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, TSOP40,
- and TSOP48 chips, which use various protocols such as LPC, FWH, parallel
+ It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32/40/48,
+ and BGA chips, which use various protocols such as LPC, FWH, parallel
  flash, or SPI.
  .
  The tool can be used to flash BIOS/firmware images for example -- be it
@@ -26,4 +26,33 @@ Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
  .
  It can also be used to read the current existing BIOS/firmware from a
  flash chip.
+ .
+ Currently supported programmers include:
+ .
+   * internal (default, for in-system flashing in the mainboard)
+   * dummy (virtual programmer for testing flashrom)
+   * nic3com (for flash ROMs on 3COM network cards)
+   * nicrealtek (for flash ROMs on Realtek network cards)
+   * nicsmc1211 (for flash ROMs on RTL8139-compatible SMC2 network cards)
+   * nicnatsemi (for flash ROMs on National Semiconductor DP838* network cards)
+   * nicintel (for parallel flash ROMs on Intel 10/100Mbit network cards)
+   * gfxnvidia (for flash ROMs on NVIDIA graphics cards)
+   * drkaiser (for flash ROMs on Dr. Kaiser PC-Waechter PCI cards)
+   * satasii (for flash ROMs on Silicon Image SATA/IDE controllers)
+   * satamv (for flash ROMs on Marvell SATA controllers)
+   * atahpt (for flash ROMs on Highpoint ATA/RAID controllers)
+   * ft2232_spi (for SPI flash ROMs attached to an FT2232/FT4232H
+     family based USB SPI programmer), including the DLP Design DLP-USB1232H,
+     FTDI FT2232H Mini-Module, FTDI FT4232H Mini-Module, openbiosprog-spi,
+     Amontec JTAGkey/JTAGkey-tiny/JTAGkey-2, Olimex ARM-USB-TINY/-H, and
+     Olimex ARM-USB-OCD/-H.
+   * serprog (for flash ROMs attached to a programmer speaking serprog),
+     including AVR flasher by Urja Rannikko, AVR flasher by eightdot,
+     Arduino Mega flasher by fritz, InSystemFlasher by Juhana Helovuo,
+     and atmegaXXu2-flasher by Stefan Tauner.
+   * buspirate_spi (for SPI flash ROMs attached to a Bus Pirate)
+   * dediprog (for SPI flash ROMs attached to a Dediprog SF100)
+   * rayer_spi (for SPI flash ROMs attached to a RayeR parport based programmer)
+   * nicintel_spi (for SPI flash ROMs on Intel Gigabit network cards)
+   * ogp_spi (for SPI flash ROMs on Open Graphics Project graphics card)
 

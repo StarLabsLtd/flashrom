@@ -35,7 +35,7 @@ struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
 	return NULL;
 }
 
-struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t class)
+struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t devclass)
 {
 	struct pci_dev *temp;
 	struct pci_filter filter;
@@ -48,7 +48,7 @@ struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t class)
 		if (pci_filter_match(&filter, temp)) {
 			/* Read PCI class */
 			tmp2 = pci_read_word(temp, 0x0a);
-			if (tmp2 == class)
+			if (tmp2 == devclass)
 				return temp;
 		}
 
@@ -127,6 +127,12 @@ int register_superio(struct superio s)
 int is_laptop = 0;
 int laptop_ok = 0;
 
+static int internal_shutdown(void *data)
+{
+	release_io_perms();
+	return 0;
+}
+
 int internal_init(void)
 {
 #if __FLASHROM_LITTLE_ENDIAN__
@@ -178,6 +184,8 @@ int internal_init(void)
 	free(arg);
 
 	get_io_perms();
+	if (register_shutdown(internal_shutdown, NULL))
+		return 1;
 
 	/* Default to Parallel/LPC/FWH flash devices. If a known host controller
 	 * is found, the init routine sets the buses_supported bitfield.
@@ -222,11 +230,19 @@ int internal_init(void)
 
 	/* Warn if a non-whitelisted laptop is detected. */
 	if (is_laptop && !laptop_ok) {
-		msg_perr("========================================================================\n"
-			 "WARNING! You seem to be running flashrom on an unsupported laptop.\n"
-			 "Laptops, notebooks and netbooks are difficult to support and we recommend\n"
-			 "to use the vendor flashing utility. The embedded controller (EC) in these\n"
-			 "machines often interacts badly with flashing.\n"
+		msg_perr("========================================================================\n");
+		if (is_laptop == 1) {
+			msg_perr("WARNING! You seem to be running flashrom on an unsupported laptop.\n");
+		} else {
+			msg_perr("WARNING! You may be running flashrom on an unsupported laptop. We could\n"
+				 "not detect this for sure because your vendor has not setup the SMBIOS\n"
+				 "tables correctly. You can enforce execution by adding\n"
+				 "'-p internal:laptop=force_I_want_a_brick' to the command line, but\n"
+				 "please read the following warning if you are not sure.\n\n");
+		}
+		msg_perr("Laptops, notebooks and netbooks are difficult to support and we\n"
+			 "recommend to use the vendor flashing utility. The embedded controller\n"
+			 "(EC) in these machines often interacts badly with flashing.\n"
 			 "See http://www.flashrom.org/Laptops for details.\n\n"
 			 "If flash is shared with the EC, erase is guaranteed to brick your laptop\n"
 			 "and write may brick your laptop.\n"
@@ -234,6 +250,7 @@ int internal_init(void)
 			 "failure and sudden poweroff.\n"
 			 "You have been warned.\n"
 			 "========================================================================\n");
+
 		if (force_laptop) {
 			msg_perr("Proceeding anyway because user specified "
 				 "laptop=force_I_want_a_brick\n");
@@ -286,13 +303,6 @@ int internal_init(void)
 		 "Aborting.\n");
 	return 1;
 #endif
-}
-
-int internal_shutdown(void)
-{
-	release_io_perms();
-
-	return 0;
 }
 #endif
 

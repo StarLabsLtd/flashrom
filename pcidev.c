@@ -270,7 +270,7 @@ struct undo_pci_write_data {
 	};
 };
 
-void undo_pci_write(void *p)
+int undo_pci_write(void *p)
 {
 	struct undo_pci_write_data *data = p;
 	msg_pdbg("Restoring PCI config space for %02x:%02x:%01x reg 0x%02x\n",
@@ -288,12 +288,17 @@ void undo_pci_write(void *p)
 	}
 	/* p was allocated in register_undo_pci_write. */
 	free(p);
+	return 0;
 }
 
 #define register_undo_pci_write(a, b, c) 				\
 {									\
 	struct undo_pci_write_data *undo_pci_write_data;		\
 	undo_pci_write_data = malloc(sizeof(struct undo_pci_write_data)); \
+	if (!undo_pci_write_data) {					\
+		msg_gerr("Out of memory!\n");				\
+		exit(1);						\
+	}								\
 	undo_pci_write_data->dev = *a;					\
 	undo_pci_write_data->reg = b;					\
 	undo_pci_write_data->type = pci_write_type_##c;			\

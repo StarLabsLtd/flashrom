@@ -30,6 +30,11 @@
 /* Change this to #define if you want to test without a serial implementation */
 #undef FAKE_COMMUNICATION
 
+struct buspirate_spispeeds {
+	const char *name;
+	const int speed;
+};
+
 #ifndef FAKE_COMMUNICATION
 static int buspirate_serialport_setup(char *dev)
 {
@@ -106,6 +111,41 @@ static const struct buspirate_spispeeds spispeeds[] = {
 	{NULL,		0x0}
 };
 
+static int buspirate_spi_shutdown(void *data)
+{
+	unsigned char buf[5];
+	int ret = 0;
+
+	/* Exit raw SPI mode (enter raw bitbang mode) */
+	buf[0] = 0x00;
+	ret = buspirate_sendrecv(buf, 1, 5);
+	if (ret)
+		return ret;
+	if (memcmp(buf, "BBIO", 4)) {
+		msg_perr("Entering raw bitbang mode failed!\n");
+		return 1;
+	}
+	msg_pdbg("Raw bitbang mode version %c\n", buf[4]);
+	if (buf[4] != '1') {
+		msg_perr("Can't handle raw bitbang mode version %c!\n",
+			buf[4]);
+		return 1;
+	}
+	/* Reset Bus Pirate (return to user terminal) */
+	buf[0] = 0x0f;
+	ret = buspirate_sendrecv(buf, 1, 0);
+	if (ret)
+		return ret;
+
+	/* Shut down serial port communication */
+	ret = serialport_shutdown(NULL);
+	if (ret)
+		return ret;
+	msg_pdbg("Bus Pirate shutdown completed.\n");
+
+	return 0;
+}
+
 int buspirate_spi_init(void)
 {
 	unsigned char buf[512];
@@ -143,6 +183,9 @@ int buspirate_spi_init(void)
 		return ret;
 	free(dev);
 
+	if (register_shutdown(buspirate_spi_shutdown, NULL))
+		return 1;
+
 	/* This is the brute force version, but it should work. */
 	for (i = 0; i < 19; i++) {
 		/* Enter raw bitbang mode */
@@ -160,7 +203,7 @@ int buspirate_spi_init(void)
 	 * sufficient either. Use a 1.5 ms delay inside the loop to make
 	 * mostly sure that at least one USB frame had time to arrive.
 	 * Looping only 5 times is not sufficient and causes the
-	 * ocassional failure.
+	 * occasional failure.
 	 * Folding the delay into the loop above is not reliable either.
 	 */
 	for (i = 0; i < 10; i++) {
@@ -244,41 +287,6 @@ int buspirate_spi_init(void)
 	}
 
 	register_spi_programmer(&spi_programmer_buspirate);
-
-	return 0;
-}
-
-int buspirate_spi_shutdown(void)
-{
-	unsigned char buf[5];
-	int ret = 0;
-
-	/* Exit raw SPI mode (enter raw bitbang mode) */
-	buf[0] = 0x00;
-	ret = buspirate_sendrecv(buf, 1, 5);
-	if (ret)
-		return ret;
-	if (memcmp(buf, "BBIO", 4)) {
-		msg_perr("Entering raw bitbang mode failed!\n");
-		return 1;
-	}
-	msg_pdbg("Raw bitbang mode version %c\n", buf[4]);
-	if (buf[4] != '1') {
-		msg_perr("Can't handle raw bitbang mode version %c!\n",
-			buf[4]);
-		return 1;
-	}
-	/* Reset Bus Pirate (return to user terminal) */
-	buf[0] = 0x0f;
-	ret = buspirate_sendrecv(buf, 1, 0);
-	if (ret)
-		return ret;
-
-	/* Shut down serial port communication */
-	ret = serialport_shutdown();
-	if (ret)
-		return ret;
-	msg_pdbg("Bus Pirate shutdown completed.\n");
 
 	return 0;
 }

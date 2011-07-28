@@ -43,36 +43,97 @@
 #include "spi.h"
 
 /* ICH9 controller register definition */
+#define ICH9_REG_HSFS		0x04	/* 16 Bits Hardware Sequencing Flash Status */
+#define HSFS_FDONE_OFF		0	/* 0: Flash Cycle Done */
+#define HSFS_FDONE		(0x1 << HSFS_FDONE_OFF)
+#define HSFS_FCERR_OFF		1	/* 1: Flash Cycle Error */
+#define HSFS_FCERR		(0x1 << HSFS_FCERR_OFF)
+#define HSFS_AEL_OFF		2	/* 2: Access Error Log */
+#define HSFS_AEL		(0x1 << HSFS_AEL_OFF)
+#define HSFS_BERASE_OFF		3	/* 3-4: Block/Sector Erase Size */
+#define HSFS_BERASE		(0x3 << HSFS_BERASE_OFF)
+#define HSFS_SCIP_OFF		5	/* 5: SPI Cycle In Progress */
+#define HSFS_SCIP		(0x1 << HSFS_SCIP_OFF)
+					/* 6-12: reserved */
+#define HSFS_FDOPSS_OFF		13	/* 13: Flash Descriptor Override Pin-Strap Status */
+#define HSFS_FDOPSS		(0x1 << HSFS_FDOPSS_OFF)
+#define HSFS_FDV_OFF		14	/* 14: Flash Descriptor Valid */
+#define HSFS_FDV		(0x1 << HSFS_FDV_OFF)
+#define HSFS_FLOCKDN_OFF	15	/* 15: Flash Configuration Lock-Down */
+#define HSFS_FLOCKDN		(0x1 << HSFS_FLOCKDN_OFF)
+
+#define ICH9_REG_HSFC		0x06	/* 16 Bits Hardware Sequencing Flash Control */
+#define HSFC_FGO_OFF		0	/* 0: Flash Cycle Go */
+#define HSFC_FGO		(0x1 << HSFC_FGO_OFF)
+#define HSFC_FCYCLE_OFF		1	/* 1-2: FLASH Cycle */
+#define HSFC_FCYCLE		(0x3 << HSFC_FCYCLE_OFF)
+					/* 3-7: reserved */
+#define HSFC_FDBC_OFF		8	/* 8-13: Flash Data Byte Count */
+#define HSFC_FDBC		(0x3f << HSFC_FDBC_OFF)
+					/* 14: reserved */
+#define HSFC_SME_OFF		15	/* 15: SPI SMI# Enable */
+#define HSFC_SME		(0x1 << HSFC_SME_OFF)
+
 #define ICH9_REG_FADDR		0x08	/* 32 Bits */
 #define ICH9_REG_FDATA0		0x10	/* 64 Bytes */
 
+#define ICH9_REG_FRAP		0x50	/* 32 Bytes Flash Region Access Permissions */
+#define ICH9_REG_FREG0		0x54	/* 32 Bytes Flash Region 0 */
+
+#define ICH9_REG_PR0		0x74	/* 32 Bytes Protected Range 0 */
+#define ICH9_REG_PR1		0x78	/* 32 Bytes Protected Range 1 */
+#define ICH9_REG_PR2		0x7c	/* 32 Bytes Protected Range 2 */
+#define ICH9_REG_PR3		0x80	/* 32 Bytes Protected Range 3 */
+#define ICH9_REG_PR4		0x84	/* 32 Bytes Protected Range 4 */
+
 #define ICH9_REG_SSFS		0x90	/* 08 Bits */
-#define SSFS_SCIP		0x00000001
-#define SSFS_CDS		0x00000004
-#define SSFS_FCERR		0x00000008
-#define SSFS_AEL		0x00000010
+#define SSFS_SCIP_OFF		0	/* SPI Cycle In Progress */
+#define SSFS_SCIP		(0x1 << SSFS_SCIP_OFF)
+#define SSFS_FDONE_OFF		2	/* Cycle Done Status */
+#define SSFS_FDONE		(0x1 << SSFS_FDONE_OFF)
+#define SSFS_FCERR_OFF		3	/* Flash Cycle Error */
+#define SSFS_FCERR		(0x1 << SSFS_FCERR_OFF)
+#define SSFS_AEL_OFF		4	/* Access Error Log */
+#define SSFS_AEL		(0x1 << SSFS_AEL_OFF)
 /* The following bits are reserved in SSFS: 1,5-7. */
 #define SSFS_RESERVED_MASK	0x000000e2
 
 #define ICH9_REG_SSFC		0x91	/* 24 Bits */
-#define SSFC_SCGO		0x00000200
-#define SSFC_ACS		0x00000400
-#define SSFC_SPOP		0x00000800
-#define SSFC_COP		0x00001000
-#define SSFC_DBC		0x00010000
-#define SSFC_DS			0x00400000
-#define SSFC_SME		0x00800000
-#define SSFC_SCF		0x01000000
-#define SSFC_SCF_20MHZ 0x00000000
-#define SSFC_SCF_33MHZ 0x01000000
 /* We combine SSFS and SSFC to one 32-bit word,
- * therefore SSFC bits are off by 8.
- * The following bits are reserved in SSFC: 23-19,7,0. */
+ * therefore SSFC bits are off by 8. */
+						/* 0: reserved */
+#define SSFC_SCGO_OFF		(1 + 8)		/* 1: SPI Cycle Go */
+#define SSFC_SCGO		(0x1 << SSFC_SCGO_OFF)
+#define SSFC_ACS_OFF		(2 + 8)		/* 2: Atomic Cycle Sequence */
+#define SSFC_ACS		(0x1 << SSFC_ACS_OFF)
+#define SSFC_SPOP_OFF		(3 + 8)		/* 3: Sequence Prefix Opcode Pointer */
+#define SSFC_SPOP		(0x1 << SSFC_SPOP_OFF)
+#define SSFC_COP_OFF		(4 + 8)		/* 4-6: Cycle Opcode Pointer */
+#define SSFC_COP		(0x7 << SSFC_COP_OFF)
+						/* 7: reserved */
+#define SSFC_DBC_OFF		(8 + 8)		/* 8-13: Data Byte Count */
+#define SSFC_DBC		(0x3f << SSFC_DBC_OFF)
+#define SSFC_DS_OFF		(14 + 8)	/* 14: Data Cycle */
+#define SSFC_DS			(0x1 << SSFC_DS_OFF)
+#define SSFC_SME_OFF		(15 + 8)	/* 15: SPI SMI# Enable */
+#define SSFC_SME		(0x1 << SSFC_SME_OFF)
+#define SSFC_SCF_OFF		(16 + 8)	/* 16-18: SPI Cycle Frequency */
+#define SSFC_SCF		(0x7 << SSFC_SCF_OFF)
+#define SSFC_SCF_20MHZ		0x00000000
+#define SSFC_SCF_33MHZ		0x01000000
+						/* 19-23: reserved */
 #define SSFC_RESERVED_MASK	0xf8008100
 
 #define ICH9_REG_PREOP		0x94	/* 16 Bits */
 #define ICH9_REG_OPTYPE		0x96	/* 16 Bits */
 #define ICH9_REG_OPMENU		0x98	/* 64 Bits */
+
+#define ICH9_REG_BBAR		0xA0	/* 32 Bits BIOS Base Address Configuration */
+#define BBAR_MASK	0x00ffff00		/* 8-23: Bottom of System Flash */
+
+#define ICH9_REG_FPB		0xD0	/* 32 Bits Flash Partition Boundary */
+#define FPB_FPBA_OFF		0	/* 0-12: Block/Sector Erase Size */
+#define FPB_FPBA			(0x1FFF << FPB_FPBA_OFF)
 
 // ICH9R SPI commands
 #define SPI_OPCODE_TYPE_READ_NO_ADDRESS		0
@@ -159,9 +220,9 @@ static uint16_t REGREAD8(int X)
 	return mmio_readb(ich_spibar + X);
 }
 
-#define REGWRITE32(off,val) mmio_writel(val, ich_spibar+off)
-#define REGWRITE16(off,val) mmio_writew(val, ich_spibar+off)
-#define REGWRITE8(off,val)  mmio_writeb(val, ich_spibar+off)
+#define REGWRITE32(off, val) mmio_writel(val, ich_spibar+(off))
+#define REGWRITE16(off, val) mmio_writew(val, ich_spibar+(off))
+#define REGWRITE8(off, val)  mmio_writeb(val, ich_spibar+(off))
 
 /* Common SPI functions */
 static int find_opcode(OPCODES *op, uint8_t opcode);
@@ -230,6 +291,72 @@ static OPCODE POSSIBLE_OPCODES[] = {
 };
 
 static OPCODES O_EXISTING = {};
+
+/* pretty printing functions */
+static void pretty_print_opcodes(OPCODES *ops)
+{
+	if(ops == NULL)
+		return;
+
+	msg_pdbg("preop0=0x%02x, preop1=0x%02x\n", ops->preop[0],
+		 ops->preop[1]);
+
+	OPCODE oc;
+	uint8_t i;
+	for (i = 0; i < 8; i++) {
+		oc = ops->opcode[i];
+		msg_pdbg("op[%d]=0x%02x, %d, %d\n",
+			 i,
+			 oc.opcode,
+			 oc.spi_type,
+			 oc.atomic);
+	}
+}
+
+#define pprint_reg(reg, bit, val, sep) msg_pdbg("%s=%d" sep, #bit, (val & reg##_##bit)>>reg##_##bit##_OFF)
+
+static void prettyprint_ich9_reg_hsfs(uint16_t reg_val)
+{
+	msg_pdbg("HSFS: ");
+	pprint_reg(HSFS, FDONE, reg_val, ", ");
+	pprint_reg(HSFS, FCERR, reg_val, ", ");
+	pprint_reg(HSFS, AEL, reg_val, ", ");
+	pprint_reg(HSFS, BERASE, reg_val, ", ");
+	pprint_reg(HSFS, SCIP, reg_val, ", ");
+	pprint_reg(HSFS, FDOPSS, reg_val, ", ");
+	pprint_reg(HSFS, FDV, reg_val, ", ");
+	pprint_reg(HSFS, FLOCKDN, reg_val, "\n");
+}
+
+static void prettyprint_ich9_reg_hsfc(uint16_t reg_val)
+{
+	msg_pdbg("HSFC: ");
+	pprint_reg(HSFC, FGO, reg_val, ", ");
+	pprint_reg(HSFC, FCYCLE, reg_val, ", ");
+	pprint_reg(HSFC, FDBC, reg_val, ", ");
+	pprint_reg(HSFC, SME, reg_val, "\n");
+}
+
+static void prettyprint_ich9_reg_ssfs(uint32_t reg_val)
+{
+	msg_pdbg("SSFS: ");
+	pprint_reg(SSFS, SCIP, reg_val, ", ");
+	pprint_reg(SSFS, FDONE, reg_val, ", ");
+	pprint_reg(SSFS, FCERR, reg_val, ", ");
+	pprint_reg(SSFS, AEL, reg_val, "\n");
+}
+
+static void prettyprint_ich9_reg_ssfc(uint32_t reg_val)
+{
+	msg_pdbg("SSFC: ");
+	pprint_reg(SSFC, SCGO, reg_val, ", ");
+	pprint_reg(SSFC, ACS, reg_val, ", ");
+	pprint_reg(SSFC, SPOP, reg_val, ", ");
+	pprint_reg(SSFC, COP, reg_val, ", ");
+	pprint_reg(SSFC, DBC, reg_val, ", ");
+	pprint_reg(SSFC, SME, reg_val, ", ");
+	pprint_reg(SSFC, SCF, reg_val, "\n");
+}
 
 static uint8_t lookup_spi_type(uint8_t opcode)
 {
@@ -432,44 +559,37 @@ static int program_opcodes(OPCODES *op, int enable_undo)
  * Try to set BBAR (BIOS Base Address Register), but read back the value in case
  * it didn't stick.
  */
-void ich_set_bbar(uint32_t minaddr)
+static void ich_set_bbar(uint32_t min_addr)
 {
-#define BBAR_MASK	0x00ffff00
-	minaddr &= BBAR_MASK;
+	int bbar_off;
 	switch (spi_programmer->type) {
 	case SPI_CONTROLLER_ICH7:
 	case SPI_CONTROLLER_VIA:
-		ichspi_bbar = mmio_readl(ich_spibar + 0x50) & ~BBAR_MASK;
-		if (ichspi_bbar)
-			msg_pdbg("Reserved bits in BBAR not zero: 0x%04x",
-				 ichspi_bbar);
-		ichspi_bbar |= minaddr;
-		rmmio_writel(ichspi_bbar, ich_spibar + 0x50);
-		ichspi_bbar = mmio_readl(ich_spibar + 0x50);
-		/* We don't have any option except complaining. And if the write
-		 * failed, the restore will fail as well, so no problem there.
-		 */
-		if (ichspi_bbar != minaddr)
-			msg_perr("Setting BBAR failed!\n");
+		bbar_off = 0x50;
 		break;
 	case SPI_CONTROLLER_ICH9:
-		ichspi_bbar = mmio_readl(ich_spibar + 0xA0) & ~BBAR_MASK;
-		if (ichspi_bbar)
-			msg_pdbg("Reserved bits in BBAR not zero: 0x%04x",
-				 ichspi_bbar);
-		ichspi_bbar |= minaddr;
-		rmmio_writel(ichspi_bbar, ich_spibar + 0xA0);
-		ichspi_bbar = mmio_readl(ich_spibar + 0xA0);
-		/* We don't have any option except complaining. And if the write
-		 * failed, the restore will fail as well, so no problem there.
-		 */
-		if (ichspi_bbar != minaddr)
-			msg_perr("Setting BBAR failed!\n");
+		bbar_off = ICH9_REG_BBAR;
 		break;
 	default:
 		msg_perr("Unknown chipset for BBAR setting!\n");
-		break;
+		return;
 	}
+	
+	ichspi_bbar = mmio_readl(ich_spibar + bbar_off) & ~BBAR_MASK;
+	if (ichspi_bbar) {
+		msg_pdbg("Reserved bits in BBAR not zero: 0x%08x\n",
+			 ichspi_bbar);
+	}
+	min_addr &= BBAR_MASK;
+	ichspi_bbar |= min_addr;
+	rmmio_writel(ichspi_bbar, ich_spibar + bbar_off);
+	ichspi_bbar = mmio_readl(ich_spibar + bbar_off) & BBAR_MASK;
+
+	/* We don't have any option except complaining. And if the write
+	 * failed, the restore will fail as well, so no problem there.
+	 */
+	if (ichspi_bbar != min_addr)
+		msg_perr("Setting BBAR failed!\n");
 }
 
 /* This function generates OPCODES from or programs OPCODES to ICH according to
@@ -507,6 +627,8 @@ static int ich_init_opcodes(void)
 	} else {
 		curopcodes = curopcodes_done;
 		msg_pdbg("done\n");
+		pretty_print_opcodes(curopcodes);
+		msg_pdbg("\n");
 		return 0;
 	}
 }
@@ -537,10 +659,11 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 		return 1;
 	}
 
-	/* Programm Offset in Flash into FADDR */
-	REGWRITE32(ICH7_REG_SPIA, (offset & 0x00FFFFFF));	/* SPI addresses are 24 BIT only */
+	/* Program offset in flash into SPIA while preserving reserved bits. */
+	temp32 = REGREAD32(ICH7_REG_SPIA) & ~0x00FFFFFF;
+	REGWRITE32(ICH7_REG_SPIA, (offset & 0x00FFFFFF) | temp32);
 
-	/* Program data into FDATA0 to N */
+	/* Program data into SPID0 to N */
 	if (write_cmd && (datalength != 0)) {
 		temp32 = 0;
 		for (a = 0; a < datalength; a++) {
@@ -567,7 +690,7 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 	/* keep reserved bits */
 	temp16 &= SPIS_RESERVED_MASK;
 	/* clear error status registers */
-	temp16 |= (SPIS_CDS + SPIS_FCERR);
+	temp16 |= (SPIS_CDS | SPIS_FCERR);
 	REGWRITE16(ICH7_REG_SPIS, temp16);
 
 	/* Assemble SPIC */
@@ -681,8 +804,10 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 		return 1;
 	}
 
-	/* Programm Offset in Flash into FADDR */
-	REGWRITE32(ICH9_REG_FADDR, (offset & 0x00FFFFFF));	/* SPI addresses are 24 BIT only */
+	/* Program offset in flash into FADDR while preserve the reserved bits
+	 * and clearing the 25. address bit which is only useable in hwseq. */
+	temp32 = REGREAD32(ICH9_REG_FADDR) & ~0x01FFFFFF;
+	REGWRITE32(ICH9_REG_FADDR, (offset & 0x00FFFFFF) | temp32);
 
 	/* Program data into FDATA0 to N */
 	if (write_cmd && (datalength != 0)) {
@@ -709,8 +834,8 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	temp32 = REGREAD32(ICH9_REG_SSFS);
 	/* Keep reserved bits only */
 	temp32 &= SSFS_RESERVED_MASK | SSFC_RESERVED_MASK;
-	/* clear error status registers */
-	temp32 |= (SSFS_CDS + SSFS_FCERR);
+	/* Clear cycle done and cycle error status registers */
+	temp32 |= (SSFS_FDONE | SSFS_FCERR);
 	REGWRITE32(ICH9_REG_SSFS, temp32);
 
 	/* Use 20 MHz */
@@ -720,7 +845,8 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	if (datalength != 0) {
 		uint32_t datatemp;
 		temp32 |= SSFC_DS;
-		datatemp = ((uint32_t) ((datalength - 1) & 0x3f)) << (8 + 8);
+		datatemp = ((((uint32_t)datalength - 1) << SSFC_DBC_OFF) &
+			    SSFC_DBC);
 		temp32 |= datatemp;
 	}
 
@@ -767,7 +893,7 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	REGWRITE32(ICH9_REG_SSFS, temp32);
 
 	/* Wait for Cycle Done Status or Flash Cycle Error. */
-	while (((REGREAD32(ICH9_REG_SSFS) & (SSFS_CDS | SSFS_FCERR)) == 0) &&
+	while (((REGREAD32(ICH9_REG_SSFS) & (SSFS_FDONE | SSFS_FCERR)) == 0) &&
 	       --timeout) {
 		programmer_delay(10);
 	}
@@ -781,6 +907,8 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	temp32 = REGREAD32(ICH9_REG_SSFS);
 	if (temp32 & SSFS_FCERR) {
 		msg_perr("Transaction error!\n");
+		prettyprint_ich9_reg_ssfs(temp32);
+		prettyprint_ich9_reg_ssfc(temp32);
 		/* keep reserved bits */
 		temp32 &= SSFS_RESERVED_MASK | SSFC_RESERVED_MASK;
 		/* Clear the transaction error. */
@@ -806,37 +934,31 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data)
 {
-	switch (spi_programmer->type) {
-	case SPI_CONTROLLER_VIA:
-		if (datalength > 16) {
-			msg_perr("%s: Internal command size error for "
-				"opcode 0x%02x, got datalength=%i, want <=16\n",
-				__func__, op.opcode, datalength);
-			return SPI_INVALID_LENGTH;
-		}
-		return ich7_run_opcode(op, offset, datalength, data, 16);
-	case SPI_CONTROLLER_ICH7:
-		if (datalength > 64) {
-			msg_perr("%s: Internal command size error for "
-				"opcode 0x%02x, got datalength=%i, want <=16\n",
-				__func__, op.opcode, datalength);
-			return SPI_INVALID_LENGTH;
-		}
-		return ich7_run_opcode(op, offset, datalength, data, 64);
-	case SPI_CONTROLLER_ICH9:
-		if (datalength > 64) {
-			msg_perr("%s: Internal command size error for "
-				"opcode 0x%02x, got datalength=%i, want <=16\n",
-				__func__, op.opcode, datalength);
-			return SPI_INVALID_LENGTH;
-		}
-		return ich9_run_opcode(op, offset, datalength, data);
-	default:
+	/* max_data_read == max_data_write for all Intel/VIA SPI masters */
+	uint8_t maxlength = spi_programmer->max_data_read;
+
+	if (spi_programmer->type == SPI_CONTROLLER_NONE) {
 		msg_perr("%s: unsupported chipset\n", __func__);
+		return -1;
 	}
 
-	/* If we ever get here, something really weird happened */
-	return -1;
+	if (datalength > maxlength) {
+		msg_perr("%s: Internal command size error for "
+			"opcode 0x%02x, got datalength=%i, want <=%i\n",
+			__func__, op.opcode, datalength, maxlength);
+		return SPI_INVALID_LENGTH;
+	}
+
+	switch (spi_programmer->type) {
+	case SPI_CONTROLLER_VIA:
+	case SPI_CONTROLLER_ICH7:
+		return ich7_run_opcode(op, offset, datalength, data, maxlength);
+	case SPI_CONTROLLER_ICH9:
+		return ich9_run_opcode(op, offset, datalength, data);
+	default:
+		/* If we ever get here, something really weird happened */
+		return -1;
+	}
 }
 
 static int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
@@ -922,7 +1044,13 @@ static int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		}
 	}
 
-	/* translate read/write array/count */
+	/* Translate read/write array/count.
+	 * The maximum data length is identical for the maximum read length and
+	 * for the maximum write length excluding opcode and address. Opcode and
+	 * address are stored in separate registers, not in the data registers
+	 * and are thus not counted towards data length. The only exception
+	 * applies if the opcode definition (un)intentionally classifies said
+	 * opcode incorrectly as non-address opcode or vice versa. */
 	if (opcode->spi_type == SPI_OPCODE_TYPE_WRITE_NO_ADDRESS) {
 		data = (uint8_t *) (writearr + 1);
 		count = writecnt - 1;
@@ -1038,7 +1166,7 @@ static void do_ich9_spi_frap(uint32_t frap, int i)
 	uint32_t base, limit;
 	int rwperms = (((ICH_BRWA(frap) >> i) & 1) << 1) |
 		      (((ICH_BRRA(frap) >> i) & 1) << 0);
-	int offset = 0x54 + i * 4;
+	int offset = ICH9_REG_FREG0 + i * 4;
 	uint32_t freg = mmio_readl(ich_spibar + offset);
 
 	msg_pdbg("0x%02X: 0x%08x (FREG%i: %s)\n",
@@ -1135,7 +1263,7 @@ int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
 			     mmio_readl(ich_spibar + 0x58));
 		msg_pdbg("0x5c: 0x%08x (OPMENU+4)\n",
 			     mmio_readl(ich_spibar + 0x5c));
-		for (i = 0; i < 4; i++) {
+		for (i = 0; i < 3; i++) {
 			int offs;
 			offs = 0x60 + (i * 4);
 			msg_pdbg("0x%02x: 0x%08x (PBR%d)\n", offs,
@@ -1148,18 +1276,21 @@ int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
 		ich_init_opcodes();
 		break;
 	case SPI_CONTROLLER_ICH9:
-		tmp2 = mmio_readw(ich_spibar + 4);
+		tmp2 = mmio_readw(ich_spibar + ICH9_REG_HSFS);
 		msg_pdbg("0x04: 0x%04x (HSFS)\n", tmp2);
-		msg_pdbg("FLOCKDN %i, ", (tmp2 >> 15 & 1));
-		msg_pdbg("FDV %i, ", (tmp2 >> 14) & 1);
-		msg_pdbg("FDOPSS %i, ", (tmp2 >> 13) & 1);
-		msg_pdbg("SCIP %i, ", (tmp2 >> 5) & 1);
-		msg_pdbg("BERASE %i, ", (tmp2 >> 3) & 3);
-		msg_pdbg("AEL %i, ", (tmp2 >> 2) & 1);
-		msg_pdbg("FCERR %i, ", (tmp2 >> 1) & 1);
-		msg_pdbg("FDONE %i\n", (tmp2 >> 0) & 1);
+		prettyprint_ich9_reg_hsfs(tmp2);
+		if (tmp2 & HSFS_FLOCKDN) {
+			msg_pinfo("WARNING: SPI Configuration Lockdown activated.\n");
+			ichspi_lock = 1;
+		}
 
-		tmp = mmio_readl(ich_spibar + 0x50);
+		tmp2 = mmio_readw(ich_spibar + ICH9_REG_HSFC);
+		msg_pdbg("0x06: 0x%04x (HSFC)\n", tmp2);
+		prettyprint_ich9_reg_hsfc(tmp2);
+
+		tmp = mmio_readl(ich_spibar + ICH9_REG_FADDR);
+		msg_pdbg("0x08: 0x%08x (FADDR)\n", tmp);
+		tmp = mmio_readl(ich_spibar + ICH9_REG_FRAP);
 		msg_pdbg("0x50: 0x%08x (FRAP)\n", tmp);
 		msg_pdbg("BMWAG 0x%02x, ", ICH_BMWAG(tmp));
 		msg_pdbg("BMRAG 0x%02x, ", ICH_BMRAG(tmp));
@@ -1171,46 +1302,40 @@ int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
 			do_ich9_spi_frap(tmp, i);
 
 		msg_pdbg("0x74: 0x%08x (PR0)\n",
-			     mmio_readl(ich_spibar + 0x74));
+			     mmio_readl(ich_spibar + ICH9_REG_PR0));
 		msg_pdbg("0x78: 0x%08x (PR1)\n",
-			     mmio_readl(ich_spibar + 0x78));
+			     mmio_readl(ich_spibar + ICH9_REG_PR1));
 		msg_pdbg("0x7C: 0x%08x (PR2)\n",
-			     mmio_readl(ich_spibar + 0x7C));
+			     mmio_readl(ich_spibar + ICH9_REG_PR2));
 		msg_pdbg("0x80: 0x%08x (PR3)\n",
-			     mmio_readl(ich_spibar + 0x80));
+			     mmio_readl(ich_spibar + ICH9_REG_PR3));
 		msg_pdbg("0x84: 0x%08x (PR4)\n",
-			     mmio_readl(ich_spibar + 0x84));
+			     mmio_readl(ich_spibar + ICH9_REG_PR4));
 
-		tmp = mmio_readl(ich_spibar + 0x90);
+		tmp = mmio_readl(ich_spibar + ICH9_REG_SSFS);
 		msg_pdbg("0x90: 0x%02x (SSFS)\n", tmp & 0xff);
-		msg_pdbg("AEL %i, ", (tmp >> 4) & 1);
-		msg_pdbg("FCERR %i, ", (tmp >> 3) & 1);
-		msg_pdbg("FDONE %i, ", (tmp >> 2) & 1);
-		msg_pdbg("SCIP %i\n", (tmp >> 0) & 1);
-		if (tmp & (1 << 3)) {
+		prettyprint_ich9_reg_ssfs(tmp);
+		if (tmp & SSFS_FCERR) {
 			msg_pdbg("Clearing SSFS.FCERR\n");
-			mmio_writeb(1 << 3, ich_spibar + 0x90);
+			mmio_writeb(SSFS_FCERR, ich_spibar + ICH9_REG_SSFS);
 		}
-		tmp >>= 8;
-		msg_pdbg("0x91: 0x%06x (SSFC)\n", tmp);
+		msg_pdbg("0x91: 0x%06x (SSFC)\n", tmp >> 8);
+		prettyprint_ich9_reg_ssfc(tmp);
 
 		msg_pdbg("0x94: 0x%04x     (PREOP)\n",
-			     mmio_readw(ich_spibar + 0x94));
+			     mmio_readw(ich_spibar + ICH9_REG_PREOP));
 		msg_pdbg("0x96: 0x%04x     (OPTYPE)\n",
-			     mmio_readw(ich_spibar + 0x96));
+			     mmio_readw(ich_spibar + ICH9_REG_OPTYPE));
 		msg_pdbg("0x98: 0x%08x (OPMENU)\n",
-			     mmio_readl(ich_spibar + 0x98));
+			     mmio_readl(ich_spibar + ICH9_REG_OPMENU));
 		msg_pdbg("0x9C: 0x%08x (OPMENU+4)\n",
-			     mmio_readl(ich_spibar + 0x9C));
-		ichspi_bbar = mmio_readl(ich_spibar + 0xA0);
+			     mmio_readl(ich_spibar + ICH9_REG_OPMENU + 4));
+		ichspi_bbar = mmio_readl(ich_spibar + ICH9_REG_BBAR);
 		msg_pdbg("0xA0: 0x%08x (BBAR)\n",
 			     ichspi_bbar);
-		msg_pdbg("0xB0: 0x%08x (FDOC)\n",
-			     mmio_readl(ich_spibar + 0xB0));
-		if (tmp2 & (1 << 15)) {
-			msg_pinfo("WARNING: SPI Configuration Lockdown activated.\n");
-			ichspi_lock = 1;
-		}
+		tmp = mmio_readl(ich_spibar + ICH9_REG_FPB);
+		msg_pdbg("0xD0: 0x%08x (FPB)\n", tmp);
+
 		ich_init_opcodes();
 		break;
 	default:
