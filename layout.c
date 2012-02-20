@@ -41,6 +41,12 @@ typedef struct {
 	char name[256];
 } romlayout_t;
 
+/* include_args lists arguments specified at the command line with -i. They
+ * must be processed at some point so that desired regions are marked as
+ * "included" in the rom_entries list.
+ */
+static char *include_args[MAX_ROMLAYOUT];
+static int num_include_args = 0; /* the number of valid entries. */
 static romlayout_t rom_entries[MAX_ROMLAYOUT];
 
 #if CONFIG_INTERNAL == 1 /* FIXME: Move the whole block to cbtable.c? */
@@ -100,11 +106,11 @@ int show_id(uint8_t *bios, int size, int force)
 
 	/*
 	 * If lb_vendor is not set, the coreboot table was
-	 * not found. Nor was -m VENDOR:PART specified.
+	 * not found. Nor was -p internal:mainboard=VENDOR:PART specified.
 	 */
 	if (!lb_vendor || !lb_part) {
-		msg_pinfo("Note: If the following flash access fails, "
-		       "try -m <vendor>:<mainboard>.\n");
+		msg_pinfo("Note: If the following flash access fails, try "
+			  "-p internal:mainboard=<vendor>:<mainboard>.\n");
 		return 0;
 	}
 
@@ -120,14 +126,17 @@ int show_id(uint8_t *bios, int size, int force)
 			       "seem to fit to this machine - forcing it.\n");
 		} else {
 			msg_pinfo("ERROR: Your firmware image (%s:%s) does not "
-			       "appear to\n       be correct for the detected "
-			       "mainboard (%s:%s)\n\nOverride with -p internal:"
-			       "boardmismatch=force if you are absolutely sure "
-			       "that\nyou are using a correct "
-			       "image for this mainboard or override\nthe detected "
-			       "values with --mainboard <vendor>:<mainboard>.\n\n",
-			       mainboard_vendor, mainboard_part, lb_vendor,
-			       lb_part);
+				  "appear to\n"
+				  "       be correct for the detected "
+				  "mainboard (%s:%s)\n\n"
+				  "Override with -p internal:boardmismatch="
+				  "force to ignore the board name in the\n"
+				  "firmware image or override the detected "
+				  "mainboard with\n"
+				  "-p internal:mainboard=<vendor>:<mainboard>."
+				  "\n\n",
+				  mainboard_vendor, mainboard_part, lb_vendor,
+				  lb_part);
 			exit(1);
 		}
 	}
@@ -156,10 +165,8 @@ int read_romlayout(char *name)
 
 		if (romimages >= MAX_ROMLAYOUT) {
 			msg_gerr("Maximum number of ROM images (%i) in layout "
-				 "file reached before end of layout file.\n",
-				 MAX_ROMLAYOUT);
-			msg_gerr("Ignoring the rest of the layout file.\n");
-			break;
+				 "file reached.\n", MAX_ROMLAYOUT);
+			return 1;
 		}
 		if (2 != fscanf(romlayout, "%s %s\n", tempstr, rom_entries[romimages].name))
 			continue;
@@ -194,83 +201,139 @@ int read_romlayout(char *name)
 }
 #endif
 
-int find_romentry(char *name)
+/* register an include argument (-i) for later processing */
+int register_include_arg(char *name)
+{
+	if (num_include_args >= MAX_ROMLAYOUT) {
+		msg_gerr("Too many regions included (%i).\n", num_include_args);
+		return 1;
+	}
+
+	if (name == NULL) {
+		msg_gerr("<NULL> is a bad region name.\n");
+		return 1;
+	}
+
+	include_args[num_include_args] = name;
+	num_include_args++;
+	return 0;
+}
+
+/* returns the index of the entry (or a negative value if it is not found) */
+static int find_romentry(char *name)
 {
 	int i;
 
 	if (!romimages)
 		return -1;
 
-	msg_ginfo("Looking for \"%s\"... ", name);
-
+	msg_gspew("Looking for region \"%s\"... ", name);
 	for (i = 0; i < romimages; i++) {
 		if (!strcmp(rom_entries[i].name, name)) {
 			rom_entries[i].included = 1;
-			msg_ginfo("found.\n");
+			msg_gspew("found.\n");
 			return i;
 		}
 	}
-	msg_ginfo("not found.\n");	// Not found. Error.
-
+	msg_gspew("not found.\n");
 	return -1;
 }
 
-int find_next_included_romentry(unsigned int start)
+/* process -i arguments
+ * returns 0 to indicate success, >0 to indicate failure
+ */
+int process_include_args(void)
+{
+	int i;
+	unsigned int found = 0;
+
+	if (num_include_args == 0)
+		return 0;
+
+	for (i = 0; i < num_include_args; i++) {
+		/* User has specified an area, but no layout file is loaded. */
+		if (!romimages) {
+			msg_gerr("Region requested (with -i \"%s\"), "
+				 "but no layout data is available.\n",
+				 include_args[i]);
+			return 1;
+		}
+
+		if (find_romentry(include_args[i]) < 0) {
+			msg_gerr("Invalid region specified: \"%s\"\n",
+				 include_args[i]);
+			return 1;
+		}
+		found++;
+	}
+
+	msg_ginfo("Using region%s: \"%s\"", num_include_args > 1 ? "s" : "",
+		  include_args[0]);
+	for (i = 1; i < num_include_args; i++)
+		msg_ginfo(", \"%s\"", include_args[i]);
+	msg_ginfo(".\n");
+	return 0;
+}
+
+romlayout_t *get_next_included_romentry(unsigned int start)
 {
 	int i;
 	unsigned int best_start = UINT_MAX;
-	int best_entry = -1;
+	romlayout_t *best_entry = NULL;
+	romlayout_t *cur;
 
 	/* First come, first serve for overlapping regions. */
 	for (i = 0; i < romimages; i++) {
-		if (!rom_entries[i].included)
+		cur = &rom_entries[i];
+		if (!cur->included)
 			continue;
 		/* Already past the current entry? */
-		if (start > rom_entries[i].end)
+		if (start > cur->end)
 			continue;
 		/* Inside the current entry? */
-		if (start >= rom_entries[i].start)
-			return i;
+		if (start >= cur->start)
+			return cur;
 		/* Entry begins after start. */
-		if (best_start > rom_entries[i].start) {
-			best_start = rom_entries[i].start;
-			best_entry = i;
+		if (best_start > cur->start) {
+			best_start = cur->start;
+			best_entry = cur;
 		}
 	}
 	return best_entry;
 }
 
-int handle_romentries(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents)
+int handle_romentries(struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents)
 {
 	unsigned int start = 0;
-	int entry;
+	romlayout_t *entry;
 	unsigned int size = flash->total_size * 1024;
 
-	/* If no layout file was specified or the layout file was empty, assume
-	 * that the user wants to flash the complete new image.
+	/* If no regions were specified for inclusion, assume
+	 * that the user wants to write the complete new image.
 	 */
-	if (!romimages)
+	if (num_include_args == 0)
 		return 0;
+
 	/* Non-included romentries are ignored.
 	 * The union of all included romentries is used from the new image.
 	 */
 	while (start < size) {
-		entry = find_next_included_romentry(start);
+		entry = get_next_included_romentry(start);
 		/* No more romentries for remaining region? */
-		if (entry < 0) {
+		if (!entry) {
 			memcpy(newcontents + start, oldcontents + start,
 			       size - start);
 			break;
 		}
-		if (rom_entries[entry].start > start)
+		/* For non-included region, copy from old content. */
+		if (entry->start > start)
 			memcpy(newcontents + start, oldcontents + start,
-			       rom_entries[entry].start - start);
+			       entry->start - start);
 		/* Skip to location after current romentry. */
-		start = rom_entries[entry].end + 1;
+		start = entry->end + 1;
 		/* Catch overflow. */
 		if (!start)
 			break;
 	}
-			
 	return 0;
 }

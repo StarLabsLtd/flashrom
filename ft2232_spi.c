@@ -25,15 +25,20 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include "flash.h"
-#include "chipdrivers.h"
 #include "programmer.h"
 #include "spi.h"
 #include <ftdi.h>
 
+/* Please keep sorted by vendor ID, then device ID. */
+
 #define FTDI_VID		0x0403
 #define FTDI_FT2232H_PID	0x6010
 #define FTDI_FT4232H_PID	0x6011
+#define TIAO_TUMPA_PID		0x8a98
 #define AMONTEC_JTAGKEY_PID	0xCFF8
+
+#define GOEPEL_VID		0x096C
+#define GOEPEL_PICOTAP_PID	0x1449
 
 #define FIC_VID			0x1457
 #define OPENMOKO_DBGBOARD_PID	0x5118
@@ -47,7 +52,9 @@
 const struct usbdev_status devs_ft2232spi[] = {
 	{FTDI_VID, FTDI_FT2232H_PID, OK, "FTDI", "FT2232H"},
 	{FTDI_VID, FTDI_FT4232H_PID, OK, "FTDI", "FT4232H"},
+	{FTDI_VID, TIAO_TUMPA_PID, OK, "TIAO", "USB Multi-Protocol Adapter"},
 	{FTDI_VID, AMONTEC_JTAGKEY_PID, OK, "Amontec", "JTAGkey"},
+	{GOEPEL_VID, GOEPEL_PICOTAP_PID, OK, "GOEPEL", "PicoTAP"},
 	{FIC_VID, OPENMOKO_DBGBOARD_PID, OK, "FIC",
 		"OpenMoko Neo1973 Debug board (V2+)"},
 	{OLIMEX_VID, OLIMEX_ARM_OCD_PID, NT, "Olimex", "ARM-USB-OCD"},
@@ -137,17 +144,19 @@ static int get_buf(struct ftdi_context *ftdic, const unsigned char *buf,
 	return 0;
 }
 
-static int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		const unsigned char *writearr, unsigned char *readarr);
+static int ft2232_spi_send_command(struct flashctx *flash,
+				   unsigned int writecnt, unsigned int readcnt,
+				   const unsigned char *writearr,
+				   unsigned char *readarr);
 
 static const struct spi_programmer spi_programmer_ft2232 = {
-	.type = SPI_CONTROLLER_FT2232,
-	.max_data_read = 64 * 1024,
-	.max_data_write = 256,
-	.command = ft2232_spi_send_command,
-	.multicommand = default_spi_send_multicommand,
-	.read = default_spi_read,
-	.write_256 = default_spi_write_256,
+	.type		= SPI_CONTROLLER_FT2232,
+	.max_data_read	= 64 * 1024,
+	.max_data_write	= 256,
+	.command	= ft2232_spi_send_command,
+	.multicommand	= default_spi_send_multicommand,
+	.read		= default_spi_read,
+	.write_256	= default_spi_write_256,
 };
 
 /* Returns 0 upon success, a negative number upon errors. */
@@ -173,6 +182,20 @@ int ft2232_spi_init(void)
 			ft2232_interface = INTERFACE_A;
 			cs_bits = 0x18;
 			pindir = 0x1b;
+		} else if (!strcasecmp(arg, "picotap")) {
+			ft2232_vid = GOEPEL_VID;
+			ft2232_type = GOEPEL_PICOTAP_PID;
+			ft2232_interface = INTERFACE_A;
+		} else if (!strcasecmp(arg, "tumpa")) {
+			/* Interface A is SPI1, B is SPI2. */
+			ft2232_type = TIAO_TUMPA_PID;
+			ft2232_interface = INTERFACE_A;
+		} else if (!strcasecmp(arg, "busblaster")) {
+			/* In its default configuration it is a jtagkey clone */
+			ft2232_type = FTDI_FT2232H_PID;
+			ft2232_interface = INTERFACE_A;
+			cs_bits = 0x18;
+			pindir = 0x1b;
 		} else if (!strcasecmp(arg, "openmoko")) {
 			ft2232_vid = FIC_VID;
 			ft2232_type = OPENMOKO_DBGBOARD_PID;
@@ -181,6 +204,8 @@ int ft2232_spi_init(void)
 			ft2232_vid = OLIMEX_VID;
 			ft2232_type = OLIMEX_ARM_OCD_PID;
 			ft2232_interface = INTERFACE_A;
+			cs_bits = 0x08;
+			pindir = 0x1b;
 		} else if (!strcasecmp(arg, "arm-usb-tiny")) {
 			ft2232_vid = OLIMEX_VID;
 			ft2232_type = OLIMEX_ARM_TINY_PID;
@@ -189,6 +214,8 @@ int ft2232_spi_init(void)
 			ft2232_vid = OLIMEX_VID;
 			ft2232_type = OLIMEX_ARM_OCD_H_PID;
 			ft2232_interface = INTERFACE_A;
+			cs_bits = 0x08;
+			pindir = 0x1b;
 		} else if (!strcasecmp(arg, "arm-usb-tiny-h")) {
 			ft2232_vid = OLIMEX_VID;
 			ft2232_type = OLIMEX_ARM_TINY_H_PID;
@@ -285,8 +312,7 @@ int ft2232_spi_init(void)
 	}
 
 	msg_pdbg("MPSSE clock: %f MHz divisor: %d "
-		 "SPI clock: %f MHz\n",
-		 mpsse_clk, DIVIDE_BY,
+		 "SPI clock: %f MHz\n", mpsse_clk, DIVIDE_BY,
 		 (double)(mpsse_clk / (((DIVIDE_BY - 1) + 1) * 2)));
 
 	/* Disconnect TDI/DO to TDO/DI for loopback. */
@@ -322,8 +348,10 @@ ftdi_err:
 }
 
 /* Returns 0 upon success, a negative number upon errors. */
-static int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		const unsigned char *writearr, unsigned char *readarr)
+static int ft2232_spi_send_command(struct flashctx *flash,
+				   unsigned int writecnt, unsigned int readcnt,
+				   const unsigned char *writearr,
+				   unsigned char *readarr)
 {
 	struct ftdi_context *ftdic = &ftdic_context;
 	static unsigned char *buf = NULL;
@@ -379,8 +407,7 @@ static int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		failed = ret;
 		/* We can't abort here, we still have to deassert CS#. */
 		if (ret)
-			msg_perr("send_buf failed before read: %i\n",
-				ret);
+			msg_perr("send_buf failed before read: %i\n", ret);
 		i = 0;
 		if (ret == 0) {
 			/*

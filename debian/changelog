@@ -1,3 +1,10 @@
+flashrom (0.9.5+r1503-1) unstable; urgency=low
+
+  * New upstream release.
+  * debian/docs: Add mysteries_intel.txt.
+
+ -- Uwe Hermann <uwe@debian.org>  Mon, 20 Feb 2012 11:54:48 +0100
+
 flashrom (0.9.4+r1394-1) unstable; urgency=low
 
   * New upstream release.

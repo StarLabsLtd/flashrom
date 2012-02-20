@@ -93,8 +93,7 @@ void probe_superio_ite(void)
 		case 0x85:
 			msg_pdbg("Found ITE EC, ID 0x%04hx,"
 			         "Rev 0x%02x on port 0x%x.\n",
-			         s.model,
-			         sio_read(s.port, CHIP_VER_REG),
+			         s.model, sio_read(s.port, CHIP_VER_REG),
 			         s.port);
 			register_superio(s);
 			break;
@@ -104,19 +103,23 @@ void probe_superio_ite(void)
 	return;
 }
 
-static int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-			const unsigned char *writearr, unsigned char *readarr);
-static int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len);
-static int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf, int start, int len);
+static int it8716f_spi_send_command(struct flashctx *flash,
+				    unsigned int writecnt, unsigned int readcnt,
+				    const unsigned char *writearr,
+				    unsigned char *readarr);
+static int it8716f_spi_chip_read(struct flashctx *flash, uint8_t *buf,
+				 unsigned int start, unsigned int len);
+static int it8716f_spi_chip_write_256(struct flashctx *flash, uint8_t *buf,
+				      unsigned int start, unsigned int len);
 
 static const struct spi_programmer spi_programmer_it87xx = {
-	.type = SPI_CONTROLLER_IT87XX,
-	.max_data_read = MAX_DATA_UNSPECIFIED,
-	.max_data_write = MAX_DATA_UNSPECIFIED,
-	.command = it8716f_spi_send_command,
-	.multicommand = default_spi_send_multicommand,
-	.read = it8716f_spi_chip_read,
-	.write_256 = it8716f_spi_chip_write_256,
+	.type		= SPI_CONTROLLER_IT87XX,
+	.max_data_read	= MAX_DATA_UNSPECIFIED,
+	.max_data_write	= MAX_DATA_UNSPECIFIED,
+	.command	= it8716f_spi_send_command,
+	.multicommand	= default_spi_send_multicommand,
+	.read		= it8716f_spi_chip_read,
+	.write_256	= it8716f_spi_chip_write_256,
 };
 
 static uint16_t it87spi_probe(uint16_t port)
@@ -128,10 +131,8 @@ static uint16_t it87spi_probe(uint16_t port)
 	enter_conf_mode_ite(port);
 	/* NOLDN, reg 0x24, mask out lowest bit (suspend) */
 	tmp = sio_read(port, 0x24) & 0xFE;
-	/* If IT87SPI was not explicitly selected, we want to check
-	 * quickly if LPC->SPI translation is active.
-	 */
-	if ((programmer == PROGRAMMER_INTERNAL) && !(tmp & (0x0E))) {
+	/* Check if LPC->SPI translation is active. */
+	if (!(tmp & 0x0e)) {
 		msg_pdbg("No IT87* serial flash segment enabled.\n");
 		exit_conf_mode_ite(port);
 		/* Nothing to do. */
@@ -193,7 +194,7 @@ static uint16_t it87spi_probe(uint16_t port)
 	free(portpos);
 	exit_conf_mode_ite(port);
 	it8716f_flashport = flashport;
-	if (buses_supported & CHIP_BUSTYPE_SPI)
+	if (internal_buses_supported & BUS_SPI)
 		msg_pdbg("Overriding chipset SPI with IT87 SPI.\n");
 	/* FIXME: Add the SPI bus or replace the other buses with it? */
 	register_spi_programmer(&spi_programmer_it87xx);
@@ -248,8 +249,10 @@ int init_superio_ite(void)
  * commands with the address in inverse wire order. That's why the register
  * ordering in case 4 and 5 may seem strange.
  */
-static int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-			const unsigned char *writearr, unsigned char *readarr)
+static int it8716f_spi_send_command(struct flashctx *flash,
+				    unsigned int writecnt, unsigned int readcnt,
+				    const unsigned char *writearr,
+				    unsigned char *readarr)
 {
 	uint8_t busy, writeenc;
 	int i;
@@ -259,7 +262,7 @@ static int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	} while (busy);
 	if (readcnt > 3) {
 		msg_pinfo("%s called with unsupported readcnt %i.\n",
-		       __func__, readcnt);
+			  __func__, readcnt);
 		return SPI_INVALID_LENGTH;
 	}
 	switch (writecnt) {
@@ -289,7 +292,7 @@ static int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		break;
 	default:
 		msg_pinfo("%s called with unsupported writecnt %i.\n",
-		       __func__, writecnt);
+			  __func__, writecnt);
 		return SPI_INVALID_LENGTH;
 	}
 	/*
@@ -313,26 +316,26 @@ static int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 }
 
 /* Page size is usually 256 bytes */
-static int it8716f_spi_page_program(struct flashchip *flash, uint8_t *buf, int start)
+static int it8716f_spi_page_program(struct flashctx *flash, uint8_t *buf,
+				    unsigned int start)
 {
-	int i;
+	unsigned int i;
 	int result;
 	chipaddr bios = flash->virtual_memory;
 
-	result = spi_write_enable();
+	result = spi_write_enable(flash);
 	if (result)
 		return result;
 	/* FIXME: The command below seems to be redundant or wrong. */
 	OUTB(0x06, it8716f_flashport + 1);
 	OUTB(((2 + (fast_spi ? 1 : 0)) << 4), it8716f_flashport);
-	for (i = 0; i < flash->page_size; i++) {
-		chip_writeb(buf[i], bios + start + i);
-	}
+	for (i = 0; i < flash->page_size; i++)
+		chip_writeb(flash, buf[i], bios + start + i);
 	OUTB(0, it8716f_flashport);
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 1-10 ms, so wait in 1 ms steps.
 	 */
-	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+	while (spi_read_status_register(flash) & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(1000);
 	return 0;
 }
@@ -341,7 +344,8 @@ static int it8716f_spi_page_program(struct flashchip *flash, uint8_t *buf, int s
  * IT8716F only allows maximum of 512 kb SPI mapped to LPC memory cycles
  * Need to read this big flash using firmware cycles 3 byte at a time.
  */
-static int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
+static int it8716f_spi_chip_read(struct flashctx *flash, uint8_t *buf,
+				 unsigned int start, unsigned int len)
 {
 	fast_spi = 0;
 
@@ -358,7 +362,8 @@ static int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf, int star
 	return 0;
 }
 
-static int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf, int start, int len)
+static int it8716f_spi_chip_write_256(struct flashctx *flash, uint8_t *buf,
+				      unsigned int start, unsigned int len)
 {
 	/*
 	 * IT8716F only allows maximum of 512 kb SPI chip size for memory
@@ -374,7 +379,7 @@ static int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf, int
 	    (flash->page_size > 256)) {
 		spi_chip_write_1(flash, buf, start, len);
 	} else {
-		int lenhere;
+		unsigned int lenhere;
 
 		if (start % flash->page_size) {
 			/* start to the end of the page or to start + len,

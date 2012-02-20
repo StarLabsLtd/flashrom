@@ -44,26 +44,18 @@ int register_shutdown(int (*function) (void *data), void *data);
 void *programmer_map_flash_region(const char *descr, unsigned long phys_addr,
 				  size_t len);
 void programmer_unmap_flash_region(void *virt_addr, size_t len);
-void chip_writeb(uint8_t val, chipaddr addr);
-void chip_writew(uint16_t val, chipaddr addr);
-void chip_writel(uint32_t val, chipaddr addr);
-void chip_writen(uint8_t *buf, chipaddr addr, size_t len);
-uint8_t chip_readb(const chipaddr addr);
-uint16_t chip_readw(const chipaddr addr);
-uint32_t chip_readl(const chipaddr addr);
-void chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void programmer_delay(int usecs);
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 enum chipbustype {
-	CHIP_BUSTYPE_NONE	= 0,
-	CHIP_BUSTYPE_PARALLEL	= 1 << 0,
-	CHIP_BUSTYPE_LPC	= 1 << 1,
-	CHIP_BUSTYPE_FWH	= 1 << 2,
-	CHIP_BUSTYPE_SPI	= 1 << 3,
-	CHIP_BUSTYPE_NONSPI	= CHIP_BUSTYPE_PARALLEL | CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH,
-	CHIP_BUSTYPE_UNKNOWN	= CHIP_BUSTYPE_PARALLEL | CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI,
+	BUS_NONE	= 0,
+	BUS_PARALLEL	= 1 << 0,
+	BUS_LPC		= 1 << 1,
+	BUS_FWH		= 1 << 2,
+	BUS_SPI		= 1 << 3,
+	BUS_PROG	= 1 << 4,
+	BUS_NONSPI	= BUS_PARALLEL | BUS_LPC | BUS_FWH,
 };
 
 /*
@@ -91,7 +83,10 @@ enum chipbustype {
 #define FEATURE_ADDR_SHIFTED	(1 << 5)
 #define FEATURE_WRSR_EWSR	(1 << 6)
 #define FEATURE_WRSR_WREN	(1 << 7)
+#define FEATURE_OTP		(1 << 8)
 #define FEATURE_WRSR_EITHER	(FEATURE_WRSR_EWSR | FEATURE_WRSR_WREN)
+
+struct flashctx;
 
 struct flashchip {
 	const char *vendor;
@@ -108,9 +103,9 @@ struct flashchip {
 	uint32_t model_id;
 
 	/* Total chip size in kilobytes */
-	int total_size;
+	unsigned int total_size;
 	/* Chip page size in bytes */
-	int page_size;
+	unsigned int page_size;
 	int feature_bits;
 
 	/*
@@ -119,10 +114,12 @@ struct flashchip {
 	 */
 	uint32_t tested;
 
-	int (*probe) (struct flashchip *flash);
+	int (*probe) (struct flashctx *flash);
 
-	/* Delay after "enter/exit ID mode" commands in microseconds. */
-	int probe_timing;
+	/* Delay after "enter/exit ID mode" commands in microseconds.
+	 * NB: negative values have special meanings, see TIMING_* below.
+	 */
+	signed int probe_timing;
 
 	/*
 	 * Erase blocks and associated erase function. Any chip erase function
@@ -138,22 +135,47 @@ struct flashchip {
 		} eraseblocks[NUM_ERASEREGIONS];
 		/* a block_erase function should try to erase one block of size
 		 * 'blocklen' at address 'blockaddr' and return 0 on success. */
-		int (*block_erase) (struct flashchip *flash, unsigned int blockaddr, unsigned int blocklen);
+		int (*block_erase) (struct flashctx *flash, unsigned int blockaddr, unsigned int blocklen);
 	} block_erasers[NUM_ERASEFUNCTIONS];
 
-	int (*printlock) (struct flashchip *flash);
-	int (*unlock) (struct flashchip *flash);
-	int (*write) (struct flashchip *flash, uint8_t *buf, int start, int len);
-	int (*read) (struct flashchip *flash, uint8_t *buf, int start, int len);
-	struct {
+	int (*printlock) (struct flashctx *flash);
+	int (*unlock) (struct flashctx *flash);
+	int (*write) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	int (*read) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	struct voltage {
 		uint16_t min;
 		uint16_t max;
 	} voltage;
-
-	/* Some flash devices have an additional register space. */
-	chipaddr virtual_memory;
-	chipaddr virtual_registers;
 };
+
+/* struct flashctx must always contain struct flashchip at the beginning. */
+struct flashctx {
+	const char *vendor;
+	const char *name;
+	enum chipbustype bustype;
+	uint32_t manufacture_id;
+	uint32_t model_id;
+	int total_size;
+	int page_size;
+	int feature_bits;
+	uint32_t tested;
+	int (*probe) (struct flashctx *flash);
+	int probe_timing;
+	struct block_eraser block_erasers[NUM_ERASEFUNCTIONS];
+	int (*printlock) (struct flashctx *flash);
+	int (*unlock) (struct flashctx *flash);
+	int (*write) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	int (*read) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	struct voltage voltage;
+	/* struct flashchip ends here. */
+	
+	chipaddr virtual_memory;
+	/* Some flash devices have an additional register space. */
+	chipaddr virtual_registers;
+	struct registered_programmer *pgm;
+};
+
+typedef int (erasefunc_t)(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 
 #define TEST_UNTESTED	0
 
@@ -186,6 +208,15 @@ struct flashchip {
 
 extern const struct flashchip flashchips[];
 
+void chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr);
+void chip_writew(const struct flashctx *flash, uint16_t val, chipaddr addr);
+void chip_writel(const struct flashctx *flash, uint32_t val, chipaddr addr);
+void chip_writen(const struct flashctx *flash, uint8_t *buf, chipaddr addr, size_t len);
+uint8_t chip_readb(const struct flashctx *flash, const chipaddr addr);
+uint16_t chip_readw(const struct flashctx *flash, const chipaddr addr);
+uint32_t chip_readl(const struct flashctx *flash, const chipaddr addr);
+void chip_readn(const struct flashctx *flash, uint8_t *buf, const chipaddr addr, size_t len);
+
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
 void print_supported(void);
@@ -197,35 +228,44 @@ enum write_granularity {
 	write_gran_1byte,
 	write_gran_256bytes,
 };
-extern enum chipbustype buses_supported;
 extern int verbose;
 extern const char flashrom_version[];
 extern char *chip_to_probe;
-void map_flash_registers(struct flashchip *flash);
-int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
-int erase_flash(struct flashchip *flash);
-int probe_flash(int startchip, struct flashchip *fill_flash, int force);
-int read_flash_to_file(struct flashchip *flash, const char *filename);
+void map_flash_registers(struct flashctx *flash);
+int read_memmapped(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+int erase_flash(struct flashctx *flash);
+int probe_flash(struct registered_programmer *pgm, int startchip, struct flashctx *fill_flash, int force);
+int read_flash_to_file(struct flashctx *flash, const char *filename);
 int min(int a, int b);
 int max(int a, int b);
 void tolower_string(char *str);
 char *extract_param(char **haystack, const char *needle, const char *delim);
-int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, const char *message);
-int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gran);
+int verify_range(struct flashctx *flash, uint8_t *cmpbuf, unsigned int start, unsigned int len, const char *message);
+int need_erase(uint8_t *have, uint8_t *want, unsigned int len, enum write_granularity gran);
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
 void print_banner(void);
 void list_programmers_linebreak(int startcol, int cols, int paren);
 int selfcheck(void);
-int doit(struct flashchip *flash, int force, const char *filename, int read_it, int write_it, int erase_it, int verify_it);
+int doit(struct flashctx *flash, int force, const char *filename, int read_it, int write_it, int erase_it, int verify_it);
 int read_buf_from_file(unsigned char *buf, unsigned long size, const char *filename);
 int write_buf_to_file(unsigned char *buf, unsigned long size, const char *filename);
 
 #define OK 0
 #define NT 1    /* Not tested */
 
-/* Something happened that shouldn't happen, but we can go on */
+/* Something happened that shouldn't happen, but we can go on. */
 #define ERROR_NONFATAL 0x100
+
+/* Something happened that shouldn't happen, we'll abort. */
+#define ERROR_FATAL -0xee
+#define ERROR_FLASHROM_BUG -200
+/* We reached one of the hardcoded limits of flashrom. This can be fixed by
+ * increasing the limit of a compile-time allocation or by switching to dynamic
+ * allocation.
+ * Note: If this warning is triggered, check first for runaway registrations.
+ */
+#define ERROR_FLASHROM_LIMIT -201
 
 /* cli_output.c */
 /* Let gcc and clang check for correct printf-style format strings. */
@@ -233,7 +273,8 @@ int print(int type, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #define MSG_ERROR	0
 #define MSG_INFO	1
 #define MSG_DEBUG	2
-#define MSG_BARF	3
+#define MSG_DEBUG2	3
+#define MSG_BARF	4
 #define msg_gerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* general errors */
 #define msg_perr(...)	print(MSG_ERROR, __VA_ARGS__)	/* programmer errors */
 #define msg_cerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* chip errors */
@@ -243,17 +284,18 @@ int print(int type, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #define msg_gdbg(...)	print(MSG_DEBUG, __VA_ARGS__)	/* general debug */
 #define msg_pdbg(...)	print(MSG_DEBUG, __VA_ARGS__)	/* programmer debug */
 #define msg_cdbg(...)	print(MSG_DEBUG, __VA_ARGS__)	/* chip debug */
+#define msg_gdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* general debug2 */
+#define msg_pdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* programmer debug2 */
+#define msg_cdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* chip debug2 */
 #define msg_gspew(...)	print(MSG_BARF, __VA_ARGS__)	/* general debug barf  */
 #define msg_pspew(...)	print(MSG_BARF, __VA_ARGS__)	/* programmer debug barf  */
 #define msg_cspew(...)	print(MSG_BARF, __VA_ARGS__)	/* chip debug barf  */
 
-/* cli_classic.c */
-int cli_classic(int argc, char *argv[]);
-
 /* layout.c */
+int register_include_arg(char *name);
+int process_include_args(void);
 int read_romlayout(char *name);
-int find_romentry(char *name);
-int handle_romentries(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents);
+int handle_romentries(struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents);
 
 /* spi.c */
 struct spi_command {
@@ -262,9 +304,9 @@ struct spi_command {
 	const unsigned char *writearr;
 	unsigned char *readarr;
 };
-int spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		const unsigned char *writearr, unsigned char *readarr);
-int spi_send_multicommand(struct spi_command *cmds);
-uint32_t spi_get_valid_read_addr(void);
+int spi_send_command(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int spi_send_multicommand(struct flashctx *flash, struct spi_command *cmds);
+uint32_t spi_get_valid_read_addr(struct flashctx *flash);
 
+enum chipbustype get_buses_supported(void);
 #endif				/* !__FLASH_H__ */

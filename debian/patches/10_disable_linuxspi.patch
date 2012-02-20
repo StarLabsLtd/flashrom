@@ -1,0 +1,15 @@
+Disable linux-spi driver for now, will be enabled later.
+
+Index: a/Makefile
+===================================================================
+--- a/Makefile	2012-02-20 20:08:59.000000000 +0100
++++ b/Makefile	2012-02-20 20:09:30.000000000 +0100
+@@ -339,7 +339,7 @@
+ CONFIG_SATAMV ?= yes
+ 
+ # Enable Linux spidev interface by default. We disable it on non-Linux targets.
+-CONFIG_LINUX_SPI ?= yes
++CONFIG_LINUX_SPI ?= no
+ 
+ # Disable wiki printing by default. It is only useful if you have wiki access.
+ CONFIG_PRINT_WIKI ?= no

@@ -1,4 +1,2069 @@
 ------------------------------------------------------------------------
+r1503 | hailfinger | 2012-02-18 03:34:58 +0100 (Sat, 18 Feb 2012) | 5 lines
+
+Increase flashrom release number to 0.9.5
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1502 | stefanct | 2012-02-17 21:03:37 +0100 (Fri, 17 Feb 2012) | 12 lines
+
+Add a bunch of new/tested stuff and various small changes 11
+
+Tested Mainboards:
+NOT OK:
+ - HP dc7800
+   http://paste.flashrom.org/view.php?id=1084
+
+ - add "Low Profile Desktop" to our dmi whitelist
+ - fix print_wiki (broken since r1488)
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1501 | stefanct | 2012-02-17 15:51:15 +0100 (Fri, 17 Feb 2012) | 14 lines
+
+Add board enable for ASUS OPLX-M.
+
+The vendor enable does some other funky stuff with MTRRs/MSRs, SMIs,
+cache and legacy ISA address forward twiddling. I would only use
+this patch to read and verify the existing contents, just to be safe.
+
+The PCI IDs of the onboard devices do contain no subsystem IDs at all.
+
+Probing and reading was
+Tested-by: Ville Skytt?\195?\164 <ville.skytta@iki.fi>
+See http://www.flashrom.org/pipermail/flashrom/2010-October/005256.html
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1500 | stefanct | 2012-02-17 15:51:04 +0100 (Fri, 17 Feb 2012) | 24 lines
+
+Add support for SFDP (JESD216).
+
+Similar to modules using the opaque programmer framework (e.g. ICH Hardware
+Sequencing) this uses a template struct flashchip element in flashchips.c with
+a special probe function that fills the obtained values into that struct.
+
+This allows yet unknown SPI chips to be supported (read, erase, write) almost
+as if it was already added to flashchips.c.
+
+Documentation used:
+http://www.jedec.org/standards-documents/docs/jesd216 (2011-04)
+W25Q32BV data sheet Revision F (2011-04-01)
+EN25QH16 data sheet Revision F (2011-06-01)
+MX25L6436E data sheet Revision 1.8 (2011-12-26)
+
+Tested-by: David Hendricks <dhendrix@google.com>
+on W25Q64CV + dediprog
+Tested-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+on a 2010 MX25L6436E with preliminary (i.e. incorrect) SFDP implementation + serprog
+
+Thanks also to Michael Karcher for his comments and preliminary review!
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1499 | stefanct | 2012-02-16 22:07:07 +0100 (Thu, 16 Feb 2012) | 109 lines
+
+Add a bunch of new/tested stuff and various small changes 10
+
+Tested mainboards:
+OK:
+ - ABIT A-S78H
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008603.html
+ - ASRock AM2NF6G-VSTA
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008534.html
+ - ASUS KFSN4-DRE/SAS
+   reported by ted on IRC
+ - ASUS M2A-VM (HDMI variant)
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008509.html
+ - ASUS M4N78 PRO
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008598.html
+ - ASUS P5K-V
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008737.html
+ - ASUS P5KPL-CM
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008522.html
+ - ASUS P5N7A-VM
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008508.html
+ - ASUS P5QPL-AM
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008557.html
+ - ECS GF7100PVT-M3
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008412.html
+ - ECS K7SEM
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008362.html
+ - ECS P4M800PRO-M V2.0
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008478.html
+ - Gigabyte 880GMA-USB3
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008715.html
+ - Gigabyte GA-EP31-DS3L
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008601.html
+ - Gigabyte GA-X58A-UDR3
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008572.html
+ - Gigabyte GA-Z68XP-UD3
+   http://paste.flashrom.org/view.php?id=1058
+ - HP ProLiant N40L
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008650.html
+ - MSI MS-7309 (K9N6PGM2-V2)
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008441.html
+ - MSI MS-7548 (Aspen-GL8E used in HP Pavilion a6750f)
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008666.html
+ - MSI MS-7676 (H67MA-ED55(B3))
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008547.html
+ - PC Engines Alix.6f2
+   Reported by Philip Prindeville on IRC
+ - Shuttle AV18E2
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008459.html
+ - Supermicro X8DTE-F
+   http://www.flashrom.org/pipermail/flashrom/2011-November/008304.html
+ - Supermicro X8DTT-HIBQF
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008520.html
+NOT OK:
+ - ASUS P8H61-M LE/USB3
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008491.html
+ - ASUS P8H67-M PRO
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008321.html
+ - ASUS P8Z68-V PRO
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008469.html
+ - Clevo P150HM (laptop)
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008717.html
+ - Intel D425KT
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008600.html
+ - Supermicro X9SCA-F
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008313.html
+
+Tested flash chips:
+ - mark AT29C512 as TEST_OK_PREW
+   http://paste.flashrom.org/view.php?id=977
+ - mark M25P40 as TEST_OK_PREW
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008351.html
+ - mark M25PE80 as TEST_OK_PREW
+   http://paste.flashrom.org/view.php?id=1061
+ - mark MX25L6405 as TEST_OK_PREW
+   tested myself with an MX25L6436E variant on serprog
+ - mark W39V080A as TEST_OK_PREW
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008509.html
+
+Tested chipsets:
+ - SiS 730 (:0730)
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008362.html
+ - NVIDIA MCP61 (:03e0)
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008534.html
+ - NVIDIA MCP73 (:07d7)
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008412.html
+ - NVIDIA MCP79 (:0aac)
+   http://www.flashrom.org/pipermail/flashrom/2012-January/008508.html
+ - VIA VT82C69x (0691) and VT82C686A/B (:0686)
+   http://www.flashrom.org/pipermail/flashrom/2011-December/008459.html
+
+ - AMD's SB950 (and presumably also SB920) have the same PCI ID as previous
+   generations, hence change the chipset enable device string. Thanks to
+   Christian Ruppert for the suggestion.
+ - Fix the board enable of the abit NF-M2 nView which had the IDs of its onboard
+   graphics card in its pattern. Change this to the LPC controller.
+ - Intel X79 SPI registers are identical to 6 Series', so use the chipsetenable
+   wrapper of it (enable_flash_pch6).
+ - Fix two paranoid checks for address < 0 in ichspi.c which became futile (and
+   generate clang warnings) with the unsignify patch committed in r1470.
+ - Rename AT25DF641 to AT25DF641(A). They are almost idencical, but could
+   be distinguished by an extended RDID probe (Atmel's patented EDI procedure),
+   which we do not support yet, hence handle them as one model for now.
+ - Source format fixes and typos
+
+the addition of the ASRock AM2NF6G-VSTA to print.c is
+Signed-off-by: Paul Menzel <paulepanter@users.sourceforge.net>
+everything else is
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1498 | hailfinger | 2012-02-16 22:00:27 +0100 (Thu, 16 Feb 2012) | 8 lines
+
+Document and enable the linux_spi driver
+
+The linux_spi driver is now enabled by default on Linux.
+A man page entry and a line in --list-supported output have been added.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1497 | stefanct | 2012-02-16 21:55:27 +0100 (Thu, 16 Feb 2012) | 18 lines
+
+Manpage improvements.
+
+The sections describing the various options of the internal and dummy
+programmers have grown out of proportions. This patch adds some headlines
+to devide the unrelated topics a bit (with .TP commands). The previous indented
+paragraphs for the various programmers were transformed to subsections (.SS).
+
+Also, rephrase the documention related to laptops completely to make it
+less redundant and more informative.
+Document the laptop=this_is_not_a_laptop internal programmer parameter
+
+Change the contact info in the bugs section by removing the trac
+reference and adding IRC (and the pastebin) instead.
+
+Remove some superfluous white space and a .RE (restore indentation) command.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1496 | hailfinger | 2012-02-16 21:31:25 +0100 (Thu, 16 Feb 2012) | 18 lines
+
+Reenable forced read
+
+Forced read functionality was disabled when programmer registration was
+merged in r1475.
+
+We now support registering more than one controller at once for each bus
+type. This can happen e.g. if one SPI controller has an attached flash
+chip and one controller doesn't. In such a case we rely on the probe
+mechanism to find exactly one chip, and the probe mechanism will
+remember which controller/bus the flash chip is attached to. A forced
+read does not have the luxury of knowing which compatible controller to
+use, so this case is handled by always picking the first one. That may
+or may not be the correct one, but there is no way (yet) to specify
+which controller a flash chip is attached to.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1495 | hailfinger | 2012-02-16 02:43:06 +0100 (Thu, 16 Feb 2012) | 8 lines
+
+Workaround missing %hhx support in MinGW sscanf
+
+MinGW uses standard Windows C libraries and those apparently don't
+support %hhx for sscanf into a uint8_t. SCNx8 isn't available either.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r1494 | stefanct | 2012-02-16 02:13:00 +0100 (Thu, 16 Feb 2012) | 10 lines
+
+ichspi.c: warn user and disable writes when a protected address range is detected.
+
+This includes not only the notorious read-only flash descriptors and locked ME
+regions, but also the more rarely used PRs (Protected Ranges).
+The user can enforce write support by specifying ich_spi_force=yes in the
+programmer options, but we don't tell him the exact syntax interactively. He
+has to read it up in the man page.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1493 | stefanct | 2012-02-16 00:40:23 +0100 (Thu, 16 Feb 2012) | 15 lines
+
+Warn of one-time programmable (OTP) memory
+
+Some flash chips contain OTP memory that we cannot read or write (yet). This
+prohibits us from cloning them, hence warn the user if we detect it. Not all
+variations of the tagged chips contain OTP memory. They are often only
+enabled on request or have there own ordering numbers. There is usually no
+way to distinguish them. Because this is a supposedly seldomly used feature
+the warning is shown in with dbg verbosity.
+
+The manpage is extended to describe the backgrounds a bit.
+
+This patch is based on the idea and code of Daniel Lenski.
+Signed-off-by: Daniel Lenski <dlenski@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1492 | hailfinger | 2012-02-13 01:35:35 +0100 (Mon, 13 Feb 2012) | 11 lines
+
+Support compilation for the ARM architecture (little-endian only).
+
+Note: The internal programmer will abort during processor check. This is
+intentional.
+The other hardware drivers (except those using port I/O) should work.
+
+Signed-off-by: David Hendricks <dhendrix@google.com>
+Acked-by: David Hendricks <dhendrix@google.com>
+Tested-by: Timo Juhani Lindfors <timo.lindfors@iki.fi>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1491 | mkarcher | 2012-02-12 01:13:14 +0100 (Sun, 12 Feb 2012) | 9 lines
+
+Board enable for TriGem Anaheim-3
+
+lspci: http://paste.flashrom.org/view.php?id=1069
+flashrom -V: http://paste.flashrom.org/view.php?id=1072
+flashrom -w: http://paste.flashrom.org/view.php?id=1073
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+(ack via IRC Feb 11, 23:14 GMT)
+------------------------------------------------------------------------
+r1490 | hailfinger | 2012-02-09 00:28:54 +0100 (Thu, 09 Feb 2012) | 23 lines
+
+SPI command black-/ignorelisting for the flash chip emulator in the dummy programmer
+
+Usage:
+flashrom -p dummy:spi_blacklist=commandlist
+flashrom -p dummy:spi_ignorelist=commandlist
+
+If commandlist is 0302, flashrom will refuse (blacklist) or ignore
+(ignorelist) command 0x03 (READ) and command 0x02 (WRITE). The
+commandlist can be up to 512 bytes (256 commands) long.
+Specifying flash chip emulation is a good idea to get useful results.
+
+Very useful for testing corner cases if you don't own a locked down
+Intel chipset and want to simulate such a thing.
+
+Example usage:
+dd if=/dev/zeros bs=1024k count=4 of=dummy_simulator.rom
+dd if=/dev/urandom bs=1024k count=4 of=randomimage.rom
+flashrom -p dummy:emulate=SST25VF032B,image=dummy_simulator.rom,\
+spi_blacklist=20,spi_ignorelist=52 -w randomimage.rom -V
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: David Hendricks <dhendrix@google.com>
+
+------------------------------------------------------------------------
+r1489 | stefanct | 2012-02-07 22:29:48 +0100 (Tue, 07 Feb 2012) | 6 lines
+
+Add support for RDC R6030 chipset
+
+Tested on Bifferboard.
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1488 | stefanct | 2012-02-03 23:32:09 +0100 (Fri, 03 Feb 2012) | 13 lines
+
+print*.c: Refine the do not count nor print generic flash chip entries conditions.
+
+Previously only the generic "unknown XXXX SPI chips" were ignored (because their
+name started with "unknown".
+This patch adds also all chips whose vendor starts with "Unknown" (none so far)
+and "Programmer" (currently used by the opaque flash chip framework) .
+A patch will add the SFDP chip template with an "Unknown" vendor field later.
+
+Rationale: these entries do not contain any useful information when shown in -L
+or wiki output. It would be better to add them to a general feature section or similar.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1487 | stefanct | 2012-01-31 07:51:56 +0100 (Tue, 31 Jan 2012) | 8 lines
+
+Add board enable for the MSC Q7 Tunnel Creek board
+
+This patch adds a generic phase 2 board enable that does nothing but set
+is_laptop to 0 to circumvent an erroneous laptop detection due to ambigous
+DMI chassis information.
+
+Signed-off-by: Ingo Feldschmid <ifel@msc-ge.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1486 | stefanct | 2012-01-19 18:50:32 +0100 (Thu, 19 Jan 2012) | 11 lines
+
+Add board enable for AOpen i945GMx-VFX (used in FCS ESPRIMO Q5010)
+
+Typical AWARD enable structure with an ICH GPIO board enable.
+This board seems also to be known as D2544-B1.
+
+Success report:
+http://www.flashrom.org/pipermail/flashrom/2012-January/008590.html
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Tested-by: Oliver Rath <rath@mglug.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1485 | hailfinger | 2012-01-12 14:58:43 +0100 (Thu, 12 Jan 2012) | 15 lines
+
+Reorder list of options to test
+
+If a chip is unknown the user is asked to test and report the result to
+the mailing list. Having `-VE` listed as the last option can result in
+an unbootable system for users not knowing what the command does, since
+rebooting the system after that command is fatal since the flash chip is
+empty. Example report at
+http://www.flashrom.org/pipermail/flashrom/2012-January/008551.html
+
+Reorder the options to prevent such accidents in the future.
+Suggested by Idwer Vollering.
+
+Signed-off-by: Paul Menzel <paulepanter@users.sourceforge.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1484 | hailfinger | 2012-01-11 03:10:11 +0100 (Wed, 11 Jan 2012) | 11 lines
+
+Postpone layout file reading
+
+Layout file reading should happen after option parsing like all other
+file accesses.
+Guard against multiple --layout parameters.
+
+Followup fix for r1483: Remove -m short option from getopt.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1483 | hailfinger | 2012-01-04 01:48:27 +0100 (Wed, 04 Jan 2012) | 22 lines
+
+Replace --mainboard with -p internal:mainboard
+
+--mainboard is a relic from a time before external programmers and makes
+the CLI inconsistent.
+Use a programmer parameter instead and free up the short option -m.
+
+NOTE:
+The --list-supported-wiki output changed to use -p internal:mainboard=
+instead of -m
+The --list-supported output changed the heading of the mainboard list
+from
+
+Vendor Board   Status  Required option
+to
+Vendor Board   Status  Required value for
+                       -p internal:mainboard=
+
+Fix lb_vendor_dev_from_string() not to write to the supplied string.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1482 | stefanct | 2011-12-25 10:12:16 +0100 (Sun, 25 Dec 2011) | 20 lines
+
+Add deferred --image processing
+
+The general idea and most of the code are based on the following
+commits in the chromiumos flashrom tree:
+
+8fc0740356ca15d02fb1c65ab43b10844f148c3b
+bb9049c66ca55e0dc621dd2c70b5d2cb6e5179bf
+Signed-off-by: Louis Yung-Chieh Lo <yjlou@chromium.org>
+
+and the main part:
+d0ea9ed71e7f86bb8e8db2ca7c32a96de25343d8
+Signed-off-by: David Hendricks <dhendrix@chromium.org>
+
+This implementation does not defer the processing until doit(), but after the
+argument parsing loop only (doit() should not contain argument checks).
+
+This allows to specify -i and -l parameters in any order.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: David Hendricks <dhendrix@google.com>
+------------------------------------------------------------------------
+r1481 | stefanct | 2011-12-25 10:07:59 +0100 (Sun, 25 Dec 2011) | 10 lines
+
+layout: change return type and name of find_next_included_romentry
+
+ - rename from find_next_included_romentry to get_next_included_romentry
+ - return a pointer to a rom_entry instead of just its index.
+   this relieves the (single existing) caller from directly accessing the
+   data structure holding the entries hence improving segregation and
+   readability.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1480 | stefanct | 2011-12-24 01:00:32 +0100 (Sat, 24 Dec 2011) | 23 lines
+
+Add ich_descriptor_tool to decode all flash descriptors stored in a flash dump file
+
+This patch adds an external utility that shares most of the existing descriptor
+decoding source code. Additionally to what is available via FDOC/FDOD this
+allows to access:
+ - the softstraps which are used to configure the chipset by flash content
+   without the need for BIOS routines. on ICH8 it is possible to read those
+   with FDOC/FDOC too, but this was removed in later chipsets.
+ - the ME VSCC (Vendor Specific Component Capabilities) table. simply put,
+   this is an SPI chip database used to figure out the flash's capabilities.
+ - the MAC address stored in the GbE image.
+
+Intel thinks this information should be confidential for ICH9 and up, but
+references some tidbits in their public documentation.
+This patch includes the human-readable information for ICH8, Ibex Peak
+(5 series) and Cougar Point (6 series); the latter two were obtained from
+leaked "SPI Flash Programming Guides" found by google. Data regarding ICH9
+and 10 is unknown to us yet. It can probably found in:
+"Intel?\194?\174 ICH7, ICH8, ICH9 and ICH10 ?\226?\128?\148 SPI Family Flash Programming Guide"
+Information regarding the upcoming Panther Point chipset is also not included.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Matthias Wenzel <bios@mazzoo.de>
+------------------------------------------------------------------------
+r1479 | mkarcher | 2011-12-23 00:27:03 +0100 (Fri, 23 Dec 2011) | 12 lines
+
+Fix programmer-centric probe (patch v2)
+
+As reported by Stefan Tauner on IRC, the new programmer-centric logic
+is broken by re-using occupied members of the flashes array when changing
+to the next programmer. This fixes it.
+
+patch v2:
+  prevent probing one chip per programmer even if the array is full. Using
+  a do-while loop was a bad idea.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1478 | hailfinger | 2011-12-20 03:08:14 +0100 (Tue, 20 Dec 2011) | 10 lines
+
+ft2232_spi: fix arm-usb-ocd and arm-usb-ocd-h
+
+These devices have an additional output buffer which is activated only
+by pulling ADBUS4 low. This patch was real-life tested with
+arm-usb-ocd; arm-usb-ocd-h should be the same (as it shares the same
+documentation).
+
+Signed-off-by: Paul Fertser <fercerpav@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1477 | hailfinger | 2011-12-20 02:54:19 +0100 (Tue, 20 Dec 2011) | 12 lines
+
+Speed up dediprog SPI page writes
+
+All chips which use spi_chip_write_256 should be written at native
+speed. Chips using spi_chip_write_1 or spi_chip_write_aai will
+still be slow.
+
+Thanks to Steven A. Falco for testing with a ST/Numonyx M25P16.
+Thanks to David Hendricks for testing with a Winbond W25Q64.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Steven A. Falco <sfalco@coincident.com>
+
+------------------------------------------------------------------------
+r1476 | hailfinger | 2011-12-20 01:51:44 +0100 (Tue, 20 Dec 2011) | 20 lines
+
+Cross-compilation fixes
+
+Switch from host OS detection to target OS detection.
+Complain about unknown target OS/architecture.
+Disable annoying format string warnings on DJGPP.
+
+Native and cross-compilation now usually just require setting CC.
+Examples:
+make CC=i586-pc-msdosdjgpp-gcc
+make CC="clang -m64"
+make CC=i686-w64-mingw32-gcc
+
+Tested for a boatload of native and cross compilation configurations.
+
+There is a new target "make libpayload" in case you don't want to
+specify all tools by hand.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: David Hendricks <dhendrix@google.com>
+
+------------------------------------------------------------------------
+r1475 | hailfinger | 2011-12-20 01:19:29 +0100 (Tue, 20 Dec 2011) | 26 lines
+
+Have all programmer init functions register bus masters/programmers
+
+All programmer types (Parallel, SPI, Opaque) now register themselves
+into a generic programmer list and probing is now programmer-centric
+instead of chip-centric.
+Registering multiple SPI/... masters at the same time is now possible
+without any problems. Handling multiple flash chips is still unchanged,
+but now we have the infrastructure to deal with "dual BIOS" and "one
+flash behind southbridge and one flash behind EC" sanely.
+
+A nice side effect is that this patch kills quite a few global variables
+and improves the situation for libflashrom.
+
+Hint for developers:
+struct {spi,par,opaque}_programmer now have a void *data pointer to
+store any additional programmer-specific data, e.g. hardware
+configuration info.
+
+Note:
+flashrom -f -c FOO -r forced_read.bin
+does not work anymore. We have to find an architecturally clean way to
+solve this.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1474 | hailfinger | 2011-12-18 16:01:24 +0100 (Sun, 18 Dec 2011) | 14 lines
+
+Add struct flashctx * parameter to all functions accessing flash chips.
+
+All programmer access function prototypes except init have been made
+static and moved to the respective file.
+
+A few internal functions in flash chip drivers had chipaddr parameters
+which are no longer needed.
+
+The lines touched by flashctx changes have been adjusted to 80 columns
+except in header files.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1473 | hailfinger | 2011-12-14 23:25:15 +0100 (Wed, 14 Dec 2011) | 20 lines
+
+Use struct flashctx instead of struct flashchip for flash chip access
+
+struct flashchip is used only for the flashchips array and for
+operations which do not access hardware, e.g. printing a list of
+supported flash chips.
+
+struct flashctx (flash context) contains all data available in
+struct flashchip, but it also contains runtime information like
+mapping addresses. struct flashctx is expected to grow additional
+members over time, a prime candidate being programmer info.
+struct flashctx contains all of struct flashchip with identical
+member layout, but struct flashctx has additional members at the end.
+
+The separation between struct flashchip/flashctx shrinks the memory
+requirement of the big flashchips array and allows future extension
+of flashctx without having to worry about bloat.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1472 | hailfinger | 2011-12-08 08:49:11 +0100 (Thu, 08 Dec 2011) | 8 lines
+
+Update URLs in print.c
+
+Move Asus A8Jm, Asus M6Ne to the laptop section.
+No working URL for the A8Jm found.
+
+Signed-off-by: Benjamin Bellec <b.bellec@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1471 | stefanct | 2011-12-02 22:48:17 +0100 (Fri, 02 Dec 2011) | 40 lines
+
+Add a bunch of new/tested stuff and various small changes 9
+
+Tested mainboards:
+OK:
+- ABIT NF-M2S
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008155.html
+- ASUS P5K-VM
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008172.html
+- ASUS M5A99X EVO
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008152.html
+- ASUS Z8PE-D12
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008195.html
+- PC Engines Alix.2d3
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008244.html
+NOT OK:
+- ASUS P8H61 PRO
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008308.html
+- ASUS P8P67 (rev. 3.1)
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008292.html
+- MSI MS-7613 (Iona-GL8E)
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008295.html
+- MSI MS-7635 (H55M-ED55)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008167.html
+- Supermicro X9SCL
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008254.html
+- ZOTAC H67-ITX WiFi
+  http://paste.flashrom.org/view.php?id=902
+
+Tested flash chips:
+- mark Pm29F002T as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008171.html
+- mark AMIC A49LF040A as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008244.html
+- mark Winbond W39V040FC as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-November/008281.html
+
+- source format fixes
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1470 | stefanct | 2011-11-23 10:13:48 +0100 (Wed, 23 Nov 2011) | 7 lines
+
+Unsignify lengths and addresses in chip functions and structs
+
+Push those changes forward where needed to prevent new sign
+conversion warnings where possible.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1469 | stefanct | 2011-11-19 20:31:17 +0100 (Sat, 19 Nov 2011) | 6 lines
+
+Add board enable for ASUS A7N8X-VM/400
+
+http://www.flashrom.org/pipermail/flashrom/2011-November/008274.html
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1468 | stefanct | 2011-11-16 23:08:11 +0100 (Wed, 16 Nov 2011) | 11 lines
+
+Add board enable for ASRock ConRoeXFire-eSATA2
+
+The reverse engineering was done by Joshua. The actual patch was
+fabricated by Paul with some polishing by Stefan.
+
+Success log:
+http://www.flashrom.org/pipermail/flashrom/2011-November/008257.html
+
+Signed-off-by: Joshua Roys <roysjosh at gmail.com>
+Signed-off-by: Paul Kocialkowski <contact@paulk.fr>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1467 | stefanct | 2011-11-15 09:08:15 +0100 (Tue, 15 Nov 2011) | 14 lines
+
+Add board enable for ASUS P4GV-LA (Guppy)
+
+The reverse engineering was done by Joshua. The actual patch was
+fabricated by Stefan.
+
+Request:
+http://www.flashrom.org/pipermail/flashrom/2011-November/008241.html
+Success report:
+http://paste.flashrom.org/view.php?id=914
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Tested-by: Mugendai <mugendai42@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1466 | stefanct | 2011-11-14 14:00:12 +0100 (Mon, 14 Nov 2011) | 12 lines
+
+board_enable.c: Make it8712f_gpio_set generic
+
+This looks suspiciously like intel_ich_gpio_set.
+
+Based on that, add board enables for the ASUS P5N-D and P5N-E SLI.
+This was tested by Guillaume Poirier-Morency on a P5N-D:
+http://www.flashrom.org/pipermail/flashrom/2011-August/007706.html
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Small changes were also contributed and
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1465 | stefanct | 2011-11-14 00:03:30 +0100 (Mon, 14 Nov 2011) | 7 lines
+
+Create a directory for documentation files
+
+Move the serprog specification there and document a few things we could not
+figure out on intel platforms yet.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1464 | stefanct | 2011-11-13 16:17:10 +0100 (Sun, 13 Nov 2011) | 11 lines
+
+ichspi: fix ich_init_opcodes() calls in ich_init_spi()
+
+By calling it early ichspi_lock was not set up correctly in accordance
+with the corresponding register, hence ich_init_opcodes() was always
+trying to programming the opcodes instead of reading them in from the
+opmenu in case of a locked down configuration.
+
+Thanks to Jonathan A. Kollasch for reporting this bug.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1463 | hailfinger | 2011-11-10 00:40:00 +0100 (Thu, 10 Nov 2011) | 16 lines
+
+Register Parallel/LPC/FWH programmers the same way SPI programmers are registered.
+
+All programmers are now calling programmer registration functions and
+direct manipulations of buses_supported are not needed/possible anymore.
+
+Note: Programmers without parallel/LPC/FWH chip support should not call
+register_par_programmer().
+
+Additional fixes:
+Set max_rom_decode.parallel for drkaiser.
+Remove abuse of programmer_map_flash_region in it85spi.
+Annotate several FIXMEs in it85spi.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-By: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1462 | stefanct | 2011-11-08 12:55:24 +0100 (Tue, 08 Nov 2011) | 6 lines
+
+ichspi: print flash descriptor dependent information only when it is valid
+
+Also, fix some coding style issues.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1461 | stefanct | 2011-11-08 11:55:54 +0100 (Tue, 08 Nov 2011) | 30 lines
+
+ichspi: add support for Intel Hardware Sequencing
+
+Based on the new opaque programmer framework this patch adds support
+for Intel Hardware Sequencing on ICH8 and its successors.
+
+By default (or when setting the ich_spi_mode option to auto)
+the module tries to use swseq and only activates hwseq if need be:
+- if important opcodes are inaccessible due to lockdown
+- if more than one flash chip is attached.
+The other options (swseq, hwseq) select the respective mode (if possible).
+
+A general description of Hardware Sequencing can be found in this blog entry:
+http://blogs.coreboot.org/blog/2011/06/11/gsoc-2011-flashrom-part-1/
+
+Besides adding hwseq this patch also introduces these unrelated changes:
+
+- Fix enable_flash_ich_dc_spi to pass ERROR_FATAL from ich_init_spi.
+  The whole error handling looks a bit odd to me, so this patch does
+  change very little. Also, it does not touch the tunnelcreek method,
+  which should be refactored anyway.
+
+- Add null-pointer guards to find_opcode and find_preop
+  to matches the other opcode methods better:
+  curopcodes == NULL has some meaning and is actively used/checked in
+  other functions.
+
+TODO: adding real documentation when we have a directory for it
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1460 | stefanct | 2011-11-07 00:51:09 +0100 (Mon, 07 Nov 2011) | 27 lines
+
+ichspi: use a variable to distinguish ich generations instead of spi_programmer->type
+
+The type member is enough most of the time to derive the wanted
+information, but
+ - not always (e.g. ich_set_bbar),
+ - only available after registration, which we want to delay till the
+   end of init, and
+ - we really want to distinguish between chipset version-grained
+   attributes which are not reflected by the registered programmer.
+
+Hence this patch introduces a new static variable which is set up
+early by the init functions and allows us to get rid of all "switch
+(spi_programmer->type)" in ichspi.c. We reuse the enum introduced
+for descriptor mode for the type of the new variable.
+
+Previously magic numbers were passed by chipset_enable wrappers. Now
+they use the enumeration items too. To get this working the enum
+definition had to be moved to programmer.h.
+
+Another noteworthy detail: previously we have checked for a valid
+programmer/ich generation all over the place. I have removed those
+checks and added one single check in the init method. Calling any
+function of a programmer without executing the init method first, is
+undefined behavior.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1459 | hailfinger | 2011-11-04 22:35:26 +0100 (Fri, 04 Nov 2011) | 10 lines
+
+Add opaque programmer registration infrastructure
+
+An opaque programmer does not allow direct flash access and only offers
+abstract probe/read/erase/write methods.
+Due to that, opaque programmers need their own infrastructure and
+registration framework.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1458 | stefanct | 2011-11-02 15:31:18 +0100 (Wed, 02 Nov 2011) | 9 lines
+
+Add board enable for Sun Ultra 40 M2
+
+Failure report with logs:
+http://www.flashrom.org/pipermail/flashrom/2011-October/008158.html
+Success report:
+http://paste.flashrom.org/view.php?id=889
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1457 | stefanct | 2011-10-23 00:01:09 +0200 (Sun, 23 Oct 2011) | 58 lines
+
+Fix all ASUS P5GD* board enables
+
+Changes related to P5GD1 variants:
+- Reorder "P5GD1 Pro" in print.c and include a DMI patter to its board enable
+- Add an untested "P5GD1(-VM)" board enable and add an entry to print.c
+- Add P5GD1-VM/S variant as reported by "Limer"
+
+Changes related to P5GD(2/C) variants:
+- Fix the name of "P5GDC-V Deluxe" board enable and add a DMI pattern and
+  print.c entry. NB: there is no "P5GDC-V" board.
+- Add a generic match for P5GD(2/C)* boards with a not tested tag.
+  This are the potential targets for this according to the asus ftp:
+  ftp://ftp.asus.com.tw/pub/ASUS/mb/socket775/
+   Unsupported variants of the P5GD2:
+    P5GD2, P5GD2 Deluxe, P5GD2 Pro, P5GD2-X
+    (P5GD2 Premium is already tested)
+    (there seems to be also a P5GD2-TVM/GB/SI in the wild, which is not known to
+    asus :)
+   Unsupported variants of the P5GDC:
+   P5GDC Pro, P5GDC-MX
+    (P5GDC Deluxe and P5GDC-V Deluxe are already tested)
+
+ References:
+P5GD1 PRO (dmi "P5GD1 PRO")
+  smbus: 0x8086, 0x266a, 0x1043, 0x80a6; audio: 0x8086, 0x2668, 0x1043, *0x814e*
+  http://www.coreboot.org/pipermail/flashrom/2010-August/004539.html
+P5GD1 (dmi "P5GD1")
+  The non-pro version seems to match the pro pci pattern, but could be
+  distinguished by the SATA ID of 1043:2604 vs. 1043:2601:
+  https://launchpadlibrarian.net/62167576/Lspci.txt
+  or a DMI pattern of course.
+P5GD1-VM (dmi "P5GD1-VM")
+  This does also match the current PCI IDs.
+  https://bugs.launchpad.net/ubuntu/+source/linux/+bug/465379
+
+- P5GD2 Premium (dmi "P5GD2-Premium")
+  smbus: 0x8086, 0x266a, 0x1043, 0x80a6; audio: 0x8086, 0x2668, 0x1043, 0x813d
+  http://www.flashrom.org/pipermail/flashrom/2010-August/004555.html
+- P5GDC-V Deluxe (dmi "P5GDC-V")
+  smbus: 0x8086, 0x266a, 0x1043, 0x80a6; audio: 0x8086, 0x2668, 0x1043, 0x813d
+  http://www.flashrom.org/pipermail/flashrom/2010-September/004939.html
+- P5GDC Deluxe (dmi "P5GDC")
+  smbus: 0x8086, 0x266a, 0x1043, 0x80a6; audio: 0x8086, 0x2668, 0x1043, 0x813d
+  http://www.flashrom.org/pipermail/flashrom/2010-September/004684.html
+
+- P5GDC Pro, P5GDC-MX, P5GD2-X, P5GD2 Pro, P5GD2
+  no useful logs found
+- P5GD2-Deluxe (dmi "P5GD2-Deluxe")
+  smbus: 0x8086, 0x266a, 0x1043, 0x80a6; audio: 0x8086, 0x2668, 0x1043, 0x813d
+  https://bugs.launchpad.net/ubuntu/+source/foomatic-filters/+bug/572514
+
+- P5GD2-TVM/GB/SI (dmi "P5GD2-TVM/GB/SI")
+  smbus: 0x8086, 0x266a, 0x1043, 0x266a; audio: 0x8086, 0x2668, 0x1043, *0x81a7*
+  https://bugs.launchpad.net/ubuntu/+source/linux/+bug/462500
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+and due to the tremendous interest... ;)
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1456 | stefanct | 2011-10-22 23:45:27 +0200 (Sat, 22 Oct 2011) | 8 lines
+
+serprog: small improvements
+
+- rename serprog_delay parameter to usecs
+- fix code style, (output) formatting issues and comments
+- sp_docommand: remove unnecessary malloc+memcpy and fix formatting
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1455 | stefanct | 2011-10-21 15:20:11 +0200 (Fri, 21 Oct 2011) | 13 lines
+
+Add board enable for ABIT AV8
+
+I disassembled the write enable and the write disable functions from
+the Award BIOS image and reconstructed C code to understand for
+myself what happens. For details see:
+http://www.flashrom.org/pipermail/flashrom/2011-October/008033.html
+
+I compared the download pages of both, abit AV8 and abit AV8-3rd Eye,
+and the BIOS downloads are the same. So it's save to assume that this
+board enable works on both versions. Tested on AV8.
+
+Signed-off-by: Christoph Grenz <christophg+cb@grenz-bonn.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1454 | stefanct | 2011-10-21 14:33:07 +0200 (Fri, 21 Oct 2011) | 87 lines
+
+Add a bunch of new/tested stuff and various small changes 8
+
+Tested mainboards:
+OK:
+- ASUS Crosshair II Formula
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007888.html
+- ASUS K8N
+  http://paste.flashrom.org/view.php?id=856
+- ASUS M2N-E SLI
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007909.html
+- ASUS M3N78-VM
+  http://www.flashrom.org/pipermail/flashrom/2011-May/006496.html
+- ASUS M4A78LT-M LE
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007869.html
+- ASUS M4A89GTD PRO
+  http://www.flashrom.org/pipermail/flashrom/2011-February/005824.html
+- MSI A75MA-G55 (MS-7696)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008055.html
+- PCCHIPS M598LMR (V9.0)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008051.html
+- ECS P4VXMS (V1.0A)
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007986.html
+- Foxconn P4M800P7MA-RS2
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008114.html
+- GIGABYTE GA-P67A-UD3P
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007930.html
+- GIGABYTE Z68MX-UD2H-B
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008080.html
+- ZOTAC Fusion-ITX WiFi (FUSION350-A-E)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008011.html
+NOT OK:
+- ASUS P8B-E/4L
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008047.html
+- ASUS P8B WS
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008081.html
+
+Tested chipsets:
+- MCP78S (:075d)
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007612.html
+- VT8233 (:3074)
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007986.html
+- SiS 530 (:0530)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008051.html
+- P67 (:1c46)
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007930.html
+ - Z68 (:1c44)
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008080.html
+
+Tested flash chips:
+- mark AMIC A29002T as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008085.html
+- mark Eon EN29F002(A)(N)T as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008053.html
+- mark EonEN25F16 as  TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-February/005824.html
+- mark Macronix MX29F002(N)T as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008083.html
+- mark Pm39LV040 as TEST_OK_PR
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007942.html
+- mark Pm39LV010 as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007942.html
+- mark SST49LF008A as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007989.html
+- mark SyncMOS {F,S,V}29C51002T as TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008052.html
+- mark W39V040B as write tested
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008114.html
+- mark W39V040C as  TEST_OK_PREW
+  http://www.flashrom.org/pipermail/flashrom/2011-October/008114.html
+
+- remove superfluous line break in enable_flash_ich_dc_spi
+- m->M in "min" and "max" (voltage) in print_wiki.c
+
+- spi25: get rid of unneccessary line breaks (on failed probes)
+which is
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+- rayer_spi.c: Remove double word: `s/the the/the/`
+which is
+Signed-off-by: Paul Menzel <paulepanter@users.sourceforge.net>
+
+The parts added until 2011-10-14 (most of this patch) were
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+everything else is
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1453 | uwe | 2011-10-21 01:14:10 +0200 (Fri, 21 Oct 2011) | 33 lines
+
+Add support for the GOEPEL PicoTAP programmer.
+
+http://www.goepel.com/en/jtagboundary-scan/hardware/picotap.html
+
+This device is actually a JTAG adapter, but since it uses standard
+FT2232 A interface pins, it can be easily used as SPI programmer
+(tested it here successfully). PicoTAP supports only 5V output, so one
+needs to reduce this to 3.3V in a same manner as DLP Design DLP-USB1232H, see
+
+  http://flashrom.org/FT2232SPI_Programmer#DLP_Design_DLP-USB1232H
+
+for details.
+
+The PicoTAP pin-out is as follows:
+
+  PicoTAP |  SPI
+ ---------+-------
+    TCK   | SCLK
+    TMS   |  CS#
+    TDI   |  SO
+    TDO   |  SI
+   /TRST  |  -
+    GND   |  GND
+    +5V   |  VCC, HOLD# & WP# after 3.3V regulator
+
+I managed to run PicoTAP in 10MHz, 15MHz and 30MHz modes (by forcing
+DIVIDE_BY), against SST25VF016B SPI flash, read/write/erase all worked
+fine (write seems somewhat slow).
+
+Signed-off-by: Samir Ibrad?\197?\190i?\196?\135 <sibradzic@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1452 | stefanct | 2011-10-20 14:57:14 +0200 (Thu, 20 Oct 2011) | 7 lines
+
+ichspi: add (partially) dead support code for Intel Hardware Sequencing
+
+This was done to ease the review. Another patch will hook up (and
+explain) this code later.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1451 | uwe | 2011-10-14 22:33:14 +0200 (Fri, 14 Oct 2011) | 28 lines
+
+TIAO/DIYGADGET USB Multi-Protocol Adapter (TUMPA) support.
+
+Thanks to TIAO/DIYGADGET for sponsoring a test device!
+
+This is an FTDI FT2232H based device which provides an easily accessible JTAG,
+SPI, I2C, serial breakout. The SPI part can be used to flash SPI flash chips
+using flashrom.
+
+http://www.diygadget.com/tiao-usb-multi-protocol-adapter-jtag-spi-i2c-serial.html
+http://www.tiaowiki.com/w/TIAO_USB_Multi_Protocol_Adapter_User%27s_Manual#SPI_Connector_1
+
+There are two SPI connectors (pin headers) on the board: SPI1, which is
+connected to the FT2232H's A interface, and SPI2, which is connected to the
+chip's B interface. Both can be used to flash SPI chips:
+
+ flashrom -p ft2232_spi:type=tumpa,port=A
+ flashrom -p ft2232_spi:type=tumpa,port=B
+
+The default interface is A, so for SPI1 you can also just write:
+
+ flashrom -p ft2232_spi:type=tumpa
+
+I tested all operations on both interfaces, everything works fine.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+
+------------------------------------------------------------------------
+r1450 | stefanct | 2011-09-19 00:42:18 +0200 (Mon, 19 Sep 2011) | 17 lines
+
+Revert "Unsignify lengths and addresses in chip functions and structs"
+
+- probe_timing was changed to unsigned although we use negative values
+  for special cases
+- some code was not changed along hence did no longer compile:
+  * dediprog's read and write functions
+  * linux_spi's read and write functions
+- it introduced a number of new sign conversion warnings
+  (http://paste.flashrom.org/view.php?id=832)
+
+To be safe this patch reverts all changes made in r1448, a corrected
+patch will follow later.
+
+Thanks to idwer for pointing out the problem first!
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1449 | stefanct | 2011-09-18 17:15:31 +0200 (Sun, 18 Sep 2011) | 11 lines
+
+ichspi: inform the user about the consequences of the security override strap
+
+Ibex Peak SPI Programming Guide:
+The PCH has a mechanism to set up to 5 address ranges from HOST access. These are
+defined in PR0, PR1, PR2, PR3 and PR4 in the PCH EDS. These address ranges are NOT
+unlocked by assertion of Flash descriptor Override.
+
+Also, the datasheets mention the bit in their description of FRAP but not PR[N].
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1448 | stefanct | 2011-09-18 02:41:33 +0200 (Sun, 18 Sep 2011) | 4 lines
+
+Unsignify lengths and addresses in chip functions and structs
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1447 | stefanct | 2011-09-18 00:21:55 +0200 (Sun, 18 Sep 2011) | 8 lines
+
+ichspi: unlock PR register restrictions on ICH8+ if not locked down
+
+Tested-by: Shailendra Sodhi
+(predecessor/proof of concept patch)
+http://www.flashrom.org/pipermail/flashrom/2011-August/007717.html
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1446 | stefanct | 2011-09-17 23:21:48 +0200 (Sat, 17 Sep 2011) | 4 lines
+
+ichspi: add prettyprinting for PR registers on ICH8+
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1445 | stefanct | 2011-09-17 23:21:42 +0200 (Sat, 17 Sep 2011) | 10 lines
+
+ichspi: don't touch the nonexistent(?) BBAR register on ICH8
+
+There is no sign of BBAR (BIOS Base Address Configuration Register)
+in the public datasheet (or specification update) of the ICH8. Also,
+the offset of that register has changed between ICH7 (SPIBAR + 50h)
+and ICH9 (SPIBAR + A0h), so we have no clue if or where it is on
+ICH8. Better don't try to touch it at all and assume/hope it is 0.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1444 | stefanct | 2011-09-17 21:53:11 +0200 (Sat, 17 Sep 2011) | 6 lines
+
+ichspi: improve prettyprint_opcodes
+
+add headers for the columns and some decoding into human readable format.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1443 | stefanct | 2011-09-16 01:52:55 +0200 (Fri, 16 Sep 2011) | 43 lines
+
+ichspi: add ICH/PCH flash descriptor decoding via FDOC/FDOD
+
+based on the work of Matthias 'mazzoo' Wenzel this patch adds pretty
+printing of those ICH/PCH flash descriptor sections that are
+cached/mapped by the chipset (and which are therefore reachable via
+FDOC/FDOD registers).
+
+this includes the following:
+- content section:
+    describes the image and some generic properties (number of
+    sections, offset of sections, PCH/ICH and MCH/PROC strap
+    offsets and lengths)
+- component section:
+    identify the different SPI flash chips and their capabilities.
+- region section
+    similarly to a partition table this describes the different regions.
+    the content of FLREG* is derived from this section.
+- master section
+    defines SPI master (host, ME, GbE) access rights of the
+    individual regions. the content of PR* is derived from this section.
+
+this is only a part of the data included in the descriptor. other
+information can be retrieved from a complete binary dump of the
+descriptor region only.
+
+this patch also adds macros and pretty printing for "Vendor Specific
+Component Capabilities" registers: there are two of them: lower and
+upper. they describe the properties of the address space divided by
+FPBA (which allows to use multiple flash chips or partitions with
+different properties). the properties of all supported flash chips
+(together with their RDIDs) are stored in the same format in table
+in a descriptor section (which is used by the ME apparently). a
+later patch will use the macros outside of ichspi.c which is the
+reason why the prettyprinting function and the register bit macros
+are not defined in ichspi.c but ich_descriptors.h (else they would
+be moved in the follow-up patch).
+
+because this patch relies on (compiler) implementation-specific
+layouting of bit-fields, it checks for correct layout before taking
+any action on runtime.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1442 | stefanct | 2011-09-16 01:38:14 +0200 (Fri, 16 Sep 2011) | 9 lines
+
+serprog: add SPI support
+
+Adds a new opcode (0x13) that just relays SPI bytes and wires it up to be
+usable within serprog.c. Checks for mandatory opcodes are moved around and
+changed a bit, but non-SPI programmers should not be harmed by this patch.
+
+Signed-off-by: Urja Rannikko <urjaman@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1441 | stefanct | 2011-09-15 00:09:48 +0200 (Thu, 15 Sep 2011) | 8 lines
+
+Add printing of chip voltage ranges to print_wiki.c
+
+- add voltage ranges
+- center some headers (test values OK, No, ? are centered via wiki templates)
+- fix style error in header (align:right -> text-align:right)
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1440 | stefanct | 2011-09-14 01:14:25 +0200 (Wed, 14 Sep 2011) | 9 lines
+
+Make the laptop warning less scary if unsure
+
+Telling the user to use "force_I_want_a_brick" if it is not even a
+laptop, is a bit over-the-top. Introduce a new laptop parameter
+"this_is_not_a_laptop" that allows to force operation, but only if
+the detection is not sure.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1439 | uwe | 2011-09-14 00:05:44 +0200 (Wed, 14 Sep 2011) | 10 lines
+
+Add probe/read support for the Catalyst CAT28F512 chip.
+
+Write and erase are NOT yet supported!
+
+Probe and read are tested by Andrew Morgan and Uwe Hermann on Intel NICs.
+
+Signed-off-by: Andrew Morgan <ziltro@ziltro.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1438 | stefanct | 2011-09-13 00:55:01 +0200 (Tue, 13 Sep 2011) | 17 lines
+
+Reformat -L output and add printing of chip voltage ranges to print.c
+
+besides adding output for the voltage ranges, this patch also changes
+various aspects of the -L output:
+- sizes are right aligned now with a fixed length of 5
+- space between columns is selectable with a constant
+- test results are always shown in the same column ("PR" and " R"
+  instead of "PR" and "R ")
+- vendor and device names are split on a delimiter (currently '/') and
+  spread over mutliple lines but only if the tokens are not too short.
+  all other columns are printed on the first line of a chip.
+- voltage ranges are printed in verbose mode only
+
+it also gets rid of POS_PRINT and digits
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1437 | hailfinger | 2011-09-12 08:17:06 +0200 (Mon, 12 Sep 2011) | 9 lines
+
+Add support for Xilinx parallel III (DLC5) programing cable
+
+The rayer_spi driver defaults to the RayeR cable, but selecting other
+predefined pin layouts with the type= parameter is possible:
+flashrom -p rayer_spi:type=xilinx
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1436 | stefanct | 2011-09-12 00:08:58 +0200 (Mon, 12 Sep 2011) | 10 lines
+
+Print out the flash chip found after the probing loop in verbose mode
+
+This allows easier identification of the flash chip used in verbose logs.
+There is no (additional) output if
+* -c is used to specify a flash chip, or
+* multiple chips are detected, or
+* no chips are detected.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1435 | stefanct | 2011-09-09 14:46:32 +0200 (Fri, 09 Sep 2011) | 8 lines
+
+Revamp the warning of failing to set BIOS write enable in enable_flash_ich
+
+ - introduce a new variable 'wanted' that is used instead of 'new'
+ - use 'new' for the actual value contained in BIOS_CNTL after we tried to write it
+ - rephrase the warning which now also includes the old and new values besides the wanted one
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1434 | uwe | 2011-09-08 21:55:18 +0200 (Thu, 08 Sep 2011) | 11 lines
+
+Add initial Atmel AT49LH002 FWH/LPC chip support.
+
+The chip code is untested, only one erase function out of two is currently
+implemented, and unlocking/printlocking is not yet supported.
+
+Thanks Mattias Mattsson <vitplister@gmail.com> for the initial patch!
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1433 | hailfinger | 2011-09-08 02:00:29 +0200 (Thu, 08 Sep 2011) | 12 lines
+
+Change programmer selection in cli and generic code
+
+Bugfix: Do not accept multiple conflicting --programmer selections.
+Restriction: Do not accept multiple --programmer selections even if
+  there is no conflict.
+Unexport the programmer variable.
+programmer_init requires the programmer as first parameter.
+The default programmer selection is now part of cli_classic.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1432 | uwe | 2011-09-07 22:48:34 +0200 (Wed, 07 Sep 2011) | 6 lines
+
+Small fixes for the linux_spi programmer code.
+
+Signed-off-by: Sven Schnelle <svens@stackframe.org>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1431 | uwe | 2011-09-07 22:20:25 +0200 (Wed, 07 Sep 2011) | 12 lines
+
+Mark the GIGABYTE GA-8I945GZME-RH and SST SST25LF040A as supported.
+
+Success report:
+http://www.flashrom.org/pipermail/flashrom/2011-June/006797.html
+
+lspci and other info:
+http://www.flashrom.org/pipermail/flashrom/2010-August/004531.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1430 | uwe | 2011-09-07 21:18:25 +0200 (Wed, 07 Sep 2011) | 19 lines
+
+Add Intel Tunnel Creek chipset support, mark it as tested.
+
+Intel's Tunnel Creek chipset supports both an SPI and an LPC bus. Set the
+chipset table entry for Tunnel Creek to the new function
+enable_flash_tunnelcreek(), which will read the hardware straps and return
+support for the bus that has been used for booting. This function uses
+ich_init_spi() with ich_generation set to 7 for initializing the SPI bus
+if necessary.
+
+SPI functionality tested on actual hardware, Tunnel Creek LPC interface not
+tested yet (missing hardware for that).
+
+Log file / success report:
+http://www.flashrom.org/pipermail/flashrom/2011-September/007823.html
+
+Signed-off-by: Ingo Feldschmid <ifel@msc-ge.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1429 | uwe | 2011-09-06 20:49:31 +0200 (Tue, 06 Sep 2011) | 6 lines
+
+Kill all exit() calls in chipset_enable.c.
+
+Signed-off-by: Tadas Slotkus <devtadas@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1428 | uwe | 2011-09-06 20:17:02 +0200 (Tue, 06 Sep 2011) | 6 lines
+
+Fix linux_spi.c build on 32bit systems.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1427 | uwe | 2011-09-03 20:37:52 +0200 (Sat, 03 Sep 2011) | 21 lines
+
+Add support for the Linux SPI subsystem (spidev).
+
+See http://www.kernel.org/doc/Documentation/spi/spidev for an introduction.
+
+Usage is as follows:
+
+  flashrom -p linux_spi:dev=/dev/spidevX.Y
+
+where X is the bus number, and Y device. It accepts an optional parameter
+'speed' which allows to set the SPI clock speed in kHz.
+
+Tested on an Atmel AVR32AP7000 board (NGW100 Network Gateway Kit), see
+below, which was used to program a ThinkPad X60, but it should work on every
+other Linux system, too.
+  
+  http://www.atmel.com/dyn/products/tools_card.asp?tool_id=4102)
+
+Signed-off-by: Sven Schnelle <svens@stackframe.org>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1426 | uwe | 2011-09-03 19:15:00 +0200 (Sat, 03 Sep 2011) | 6 lines
+
+Introduce ERROR_FATAL, abort upon failed chipset enables.
+
+Signed-off-by: Tadas Slotkus <devtadas@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1425 | stefanct | 2011-09-03 13:22:27 +0200 (Sat, 03 Sep 2011) | 92 lines
+
+Add a bunch of new/tested stuff and various small changes 7
+
+- add Asus Crosshair IV Extreme to the list of supported boards
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007640.html
+- add Biostar N68S3+ to the list of supported boards
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007788.html
+- add P7H55-M LX to the list of supported boards
+  although flashrom works correctly, it is marked as not ok, because flashing the
+  vendor image will break the LAN interface.
+- add GA-X58A-UD7 to the list of supported boards
+  http://paste.flashrom.org/view.php?id=739
+- add Asus P4P800-VM to print.c
+  (has a working board enable)
+- add Asus K8V-X to print.c
+  reported by florz
+  http://paste.flashrom.org/view.php?id=742
+- add Intel D865GLC to print.c as non-working (ICH5 with BIOS lock enable)
+  reported by jmd on IRC
+  http://paste.flashrom.org/view.php?id=775
+- add Intel DH67CF to print.c as non-working (H67 with BIOS lock enable and locked ME region)
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007789.html
+- add ECS P4M800PRO-M (V1.0A) to the list of supported boards
+  reported by dweg on IRC (hot flashed a SST49LF040B, original was W39V040B)
+- add X8DTU-6TF+ to print.c (needs ME unlocking)
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007553.html
+- add Shuttle FH67 (used in the SH67H3 barebone) to the list of supported boards
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007749.html
+- add Tyan S2912 to the list of supported boards
+  reported by erlan on IRC
+- add ZOTAC GeForce 8200 to the list of supported boards
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007612.html
+
+- mark AT25DF321A as TEST_OK_PROBE
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007553.html
+- mark 28F001BN/BX-T as TEST_OK_PR
+  http://www.flashrom.org/pipermail/flashrom/2011-July/007208.html
+- rename MX29F002
+  http://patchwork.coreboot.org/patch/2794/
+- mark SST39SF040 as fully tested
+  reported by Florian 'florz' Zumbiehl
+  http://paste.flashrom.org/view.php?id=742
+- mark SST49LF040B as fully tested
+  reported by dweg on IRC and later by Armin on the ml:
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007764.html
+
+- mark H55 chipset as OK
+  http://www.flashrom.org/pipermail/flashrom/2011-July/007432.html
+- mark H67 chipset as OK
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007749.html
+- mark a MCP61 version as OK
+  http://www.flashrom.org/pipermail/flashrom/2011-September/007788.html
+- add preliminary X79 (patsburg) PCI IDs
+  0x1d40 was reported already as working (not archived in our pipermail?)
+  http://marc.info/?l=flashrom&m=130683026218257&w=2
+
+- mark "82557/8/9/0/1 Ethernet Pro 100" in nicintel.c as working
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007480.html
+
+- rename some chips that had gratuitous "probing" suffixes:
+  - SST25VF010.REMS
+  - SST25VF040.REMS
+  - M25P05.RES
+  - M25P10.RES
+  some other chip names with suffixes are needed due to lack of support
+  for multiple probe functions per chip. this is explained here:
+  http://www.flashrom.org/pipermail/flashrom/2011-August/007597.html
+
+- remove unneeded nicintel_spi-related function declarations in programmer.h
+
+- typos and whitespace fixes
+
+- fix Asus P4P800-E Deluxe detection
+  The original board enable was added before DMI matching and used
+  the IDs of a Promise controller as secondary PCI ID set. The
+  controller could be disabled in the BIOS which would make the
+  board not match. This patch uses the SMBus controller instead and
+  adds a DMI pattern. This was
+Tested-by: Michael Schneider <vdrportal_midas at gmx dot de>
+
+- add "Sealed-case PC" to the list of chassis type (as indicating "not a laptop")
+This is
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+the fix for the typo unusued -> unused is
+Signed-off-by: Sylvain "ythier" Hitier <sylvain.hitier@gmail.com>
+
+everything else is
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+And everything was reviewed and
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1424 | hailfinger | 2011-08-31 18:19:50 +0200 (Wed, 31 Aug 2011) | 5 lines
+
+Shorten some board enable related function names
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1423 | stefanct | 2011-08-27 23:19:56 +0200 (Sat, 27 Aug 2011) | 26 lines
+
+Fix printing of the Boot BIOS Straps on Intel chipsets
+
+The meaning of the bits involved has changed several times in the past.
+This patch takes these changes into account and hence fixes the output of the
+pretty printing of GCS on all SPI-supported Intel chipsets that are not ICH7 or
+NM10 (the latter were unaffected, because the defaults were correct).
+
+This patch also allows to differentiate Ibex Peak and Cougar Point chipsets from
+the earlier chipset series (ICH10) by adding new wrapper functions that set
+"ich_generation" to 11 and 12 respectively. This should not change behavior
+outside of enable_flash_ich_dc_spi, because the code path for
+ich_generation >=9 is equal.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+---
+defining all those arrays is not very elegant, but i think it is at least very
+readable this way. improvements are welcome!
+reviewers should have an eye on the codepaths for ich_generation >= 9. i did not
+spot a problem, but it should be checked again.
+
+alternatively we could just remove the pretty printing of GCS and just output
+the bits involved. i would like to keep the pch differentiation anyway though,
+because i feel it will become handy in the future.
+
+tested on my QS57-based thinkpad (probe + partial read)
+------------------------------------------------------------------------
+r1422 | uwe | 2011-08-26 23:11:41 +0200 (Fri, 26 Aug 2011) | 9 lines
+
+Add AMD Hudson chipset-enable.
+
+AMD Hudson has different vendor/device IDs than AMD SBx00, handle
+that properly.
+
+Signed-off-by: Wang Qing Pei <wangqingpei@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1421 | uwe | 2011-08-26 00:54:23 +0200 (Fri, 26 Aug 2011) | 9 lines
+
+Mark the AMD Am29LV008BB chip as fully tested.
+
+Thanks Mattias Mattsson <vitplister@gmail.com> for the report.
+http://www.flashrom.org/pipermail/flashrom/2011-July/007423.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1420 | uwe | 2011-08-26 00:44:11 +0200 (Fri, 26 Aug 2011) | 9 lines
+
+Add support for the Sharp LH28F008BJT-BTLZ1 chip.
+
+Tested by Mattias Mattsson <vitplister@gmail.com> on a PowerPC box.
+
+Signed-off-by: Mattias Mattsson <vitplister@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1419 | stefanct | 2011-08-25 16:06:50 +0200 (Thu, 25 Aug 2011) | 15 lines
+
+Add board enable for ASUS P5LP-LE
+
+Based on the REing of Michael Karcher and a good guess of Idwer Vollering.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Tested-by: Leon Zhang <leoncamel at gmail.com>
+http://www.coreboot.org/pipermail/flashrom/2010-August/004500.html
+Tested-by: medhi <nefkongo@hotmail.com>
+http://paste.flashrom.org/view.php?id=779
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+---
+i have added the DMI match and changed the board enable and wiki comments
+a bit. i am not sure if this is the right way to add it, because there are so many
+variations, but we can change that later too.
+------------------------------------------------------------------------
+r1418 | uwe | 2011-08-20 16:16:00 +0200 (Sat, 20 Aug 2011) | 23 lines
+
+Makefile: Fix MinGW build, improve output with bogus CC.
+
+As per IRC discussion, the "ARCH :=" line should be moved after any
+lines which set CC, as it uses CC itself. This fixes the MinGW build.
+
+Also, add a "2>/dev/null" in the "ARCH :=" as per suggestion from
+Stefan Tauner to improve the output in the case CC is bogus:
+
+Before:
+$ make CC=foo
+/bin/sh: foo: not found
+Checking for a C compiler... not found.
+make: *** [compiler] Error 1
+
+After:
+$ make CC=foo
+Checking for a C compiler... not found.
+make: *** [compiler] Error 1
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+
+------------------------------------------------------------------------
+r1417 | uwe | 2011-08-20 16:14:22 +0200 (Sat, 20 Aug 2011) | 14 lines
+
+Move the main() function from flashrom.c to cli_classic.c.
+
+The file flashrom.c is part of libflashrom and should thus not contain a
+main() function, that would break compilation of all frontends using
+libflashrom. Also, cli_classic.c is the right place anyway, as it's the
+main() of the CLI tool.
+
+Rename the simple wrapper cli_classic() in cli_classic.c to main(), as
+it's not really needed.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+
+------------------------------------------------------------------------
+r1416 | stefanct | 2011-08-18 04:27:19 +0200 (Thu, 18 Aug 2011) | 35 lines
+
+Makefile: fix and simplify test program compilations
+
+this was totally broken due to the make's shell function's temporal
+behavior.
+
+quote from the gnu make documentation
+(http://www.gnu.org/s/hello/manual/make/Shell-Function.html):
+"The commands run by calls to the shell function are run when the
+function calls are expanded"
+we have used the shell function to echo the test programs to a file.
+the file name used was equal for all tests and was overwritten for
+each test. the result was that all tests (in a single target?) used
+the last test program because the echoing of the test programs was
+done before all test compilations(!)
+see my mail for details:
+http://lists.gnu.org/archive/html/bug-make/2011-08/msg00010.html
+
+also the branching for testing ifeq ($(CONFIG_FT2232_SPI), yes) was
+unnecessarily complicated.
+
+in my approach here i am using verbatim variables (allows to define
+even complex test programs in the makefile without jumping through
+hoops) that get exported to environment variables (via "export",
+reference afterwards with "$$<varname>").
+
+i have also added the missing redirection of stderr to the compiler
+test and changed the definition of ARCH to use simple expansion (:=).
+
+the latter is still wrong, because it uses $(CC) before we check if
+a compiler is installed... makes the compiler check pretty much
+useless. The simple expansion just reduces the number of errors
+printed to 1.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1415 | stefanct | 2011-08-17 11:50:11 +0200 (Wed, 17 Aug 2011) | 10 lines
+
+Add support for the SST25LF080A flash chip
+
+Based on the definition of SST25LF040A and the public datasheet
+available here: http://www.sst.com/dotAsset/40316.pdf
+
+Also, move the SST25LF040A up to keep the list ordered
+alphabetically (while removing the ".RES" suffix).
+
+Signed-off-by: Zeus Castro <thezeusjuice@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1414 | stefanct | 2011-08-16 14:08:22 +0200 (Tue, 16 Aug 2011) | 19 lines
+
+Remove unneeded inclusions of chipdrivers.h
+
+this is related to the spi split patch as discussed in:
+http://www.flashrom.org/pipermail/flashrom/2010-February/thread.html#2364
+the old commit (r914) log notes:
+"Some of the spi programmer drivers required chipdrivers.h, needs fixing later: it87spi.c
+  ichspi.c   sb600spi.c   wbsio_spi.c   buspirate_spi.c   ft2232spi.c   bitbang_spi.c   dediprog.c"
+
+there still remain a few cases where chipdrivers.h is needed:
+dediprog.c (spi_read_chunked and spi_write_chunked)
+it87spi.c (due to spi_write_enable and spi_read_status_register)
+wbsio_spi.c (spi_programmer registration only)
+
+besides that, there are also non-spi files that do not need it.
+also, add flash.h to chipdrivers.h because it uses some types of it
+and remove flashchips.h from print.c
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1413 | hailfinger | 2011-08-15 21:54:20 +0200 (Mon, 15 Aug 2011) | 11 lines
+
+Fixup of r1397:
+- Mixing uninitialized and initialized local variables leads to
+  confusion.
+- ft2232_spi error cases should have gotten some error handling, and
+  that's the reason the curly braces were there.
+- Fixing typos/wording in some places would have been nice given that
+  those places were touched anyway.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1412 | stefanct | 2011-08-12 03:19:32 +0200 (Fri, 12 Aug 2011) | 13 lines
+
+ft2232_spi: add support for the Dangerous Prototypes Bus Blaster
+
+Add support for the Dangerous Prototypes Bus Blaster (v1/v2).
+The new model is called "busblaster".
+So far only v2 has been tested, but since both v1 and v2
+emulate a Amontec JTAGKEY in the default configuration,
+it is assumed that v1 should work fine as well.
+
+Information about the Busblaster can be found at:
+http://dangerousprototypes.com/docs/Bus_Blaster
+
+Signed-off-by: Steve Markgraf <steve@steve-m.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1411 | stefanct | 2011-08-11 07:47:32 +0200 (Thu, 11 Aug 2011) | 19 lines
+
+Add board enable for ASUS P5GD2 Premium
+
+This is based on Joshua's patch, but with a DMI pattern, contrary to
+http://www.flashrom.org/pipermail/flashrom/2010-September/004745.html
+Rationale: although it looks like all P5GD2/C* might use the same
+board enable (intel_ich_gpio21_raise), we need to add the variants
+individually as long as we don't have enough reports to make a
+better guess. This also guarantees correct output of flashrom -L and -z
+and on activation of the board enable - not like this:
+http://www.flashrom.org/pipermail/flashrom/attachments/20100930/2286e5d1/attachment-0003.txt
+
+Success report:
+http://www.flashrom.org/pipermail/flashrom/2010-August/004555.html
+
+Also, fix last commit by adding a missing comma.
+
+Tested-by: Roberto Malinverni
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1410 | stefanct | 2011-08-11 06:21:34 +0200 (Thu, 11 Aug 2011) | 15 lines
+
+Add (untested) board enable for Asus P5LD2
+
+There are numerous other variants of the P5LD2 which vary wildly not only in
+PCB layout but also in northbridges used, number of PCI, PCI-E and DIMM slots
+etc. This one is for the plain P5LD2 without any suffixes.
+
+This patch is essentially a rebased version of Joshua's patch, which was never
+tested (user did not reply). I have added additional PCI IDs and the DMI pattern
+and also changed the status to NT. An entry in the print.c table was also added.
+
+http://www.flashrom.org/pipermail/flashrom/2010-October/005080.html
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1409 | stefanct | 2011-08-09 03:49:34 +0200 (Tue, 09 Aug 2011) | 9 lines
+
+ichspi.c: refactor filling and reading the fdata/spid registers
+
+- add ich_fill_data to fill the chipset registers from an array
+- add ich_read_data to copy the data from the chipset register into an array
+- replace the existing code with calls to those functions
+- minor cosmetic changes
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1408 | stefanct | 2011-08-07 15:17:20 +0200 (Sun, 07 Aug 2011) | 8 lines
+
+Add a board enable for ASUS A8M2N-LA (HP OEM "NodusM3-GL8E")
+
+It is based on Joshua Roys' RE.
+http://www.flashrom.org/pipermail/flashrom/2011-August/007504.html
+
+Tested-by: M?\195?\161rton Mikl?\195?\179s
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1407 | stefanct | 2011-08-06 18:16:45 +0200 (Sat, 06 Aug 2011) | 19 lines
+
+Fix the A8N-SLI Deluxe board enable
+
+Long story short:
+- the A8N in print.c should be A8N-SLI Deluxe as documented
+- the A8N-SLI Deluxe board enable needs a DMI pattern, else it will get executed
+  on the A8N-SLI Premium unnecessarily.
+  http://www.flashrom.org/pipermail/flashrom/2010-August/004310.html
+  the DMI string is taken from an ubuntu bug report (a real dmidecode or flashrom
+  output was not found).
+  https://bugs.launchpad.net/ubuntu/+source/linux/+bug/807980
+- the other A8N-SLI variants seem to work without the board enable
+  A8N-SLI Premium:
+  http://www.flashrom.org/pipermail/flashrom/2010-August/004310.html
+  A8N-SLI:
+  http://www.coreboot.org/pipermail/coreboot/2009-June/049107.html
+  http://www.coreboot.org/pipermail/coreboot/2009-May/049002.html
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1406 | stefanct | 2011-08-06 18:16:33 +0200 (Sat, 06 Aug 2011) | 13 lines
+
+Fix the EP-8NPA7I (for the last time hopefully)
+
+ - retag it as OK (tested by Jonathan Kollasch when he wrote it)
+   http://patchwork.coreboot.org/patch/2106/
+ - add a line with identical pci ids but a different dmi pattern, so that EP-9NPA7I
+   is also matched. combining multiple boards in one line is problematic due to
+   print.c's detection of board enables - so dont bother for now.
+   http://www.flashrom.org/pipermail/flashrom/2011-June/006878.html
+
+See previous commit for additional information.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1405 | stefanct | 2011-08-06 14:45:21 +0200 (Sat, 06 Aug 2011) | 20 lines
+
+Clear byte 0x92 of the LPC bridge for all CK804 (and MCP51) chipsets
+
+The OEM BIOS on the EPoX EP-8PA7I and a number of other boards clear
+byte 0x92 in the LPC bridge configuration space.  Do the same for
+all CK804 chips, assuming this to be some sort of chipset-generic
+write-enable.
+
+Currently the same chipset enable is used for MCP51 (nForce 430).
+There have been reports of successful writes with its variations
+(e.g. A8N-LA (Nagami-GL8E)), but they were not tagged as OK. Due to
+the new "unsupported chipset"-message we will get success reports in
+the case this patch does not break anything on the MCP51-based boards.
+
+See also:
+http://www.flashrom.org/pipermail/flashrom/2011-July/007252.html
+http://patchwork.coreboot.org/patch/3176/
+
+Signed-off-by: Jonathan Kollasch <jakllsch@kollasch.net>
+Acked-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1404 | stefanct | 2011-08-04 19:40:25 +0200 (Thu, 04 Aug 2011) | 4 lines
+
+Introduce msg_*dbg2
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1403 | stefanct | 2011-08-04 19:37:58 +0200 (Thu, 04 Aug 2011) | 4 lines
+
+Rephrase warnings in chipset_enable.c
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1402 | stefanct | 2011-08-01 20:39:28 +0200 (Mon, 01 Aug 2011) | 22 lines
+
+Switch to AAI for some more SST chips
+
+Enable AAI for:
+SST25VF016B
+SST25VF040B{,.REMS}
+SST25VF080B
+
+Chips that support AAI via a different opcode are annotated with a comment:
+SST25VF040.REMS
+SST25LF040A.RES
+
+SST25VF080B
+Tested-by: Joshua Roys <roysjosh@gmail.com>
+Write time (w/erase) went from 46 s to 21 s.
+
+SST25VF016B
+Tested-by: No?\195?\169 Rubinstein <nrubinstein@avencall.com>
+Write time (w/erase) on a dediprog went from 143 mins to 56 mins.
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Rebased and
+Acked-by: No?\195?\169 Rubinstein <nrubinstein@avencall.com>
+------------------------------------------------------------------------
+r1401 | uwe | 2011-07-29 22:13:45 +0200 (Fri, 29 Jul 2011) | 11 lines
+
+Use __func__ instead of __FUNCTION__ as we do elsewhere.
+
+The __func__ variant is standardized in C99 and recommended to be
+used instead of __FUNCTION__ in the gcc info page.
+
+See also r711 where we did the same change.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1400 | uwe | 2011-07-29 14:13:01 +0200 (Fri, 29 Jul 2011) | 9 lines
+
+Make flashrom build on PPC/PowerPC with just "make".
+
+Build-tested in a QEMU ppc (Debian) image, and by Andrew Morgan
+<ziltro@ziltro.com> on real hardware.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Andrew Morgan <ziltro@ziltro.com>
+
+
+------------------------------------------------------------------------
+r1399 | stefanct | 2011-07-29 14:06:04 +0200 (Fri, 29 Jul 2011) | 7 lines
+
+extract spi_prettyprint_status_register_amic_a25_srwd
+
+extract spi_prettyprint_status_register_amic_a25_srwd from
+spi_prettyprint_status_register_amic_a25l* functions
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1398 | uwe | 2011-07-28 21:23:09 +0200 (Thu, 28 Jul 2011) | 6 lines
+
+manpage: Document all ft2232_spi and serprog variants.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1397 | uwe | 2011-07-28 10:13:25 +0200 (Thu, 28 Jul 2011) | 11 lines
+
+Random whitespace and coding-style fixes.
+
+Also, indentation fixes, e.g. due to conversion to msg_*, use ARRAY_SIZE
+where possible, wrap overly long line, etc.
+
+Compile-tested. There should be no functional changes.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1396 | hailfinger | 2011-07-27 09:13:06 +0200 (Wed, 27 Jul 2011) | 7 lines
+
+Rename CHIP_BUSTYPE_FOO to BUS_FOO.
+
+It's shorter to type, and we have less problems with the 80 column limit.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
 r1394 | hailfinger | 2011-07-26 22:43:13 +0200 (Tue, 26 Jul 2011) | 7 lines
 
 Increase flashrom release number to 0.9.4

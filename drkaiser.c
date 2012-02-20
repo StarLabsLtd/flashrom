@@ -39,6 +39,21 @@ const struct pcidev_status drkaiser_pcidev[] = {
 
 static uint8_t *drkaiser_bar;
 
+static void drkaiser_chip_writeb(const struct flashctx *flash, uint8_t val,
+				 chipaddr addr);
+static uint8_t drkaiser_chip_readb(const struct flashctx *flash,
+				   const chipaddr addr);
+static const struct par_programmer par_programmer_drkaiser = {
+		.chip_readb		= drkaiser_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= drkaiser_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+};
+
 static int drkaiser_shutdown(void *data)
 {
 	physunmap(drkaiser_bar, DRKAISER_MEMMAP_SIZE);
@@ -58,25 +73,29 @@ int drkaiser_init(void)
 
 	/* Write magic register to enable flash write. */
 	rpci_write_word(pcidev_dev, PCI_MAGIC_DRKAISER_ADDR,
-		       PCI_MAGIC_DRKAISER_VALUE);
+			PCI_MAGIC_DRKAISER_VALUE);
 
 	/* Map 128kB flash memory window. */
 	drkaiser_bar = physmap("Dr. Kaiser PC-Waechter flash memory",
 			       addr, DRKAISER_MEMMAP_SIZE);
 
-	buses_supported = CHIP_BUSTYPE_PARALLEL;
-
 	if (register_shutdown(drkaiser_shutdown, NULL))
 		return 1;
+
+	max_rom_decode.parallel = 128 * 1024;
+	register_par_programmer(&par_programmer_drkaiser, BUS_PARALLEL);
+
 	return 0;
 }
 
-void drkaiser_chip_writeb(uint8_t val, chipaddr addr)
+static void drkaiser_chip_writeb(const struct flashctx *flash, uint8_t val,
+				 chipaddr addr)
 {
 	pci_mmio_writeb(val, drkaiser_bar + (addr & DRKAISER_MEMMAP_MASK));
 }
 
-uint8_t drkaiser_chip_readb(const chipaddr addr)
+static uint8_t drkaiser_chip_readb(const struct flashctx *flash,
+				   const chipaddr addr)
 {
 	return pci_mmio_readb(drkaiser_bar + (addr & DRKAISER_MEMMAP_MASK));
 }
