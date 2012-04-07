@@ -275,9 +275,9 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 1508
+SVNVERSION := 1517
 
-RELEASE := 0.9.5.1
+RELEASE := 0.9.5.2
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
@@ -485,7 +485,8 @@ NEED_PCI := yes
 endif
 
 ifeq ($(CONFIG_LINUX_SPI), yes)
-FEATURE_CFLAGS += -D'CONFIG_LINUX_SPI=1'
+# This is a totally ugly hack.
+FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "LINUX_SPI_SUPPORT := yes" .features && printf "%s" "-D'CONFIG_LINUX_SPI=1'")
 PROGRAMMER_OBJS += linux_spi.o
 endif
 
@@ -671,6 +672,19 @@ int main(int argc, char **argv)
 endef
 export UTSNAME_TEST
 
+define LINUX_SPI_TEST
+#include <linux/types.h>
+#include <linux/spi/spidev.h>
+
+int main(int argc, char **argv)
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+endef
+export LINUX_SPI_TEST
+
 features: compiler
 	@echo "FEATURES := yes" > .features.tmp
 ifeq ($(CONFIG_FT2232_SPI), yes)
@@ -679,6 +693,13 @@ ifeq ($(CONFIG_FT2232_SPI), yes)
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) $(FTDILIBS) $(LIBS) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "FTDISUPPORT := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp )
+endif
+ifeq ($(CONFIG_LINUX_SPI), yes)
+	@printf "Checking if Linux SPI headers are present... "
+	@echo "$$LINUX_SPI_TEST" > .featuretest.c
+	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) >/dev/null 2>&1 &&	\
+		( echo "yes."; echo "LINUX_SPI_SUPPORT := yes" >> .features.tmp ) ||	\
+		( echo "no."; echo "LINUX_SPI_SUPPORT := no" >> .features.tmp )
 endif
 	@printf "Checking for utsname support... "
 	@echo "$$UTSNAME_TEST" > .featuretest.c
