@@ -3,7 +3,7 @@ Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 5), libpci-dev, libftdi-dev
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Homepage: http://www.flashrom.org
 
 Package: flashrom
@@ -53,6 +53,9 @@ Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
    * buspirate_spi (for SPI flash ROMs attached to a Bus Pirate)
    * dediprog (for SPI flash ROMs attached to a Dediprog SF100)
    * rayer_spi (for SPI flash ROMs attached to a RayeR parport based programmer)
+   * pony_spi (for SPI flash ROMs attached to a SI-Prog serial port
+     bitbanging adapter)
    * nicintel_spi (for SPI flash ROMs on Intel Gigabit network cards)
    * ogp_spi (for SPI flash ROMs on Open Graphics Project graphics card)
+   * linux_spi (for SPI flash ROMs accessible via /dev/spidevX.Y on Linux)
 

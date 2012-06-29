@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <errno.h>
 #include "flash.h"
 #include "chipdrivers.h"
 #include "programmer.h"
@@ -45,6 +46,7 @@ enum emu_chip {
 	EMULATE_ST_M25P10_RES,
 	EMULATE_SST_SST25VF040_REMS,
 	EMULATE_SST_SST25VF032B,
+	EMULATE_MACRONIX_MX25L6436,
 };
 static enum emu_chip emu_chip = EMULATE_NONE;
 static char *emu_persistent_image = NULL;
@@ -61,6 +63,34 @@ unsigned char spi_blacklist[256];
 unsigned char spi_ignorelist[256];
 int spi_blacklist_size = 0;
 int spi_ignorelist_size = 0;
+static uint8_t emu_status = 0;
+
+/* A legit complete SFDP table based on the MX25L6436E (rev. 1.8) datasheet. */
+static const uint8_t const sfdp_table[] = {
+	0x53, 0x46, 0x44, 0x50, // @0x00: SFDP signature
+	0x00, 0x01, 0x01, 0xFF, // @0x04: revision 1.0, 2 headers
+	0x00, 0x00, 0x01, 0x09, // @0x08: JEDEC SFDP header rev. 1.0, 9 DW long
+	0x1C, 0x00, 0x00, 0xFF, // @0x0C: PTP0 = 0x1C (instead of 0x30)
+	0xC2, 0x00, 0x01, 0x04, // @0x10: Macronix header rev. 1.0, 4 DW long
+	0x48, 0x00, 0x00, 0xFF, // @0x14: PTP1 = 0x48 (instead of 0x60)
+	0xFF, 0xFF, 0xFF, 0xFF, // @0x18: hole.
+	0xE5, 0x20, 0xC9, 0xFF, // @0x1C: SFDP parameter table start
+	0xFF, 0xFF, 0xFF, 0x03, // @0x20
+	0x00, 0xFF, 0x08, 0x6B, // @0x24
+	0x08, 0x3B, 0x00, 0xFF, // @0x28
+	0xEE, 0xFF, 0xFF, 0xFF, // @0x2C
+	0xFF, 0xFF, 0x00, 0x00, // @0x30
+	0xFF, 0xFF, 0x00, 0xFF, // @0x34
+	0x0C, 0x20, 0x0F, 0x52, // @0x38
+	0x10, 0xD8, 0x00, 0xFF, // @0x3C: SFDP parameter table end
+	0xFF, 0xFF, 0xFF, 0xFF, // @0x40: hole.
+	0xFF, 0xFF, 0xFF, 0xFF, // @0x44: hole.
+	0x00, 0x36, 0x00, 0x27, // @0x48: Macronix parameter table start
+	0xF4, 0x4F, 0xFF, 0xFF, // @0x4C
+	0xD9, 0xC8, 0xFF, 0xFF, // @0x50
+	0xFF, 0xFF, 0xFF, 0xFF, // @0x54: Macronix parameter table end
+};
+
 #endif
 #endif
 
@@ -97,6 +127,7 @@ static const struct spi_programmer spi_programmer_dummyflasher = {
 	.multicommand	= default_spi_send_multicommand,
 	.read		= default_spi_read,
 	.write_256	= dummy_spi_write_256,
+	.write_aai	= default_spi_write_aai,
 };
 
 static const struct par_programmer par_programmer_dummy = {
@@ -133,6 +164,9 @@ int dummy_init(void)
 	char *bustext = NULL;
 	char *tmp = NULL;
 	int i;
+#if EMULATE_SPI_CHIP
+	char *status = NULL;
+#endif
 #if EMULATE_CHIP
 	struct stat image_stat;
 #endif
@@ -296,6 +330,19 @@ int dummy_init(void)
 		msg_pdbg("Emulating SST SST25VF032B SPI flash chip (RDID, AAI "
 			 "write)\n");
 	}
+	if (!strcmp(tmp, "MX25L6436")) {
+		emu_chip = EMULATE_MACRONIX_MX25L6436;
+		emu_chip_size = 8 * 1024 * 1024;
+		emu_max_byteprogram_size = 256;
+		emu_max_aai_size = 0;
+		emu_jedec_se_size = 4 * 1024;
+		emu_jedec_be_52_size = 32 * 1024;
+		emu_jedec_be_d8_size = 64 * 1024;
+		emu_jedec_ce_60_size = emu_chip_size;
+		emu_jedec_ce_c7_size = emu_chip_size;
+		msg_pdbg("Emulating Macronix MX25L6436 SPI flash chip (RDID, "
+			 "SFDP)\n");
+	}
 #endif
 	if (emu_chip == EMULATE_NONE) {
 		msg_perr("Invalid chip specified for emulation: %s\n", tmp);
@@ -308,6 +355,23 @@ int dummy_init(void)
 		msg_perr("Out of memory!\n");
 		return 1;
 	}
+
+#ifdef EMULATE_SPI_CHIP
+	status = extract_programmer_param("spi_status");
+	if (status) {
+		char *endptr;
+		errno = 0;
+		emu_status = strtoul(status, &endptr, 0);
+		free(status);
+		if (errno != 0 || status == endptr) {
+			msg_perr("Error: initial status register specified, "
+				 "but the value could not be converted.\n");
+			return 1;
+		}
+		msg_pdbg("Initial status register is set to 0x%02x.\n",
+			 emu_status);
+	}
+#endif
 
 	msg_pdbg("Filling fake flash chip with 0xff, size %i\n", emu_chip_size);
 	memset(flashchip_contents, 0xff, emu_chip_size);
@@ -427,9 +491,8 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 				     const unsigned char *writearr,
 				     unsigned char *readarr)
 {
-	unsigned int offs, i;
+	unsigned int offs, i, toread;
 	static int unsigned aai_offs;
-	static int aai_active = 0;
 
 	if (writecnt == 0) {
 		msg_perr("No command sent to the chip!\n");
@@ -453,6 +516,17 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 			return 0;
 		}
 	}
+
+	if (emu_max_aai_size && (emu_status & SPI_SR_AAI)) {
+		if (writearr[0] != JEDEC_AAI_WORD_PROGRAM &&
+		    writearr[0] != JEDEC_WRDI &&
+		    writearr[0] != JEDEC_RDSR) {
+			msg_perr("Forbidden opcode (0x%02x) attempted during "
+				 "AAI sequence!\n", writearr[0]);
+			return 0;
+		}
+	}
+
 	switch (writearr[0]) {
 	case JEDEC_RES:
 		if (emu_chip != EMULATE_ST_M25P10_RES)
@@ -471,20 +545,43 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 			readarr[1] = 0x44;
 		break;
 	case JEDEC_RDID:
-		if (emu_chip != EMULATE_SST_SST25VF032B)
+		switch (emu_chip) {
+		case EMULATE_SST_SST25VF032B:
+			if (readcnt > 0)
+				readarr[0] = 0xbf;
+			if (readcnt > 1)
+				readarr[1] = 0x25;
+			if (readcnt > 2)
+				readarr[2] = 0x4a;
 			break;
-		/* Respond with SST_SST25VF032B. */
-		if (readcnt > 0)
-			readarr[0] = 0xbf;
-		if (readcnt > 1)
-			readarr[1] = 0x25;
-		if (readcnt > 2)
-			readarr[2] = 0x4a;
+		case EMULATE_MACRONIX_MX25L6436:
+			if (readcnt > 0)
+				readarr[0] = 0xc2;
+			if (readcnt > 1)
+				readarr[1] = 0x20;
+			if (readcnt > 2)
+				readarr[2] = 0x17;
+			break;
+		default: /* ignore */
+			break;
+		}
 		break;
 	case JEDEC_RDSR:
-		memset(readarr, 0, readcnt);
-		if (aai_active)
-			memset(readarr, 1 << 6, readcnt);
+		memset(readarr, emu_status, readcnt);
+		break;
+	/* FIXME: this should be chip-specific. */
+	case JEDEC_EWSR:
+	case JEDEC_WREN:
+		emu_status |= SPI_SR_WEL;
+		break;
+	case JEDEC_WRSR:
+		if (!(emu_status & SPI_SR_WEL)) {
+			msg_perr("WRSR attempted, but WEL is 0!\n");
+			break;
+		}
+		/* FIXME: add some reasonable simulation of the busy flag */
+		emu_status = writearr[1] & ~SPI_SR_WIP;
+		msg_pdbg2("WRSR wrote 0x%02x.\n", emu_status);
 		break;
 	case JEDEC_READ:
 		offs = writearr[1] << 16 | writearr[2] << 8 | writearr[3];
@@ -510,7 +607,7 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 	case JEDEC_AAI_WORD_PROGRAM:
 		if (!emu_max_aai_size)
 			break;
-		if (!aai_active) {
+		if (!(emu_status & SPI_SR_AAI)) {
 			if (writecnt < JEDEC_AAI_WORD_PROGRAM_OUTSIZE) {
 				msg_perr("Initial AAI WORD PROGRAM size too "
 					 "short!\n");
@@ -521,7 +618,7 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 					 "long!\n");
 				return 1;
 			}
-			aai_active = 1;
+			emu_status |= SPI_SR_AAI;
 			aai_offs = writearr[1] << 16 | writearr[2] << 8 |
 				   writearr[3];
 			/* Truncate to emu_chip_size. */
@@ -544,9 +641,8 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 		}
 		break;
 	case JEDEC_WRDI:
-		if (!emu_max_aai_size)
-			break;
-		aai_active = 0;
+		if (emu_max_aai_size)
+			emu_status &= ~SPI_SR_AAI;
 		break;
 	case JEDEC_SE:
 		if (!emu_jedec_se_size)
@@ -629,10 +725,47 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 		/* emu_jedec_ce_c7_size is emu_chip_size. */
 		memset(flashchip_contents, 0xff, emu_jedec_ce_c7_size);
 		break;
+	case JEDEC_SFDP:
+		if (emu_chip != EMULATE_MACRONIX_MX25L6436)
+			break;
+		if (writecnt < 4)
+			break;
+		offs = writearr[1] << 16 | writearr[2] << 8 | writearr[3];
+
+		/* SFDP expects one dummy byte after the address. */
+		if (writecnt == 4) {
+			/* The dummy byte was not written, make sure it is read instead.
+			 * Shifting and shortening the read array does achieve this goal.
+			 */
+			readarr++;
+			readcnt--;
+		} else {
+			/* The response is shifted if more than 5 bytes are written, because SFDP data is
+			 * already shifted out by the chip while those superfluous bytes are written. */
+			offs += writecnt - 5;
+		}
+
+		/* The SFDP spec implies that the start address of an SFDP read may be truncated to fit in the
+		 * SFDP table address space, i.e. the start address may be wrapped around at SFDP table size.
+		 * This is a reasonable implementation choice in hardware because it saves a few gates. */
+		if (offs >= sizeof(sfdp_table)) {
+			msg_pdbg("Wrapping the start address around the SFDP table boundary (using 0x%x "
+				 "instead of 0x%x).\n", (unsigned int)(offs % sizeof(sfdp_table)), offs);
+			offs %= sizeof(sfdp_table);
+		}
+		toread = min(sizeof(sfdp_table) - offs, readcnt);
+		memcpy(readarr, sfdp_table + offs, toread);
+		if (toread < readcnt)
+			msg_pdbg("Crossing the SFDP table boundary in a single "
+				 "continuous chunk produces undefined results "
+				 "after that point.\n");
+		break;
 	default:
 		/* No special response. */
 		break;
 	}
+	if (writearr[0] != JEDEC_WREN && writearr[0] != JEDEC_EWSR)
+		emu_status &= ~SPI_SR_WEL;
 	return 0;
 }
 #endif
@@ -657,6 +790,7 @@ static int dummy_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 	case EMULATE_ST_M25P10_RES:
 	case EMULATE_SST_SST25VF040_REMS:
 	case EMULATE_SST_SST25VF032B:
+	case EMULATE_MACRONIX_MX25L6436:
 		if (emulate_spi_chip_response(writecnt, readcnt, writearr,
 					      readarr)) {
 			msg_pdbg("Invalid command sent to flash chip!\n");

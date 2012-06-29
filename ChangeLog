@@ -1,4 +1,452 @@
 ------------------------------------------------------------------------
+r1546 | hailfinger | 2012-06-19 14:06:53 +0200 (Tue, 19 Jun 2012) | 11 lines
+
+Add native SPI AAI write support to the Dediprog SF100 driver
+
+To tell the programmer how to handle the data on the spi bus, a flag in
+the fourth byte sent with the usb command is used. The second word was
+mistaken for the size of the chunks sent over usb earlier. The third
+byte (first of the second word) is now set to zero. This also adds some
+checks for the size of data chunks sent over usb.
+
+Signed-off-by: Nico Huber <nico.huber@secunet.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1545 | hailfinger | 2012-06-16 02:11:16 +0200 (Sat, 16 Jun 2012) | 8 lines
+
+Remove exit() call from show_id
+
+The only caller is able to check the return code and handle it
+correctly.
+
+Signed-off-by: Niklas S?\195?\182derlund <niso@kth.se>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1544 | hailfinger | 2012-06-16 02:02:27 +0200 (Sat, 16 Jun 2012) | 9 lines
+
+Add voltage change delays to dediprog driver
+
+Some investigations have shown that the original dediprog driver waits
+about 200ms after setting voltage up and before setting voltage down.
+This patch adds those delays. It helps flash chips to come up in time.
+
+Signed-off-by: Nico Huber <nico.huber@secunet.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1543 | hailfinger | 2012-06-16 00:28:12 +0200 (Sat, 16 Jun 2012) | 14 lines
+
+Let the programmer driver decide how to do AAI transfers
+
+Currently spi_aai_write() is implemented without an abstraction
+mechanism for the programmer driver. This adds another function
+pointer 'write_aai' to struct spi_programmer, which is set to
+default_spi_write_aai (renamed spi_aai_write) for all programmers
+for now.
+
+A patch which utilises this abstraction in the dediprog driver will
+follow.
+
+Signed-off-by: Nico Huber <nico.huber@secunet.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1542 | stefanct | 2012-06-14 15:08:33 +0200 (Thu, 14 Jun 2012) | 7 lines
+
+Fix setting the divisor in ft2232_spi.
+
+The patch that should have improved the clock divisor setting in r1537 made
+it much worse: the divisor used was from an uninitialized buffer.
+
+Signed-off-by: Ilya A. Volynets-Evenbakh <ilya@total-knowledge.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1541 | hailfinger | 2012-06-08 17:27:47 +0200 (Fri, 08 Jun 2012) | 11 lines
+
+Bus Pirate buffer management revamp
+
+The buffer management of the Bus Pirate driver has been revamped to use
+grow-only buffers with a reasonable initial default size so realloc()
+will not have to be called in normal operation. A side effect is the
+ability to switch to a static buffer without major hassle.
+Handle OOM gracefully.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Patrick Georgi <patrick@georgi-clan.de>
+
+------------------------------------------------------------------------
+r1540 | hailfinger | 2012-06-06 11:17:06 +0200 (Wed, 06 Jun 2012) | 11 lines
+
+Add logfile support to flashrom
+
+Usage: flashrom --output logfile.txt
+
+Logfile output has at least dbg2 verbosity or screen verbosity,
+whichever is greater.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested on Linux, Windows and FreeBSD.
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r1539 | stefanct | 2012-05-21 01:32:33 +0200 (Mon, 21 May 2012) | 7 lines
+
+Add support for PMC Pm39LV512.
+
+This flash is like PMC model Pm39LV010 but capacity is 64kB.
+Model ID was already defined. PREW works for me.
+
+Signed-off-by: Ky?\195?\182sti M?\195?\164lkki <kyosti.malkki@gmail.com>
+Acked-by: Paul Menzel <paulepanter@users.sourceforge.net>
+------------------------------------------------------------------------
+r1538 | stefanct | 2012-05-16 02:15:53 +0200 (Wed, 16 May 2012) | 8 lines
+
+Remove sharplhf00l04.c.
+
+The currently unreferenced function in sharplhf00l04.c does a standard
+FWH block protection reset (writes 0 to the protection register) and a
+standard FWH block erase.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1537 | stefanct | 2012-05-16 00:58:19 +0200 (Wed, 16 May 2012) | 9 lines
+
+ft2232_spi.c: add frequency divisor parameter.
+
+This adds an optional argument when using the ft2232_spi programmer to set
+the frequency divisor. The valid values for the divisor is any even integer
+between 2 and 131072.
+
+Signed-off-by: Samir Ibrad?\197?\190i?\196?\135 <sibradzic@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1536 | hailfinger | 2012-05-15 00:54:58 +0200 (Tue, 15 May 2012) | 12 lines
+
+Convert printf to msg_* where appropriate.
+Clean up cli_output.c to be more readable.
+Use enum instead of #define for message levels.
+Kill a few exit(0) calls.
+Print the command line arguments in verbose mode.
+Move actions (--list-supported etc.) after argument sanity checks.
+Reduce the number of code paths which have their own
+programmer_shutdown().
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1535 | stefanct | 2012-05-14 03:51:46 +0200 (Mon, 14 May 2012) | 7 lines
+
+Add support for Eon EN25QH32.
+
+Its ID was spotted in an descriptor region update by Jetway:
+http://paste.flashrom.org/view.php?id=1217
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1534 | stefanct | 2012-05-08 00:12:16 +0200 (Tue, 08 May 2012) | 8 lines
+
+dummyflasher.c: add support for SFDP by adding a new emulator chip: MX25L6436
+
+The chip features a complete 1.0 SFDP JEDEC flash parameter table and also a
+vendor-specific extension table (defining voltages, lock bits etc).
+NB: the MX25L6436 uses the same RDID as the MX25L6405.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1533 | hailfinger | 2012-05-07 00:48:01 +0200 (Mon, 07 May 2012) | 9 lines
+
+Add Winbond W836xx SuperI/O detection.
+Add ITE IT8707F/IT8710F detection.
+
+Note that we autodetect those chips, but we don't handle their flash
+translation features automatically yet.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1532 | stefanct | 2012-05-06 19:03:40 +0200 (Sun, 06 May 2012) | 4 lines
+
+dummyflasher: Add a status register to SPI chips.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>  
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1531 | stefanct | 2012-05-06 17:11:26 +0200 (Sun, 06 May 2012) | 4 lines
+
+Refine reprogram_opcode_on_the_fly to indicate wrong readcnt/writecnt combinations.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1530 | mkarcher | 2012-05-05 22:53:59 +0200 (Sat, 05 May 2012) | 4 lines
+
+Add manpage entry for pony_spi
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1529 | hailfinger | 2012-05-05 22:43:42 +0200 (Sat, 05 May 2012) | 6 lines
+
+Function to enable the flash interface on w83697 family SuperIO chips.
+Not hooked up to the superio detection framework yet.
+
+Signed-off-by: David Borg <borg.db@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1528 | stefanct | 2012-05-02 22:08:01 +0200 (Wed, 02 May 2012) | 22 lines
+
+spi25.c: Refactor spi_write_status_register helpers.
+
+In r1115 "Write protection handling for Atmel AT25*" the old spi_write_status_register
+function was duplicated to send WREN and EWSR commands respectively controlled
+by a new common wrapper function spi_write_status_register without a reason.
+Both functions' resulting code is  equal apart from the opcode used. The code
+itself does also differ in the macros used, but their value (apart from the opcode)
+is equal. This patch adds a new parameter for the opcode to the helper function
+which allows removal of the other one. This relies on the fact that EWSR and WREN
+have the same INSIZE and OUTSIZE though. If that is really seen as an issue, the
+sizes could be made parameters too.
+
+This patch also changes the wrapper so that it no longer sets the feature bits
+of the struct flash(ctx) argument. This may result in changed output, because it
+no longer implicitly disables the debug message in following executions. Since
+almost all chips had their feature bits fixed in the previous commit, this is
+a minor problem.
+
+Also, spi_write_status_enable has been dead code since r658 or so. Remove it.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1527 | stefanct | 2012-05-02 22:07:57 +0200 (Wed, 02 May 2012) | 28 lines
+
+Tag all EWSR chips correctly.
+
+All SPI chips without a WRSR feature bit set were evaluated except the
+Sanyo LF25FW203A for which no datasheet is available.
+
+The following list includes all SPI-capable chips that still have no
+WRSR feature bit set:
+ - AT26DF041
+ - AT45CS1282
+ - AT45DB011D
+ - AT45DB021D
+ - AT45DB041D
+ - AT45DB081D
+ - AT45DB161D
+ - AT45DB321C
+ - AT45DB321D
+ - AT45DB642D
+
+All of them have no write function set and can be therefore ignored
+for now.
+
+Apart from those the generic chips are also not tagged. The opaque
+flash interface should not be affected. The SFDP dummy chip is
+changed to explicitly set EWSR if it can't deduce it dynamically.
+The vendor detecting generic chips can't write anyway.
+
+Signed-off-by: Steven Zakulec <spzakulec@gmail.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1526 | stefanct | 2012-05-02 21:48:21 +0200 (Wed, 02 May 2012) | 9 lines
+
+Add board enable for ASUS P5BV-R.
+
+These are used in ASUS RS120-E5/PA2 servers.
+
+GPIO pin discovered, patch prepared and
+Tested-by: Geoffrey McRae
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1525 | mkarcher | 2012-05-01 01:11:06 +0200 (Tue, 01 May 2012) | 8 lines
+
+Add serial port bitbanging code
+
+This adds the pony_spi driver which supports the SI_Prog adapter, which
+is commonly used for SPI chips with PonyProg 2000, and a custom adapter
+called "SERBANG" which differs in the logic of two pins.
+
+Signed-off-by: Virgil-Adrian Teaca <darkstarlinux@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1524 | stefanct | 2012-04-27 22:41:23 +0200 (Fri, 27 Apr 2012) | 87 lines
+
+Add a bunch of new/tested stuff and various small changes 12.
+
+Tested Mainboards:
+OK:
+ - ASUS M4A785T-M
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009118.html
+ - ASUS P5VD2-MX
+   http://www.flashrom.org/pipermail/flashrom/2012-March/009014.html
+ - ASUS P8Z68-V PRO/GEN3
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009086.html
+ - Bachmann electronic OT200
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009094.html
+ - Biostar N61PB-M2S
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008958.html
+ - GIGABYTE GA-H61M-D2-B3
+   http://www.flashrom.org/pipermail/flashrom/2012-March/009002.html
+ - MSI MS-7740 (H61MA-E35(B3))
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008985.html
+ - Tyan S2875 (Tiger K8W)
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008986.html
+ - ZOTAC nForce 630i Supreme (N73U-Supreme)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009073.html
+ - ZOTAC ZBOX AD02 (PLUS)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009047.html
+NOT OK:
+ - ASRock H67M
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008909.html
+ - ASUS P8P67 LE
+   http://paste.flashrom.org/view.php?id=1097
+ - ASUS Maximus IV Extreme
+   http://www.flashrom.org/pipermail/flashrom/2012-March/009033.html
+ - Biostar H61MU3
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008832.html
+ - Biostar M7VIQ
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008863.html
+ - Dell Inspiron 580
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008888.html
+ - Dell Vostro 460
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009144.html
+ - Fujitsu-Siemens CELSIUS W410 (D3062-A1)
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008987.html
+ - EPoX EP-3PTA
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009043.html
+ - HP XW6400
+   http://www.flashrom.org/pipermail/flashrom/2012-March/009006.html
+ - HP XW9300
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008862.html
+ - Intel DG965OT
+   http://paste.flashrom.org/view.php?id=1096
+ - Intel DN2800MT (Marshalltown)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009095.html
+ - Lenovo T420
+   http://paste.flashrom.org/view.php?id=1095
+ - Lenovo X1
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009135.html
+ - MSI GF615M-P33
+   http://www.flashrom.org/pipermail/flashrom/2012-March/008956.html
+
+Tested flash chips:
+ - mark EN25Q32(A/B) as TEST_OK_PROBE (+P)
+   http://www.flashrom.org/pipermail/flashrom/2012-February/008832.html
+ - mark S25FL032A as TEST_OK_PR (+PR)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009105.html
+ - mark AT25DF161 as TEST_OK_PROBE (+P)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009095.html
+ - mark SST as TEST_OK_PREW (+EW)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009094.html
+
+Tested chipset enables:
+ - H61 (various reports)
+ - SiS 755
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009072.html
+
+ - Fix compilation of ich_descriptor_tool which was broken since r1492.
+ - Add Documentation regarding unlocking the ME region on Intel chipsets.
+ - Fix reading the flash descriptor via FDOC/FDOD and prettyprinting of the
+   descriptor on boards with 5 active regions.
+ - Reorder some boards in print.c.
+ - Add Intel 7 Series (Panther Point) PCI IDs.
+ - Add preliminary PCI IDs for future Intel chipsets (DH89xxCC and Lynx Point)
+   see https://lkml.org/lkml/2012/2/20/467
+ - Change the message for untested chipsets to send only after an attempt to
+   update the firmware with flashrom.
+ - Fix warnings in ich_descriptor_tool's build.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1523 | stefanct | 2012-04-15 16:09:16 +0200 (Sun, 15 Apr 2012) | 6 lines
+
+Check for duplicate -i arguments.
+
+And a tiny cleanup.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1522 | uwe | 2012-04-15 15:16:32 +0200 (Sun, 15 Apr 2012) | 9 lines
+
+Add support for for the Atmel AT49F040 chip.
+
+Chip features an optional permanent boot block write protection.
+
+Signed-off-by: David Borg <borg.db@gmail.com>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1521 | uwe | 2012-04-15 00:51:40 +0200 (Sun, 15 Apr 2012) | 11 lines
+
+Add support for the Eon EN29LV640B chip.
+
+This chip needs special command sequences in 8 bit mode. Also, 8 bit
+programming needs actually 16bit double byte program.
+
+The chip is found on the Bifferos Bifferboard, for example.
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1520 | uwe | 2012-04-14 23:59:23 +0200 (Sat, 14 Apr 2012) | 13 lines
+
+Add GigaDevice GD25QXX series support.
+
+http://www.gigadevice.com/Product/SPI.php?WebPageTypeId=98&WebPageTypeId2=151&WebPageTypeId3=134
+
+The GD25Q80 has been successfully tested, the other ones are marked as
+untested for now.
+
+http://www.flashrom.org/pipermail/flashrom/2012-March/009028.html
+
+Signed-off-by: Justin Chevrier <jchevrier@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1519 | uwe | 2012-04-14 23:06:31 +0200 (Sat, 14 Apr 2012) | 9 lines
+
+Minor NetBSD/DragonFly/pkgsrc build instruction update.
+
+Add -I/usr/pkg/include to NetBSD/Dragon Fly build example CPPFLAGS.
+This is needed to pick up libftdi.
+
+Signed-off-by: Jonathan A. Kollasch <jakllsch@kollasch.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1518 | uwe | 2012-04-14 23:04:03 +0200 (Sat, 14 Apr 2012) | 10 lines
+
+Add support for the Numonyx N25Q064 chip.
+
+All operations were successfully tested.
+http://www.flashrom.org/pipermail/flashrom/2012-April/009048.html
+
+Signed-off-by: Niklas S?\195?\182derlund <niklas.soderlund@ericsson.com>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
 r1517 | stefanct | 2012-03-13 01:18:19 +0100 (Tue, 13 Mar 2012) | 8 lines
 
 Make the presence of Linux SPI headers mandatory for linux_spi.

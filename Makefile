@@ -260,8 +260,8 @@ endif
 
 CHIP_OBJS = jedec.o stm50flw0x0x.o w39.o w29ee011.o \
 	sst28sf040.o m29f400bt.o 82802ab.o pm49fl00x.o \
-	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o sharplhf00l04.o \
-	a25.o at25.o opaque.o sfdp.o
+	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o \
+	a25.o at25.o opaque.o sfdp.o en29lv640b.o
 
 LIB_OBJS = layout.o
 
@@ -275,7 +275,7 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 1517
+SVNVERSION := 1546
 
 RELEASE := 0.9.5.2
 VERSION := $(RELEASE)-r$(SVNVERSION)
@@ -291,6 +291,9 @@ CONFIG_SERPROG ?= yes
 
 # RayeR SPIPGM hardware support
 CONFIG_RAYER_SPI ?= yes
+
+# PonyProg2000 SPI hardware support
+CONFIG_PONY_SPI ?= yes
 
 # Always enable 3Com NICs for now.
 CONFIG_NIC3COM ?= yes
@@ -348,6 +351,9 @@ CONFIG_PRINT_WIKI ?= no
 ifeq ($(CONFIG_RAYER_SPI), yes)
 override CONFIG_BITBANG_SPI = yes
 else
+ifeq ($(CONFIG_PONY_SPI), yes)
+override CONFIG_BITBANG_SPI = yes
+else
 ifeq ($(CONFIG_INTERNAL), yes)
 override CONFIG_BITBANG_SPI = yes
 else
@@ -358,6 +364,7 @@ ifeq ($(CONFIG_OGP_SPI), yes)
 override CONFIG_BITBANG_SPI = yes
 else
 CONFIG_BITBANG_SPI ?= no
+endif
 endif
 endif
 endif
@@ -386,6 +393,12 @@ FEATURE_CFLAGS += -D'CONFIG_RAYER_SPI=1'
 PROGRAMMER_OBJS += rayer_spi.o
 # Actually, NEED_PCI is wrong. NEED_IOPORT_ACCESS would be more correct.
 NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_PONY_SPI), yes)
+FEATURE_CFLAGS += -D'CONFIG_PONY_SPI=1'
+PROGRAMMER_OBJS += pony_spi.o
+NEED_SERIAL := yes
 endif
 
 ifeq ($(CONFIG_BITBANG_SPI), yes)

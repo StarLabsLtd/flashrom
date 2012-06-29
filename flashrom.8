@@ -201,6 +201,9 @@ atmegaXXu2-flasher by Stefan Tauner."
 .BR "* rayer_spi" " (for SPI flash ROMs attached to a RayeR parport "
 or Xilinx DLC5 compatible cable)
 .sp
+.BR "* pony_spi" " (for SPI flash ROMs attached to a SI-Prog serial port "
+bitbanging adapter)
+.sp
 .BR "* nicintel_spi" " (for SPI flash ROMs on Intel Gigabit network cards)"
 .sp
 .BR "* ogp_spi" " (for SPI flash ROMs on Open Graphics Project graphics card)"
@@ -432,6 +435,8 @@ vendor):
 .sp
 .RB "* SST " SST25VF032B " SPI flash chip (RDID, AAI write)"
 .sp
+.RB "* Macronix " MX25L6436 " SPI flash chip (RDID, SFDP)"
+.sp
 Example:
 .B "flashrom -p dummy:emulate=SST25VF040.REMS"
 .TP
@@ -492,6 +497,15 @@ SPI commands. If commandlist is e.g. 0302, the emulated flash chip will ignore
 command 0x03 (READ) and command 0x02 (WRITE).  commandlist may be up to 512
 characters (256 commands) long.
 Implementation note: flashrom won't detect an error during command execution.
+.sp
+.TP
+.B SPI status register
+.sp
+You can specify the initial content of the chip's status register with the
+.sp
+.B "  flashrom -p dummy:spi_status=content"
+.sp
+syntax where content is an 8-bit hexadecimal value.
 .SS
 .BR "nic3com" , " nicrealtek" , " nicsmc1211" , " nicnatsemi" , " nicintel\
 " , " nicintel_spi" , " gfxnvidia" , " ogp_spi" , " drkaiser" , " satasii\
@@ -535,6 +549,17 @@ The default model is
 .B 4232H
 and the default interface is
 .BR B .
+.sp
+All models supported by the ft2232_spi driver can configure the SPI clock rate by setting a divisor. The
+expressible divisors are all even numbers between 2 and 2^17 (=131072) resulting in SPI clock frequencies of
+6 MHz down to about 92 Hz for 12 MHz inputs. The default divisor is set to 2, but you can use another one by
+specifying the optional
+.B divisor
+parameter with the
+.sp
+.B "  flashrom \-p ft2232_spi:divisor=div"
+.sp
+syntax.
 .SS
 .BR "serprog " programmer
 A mandatory parameter specifies either a serial
@@ -613,6 +638,26 @@ More information about the RayeR hardware is available at
 .BR "http://rayer.ic.cz/elektro/spipgm.htm " .
 The schematic of the Xilinx DLC 5 was published at
 .BR "http://www.xilinx.com/itp/xilinx4/data/docs/pac/appendixb.html " .
+.SS
+.BR "pony_spi " programmer
+The serial port (like /dev/ttyS0, /dev/ttyUSB0 on Linux or COM3 on windows) is
+specified using the mandatory
+.B dev 
+parameter. The adapter type is selectable between SI-Prog (used for
+SPI devices with PonyProg 2000) or a custom made serial bitbanging programmer
+named "serbang". The optional
+.B type 
+parameter accepts the values "si_prog" (default) or "serbang".
+.sp
+Information about the SI-Prog adapter can be found at
+.BR "http://www.lancos.com/siprogsch.html " .
+.sp
+An example call to flashrom is
+.sp
+.B "  flashrom \-p pony_spi:dev=/dev/ttyS0,type=serbang"
+.sp
+Please note that while USB-to-serial adapters work under certain circumstances,
+this slows down operation considerably.
 .SS
 .BR "ogp_spi " programmer
 The flash ROM chip to access must be specified with the

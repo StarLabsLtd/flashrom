@@ -40,7 +40,8 @@
 
 const char flashrom_version[] = FLASHROM_VERSION;
 char *chip_to_probe = NULL;
-int verbose = 0;
+int verbose_screen = MSG_INFO;
+int verbose_logfile = MSG_DEBUG2;
 
 static enum programmer programmer = PROGRAMMER_INVALID;
 
@@ -199,6 +200,16 @@ const struct programmer_entry programmer_table[] = {
 		.unmap_flash_region	= fallback_unmap,
 		.delay			= internal_delay,
 	},
+#endif
+
+#if CONFIG_PONY_SPI == 1
+	{
+		.name			= "pony_spi",
+		.init			= pony_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+},
 #endif
 
 #if CONFIG_NICINTEL == 1
@@ -1412,9 +1423,9 @@ void nonfatal_help_message(void)
 void emergency_help_message(void)
 {
 	msg_gerr("Your flash chip is in an unknown state.\n"
-		"Get help on IRC at irc.freenode.net (channel #flashrom) or\n"
-		"mail flashrom@flashrom.org with FAILED: your board name in "
-		  "the subject line!\n"
+		"Get help on IRC at chat.freenode.net (channel #flashrom) or\n"
+		"mail flashrom@flashrom.org with the subject "
+		"\"FAILED: <your board name>\"!\n"
 		"-------------------------------------------------------------"
 		  "------------------\n"
 		"DO NOT REBOOT OR POWEROFF!\n");
@@ -1447,27 +1458,27 @@ void list_programmers_linebreak(int startcol, int cols, int paren)
 			if (firstline)
 				firstline = 0;
 			else
-				printf("\n");
+				msg_ginfo("\n");
 			for (i = 0; i < startcol; i++)
-				printf(" ");
+				msg_ginfo(" ");
 			remaining = cols - startcol;
 		} else {
-			printf(" ");
+			msg_ginfo(" ");
 			remaining--;
 		}
 		if (paren && (p == 0)) {
-			printf("(");
+			msg_ginfo("(");
 			remaining--;
 		}
-		printf("%s", pname);
+		msg_ginfo("%s", pname);
 		remaining -= pnamelen;
 		if (p < PROGRAMMER_INVALID - 1) {
-			printf(",");
+			msg_ginfo(",");
 			remaining--;
 		} else {
 			if (paren)
-				printf(")");
-			printf("\n");
+				msg_ginfo(")");
+			msg_ginfo("\n");
 		}
 	}
 }
@@ -1483,43 +1494,48 @@ void print_sysinfo(void)
 #else
 	msg_ginfo(" on unknown machine");
 #endif
-	msg_ginfo(", built with");
+}
+
+void print_buildinfo(void)
+{
+	msg_gdbg("flashrom was built with");
 #if NEED_PCI == 1
 #ifdef PCILIB_VERSION
-	msg_ginfo(" libpci %s,", PCILIB_VERSION);
+	msg_gdbg(" libpci %s,", PCILIB_VERSION);
 #else
-	msg_ginfo(" unknown PCI library,");
+	msg_gdbg(" unknown PCI library,");
 #endif
 #endif
 #ifdef __clang__
-	msg_ginfo(" LLVM Clang");
+	msg_gdbg(" LLVM Clang");
 #ifdef __clang_version__
-	msg_ginfo(" %s,", __clang_version__);
+	msg_gdbg(" %s,", __clang_version__);
 #else
-	msg_ginfo(" unknown version (before r102686),");
+	msg_gdbg(" unknown version (before r102686),");
 #endif
 #elif defined(__GNUC__)
-	msg_ginfo(" GCC");
+	msg_gdbg(" GCC");
 #ifdef __VERSION__
-	msg_ginfo(" %s,", __VERSION__);
+	msg_gdbg(" %s,", __VERSION__);
 #else
-	msg_ginfo(" unknown version,");
+	msg_gdbg(" unknown version,");
 #endif
 #else
-	msg_ginfo(" unknown compiler,");
+	msg_gdbg(" unknown compiler,");
 #endif
 #if defined (__FLASHROM_LITTLE_ENDIAN__)
-	msg_ginfo(" little endian");
+	msg_gdbg(" little endian");
 #else
-	msg_ginfo(" big endian");
+	msg_gdbg(" big endian");
 #endif
-	msg_ginfo("\n");
+	msg_gdbg("\n");
 }
 
 void print_version(void)
 {
 	msg_ginfo("flashrom v%s", flashrom_version);
 	print_sysinfo();
+	msg_ginfo("\n");
 }
 
 void print_banner(void)
@@ -1771,7 +1787,10 @@ int doit(struct flashctx *flash, int force, const char *filename, int read_it,
 
 #if CONFIG_INTERNAL == 1
 		if (programmer == PROGRAMMER_INTERNAL)
-			show_id(newcontents, size, force);
+			if (show_id(newcontents, size, force)) {
+				ret = 1;
+				goto out;
+			}
 #endif
 	}
 

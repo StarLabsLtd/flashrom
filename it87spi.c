@@ -120,6 +120,7 @@ static const struct spi_programmer spi_programmer_it87xx = {
 	.multicommand	= default_spi_send_multicommand,
 	.read		= it8716f_spi_chip_read,
 	.write_256	= it8716f_spi_chip_write_256,
+	.write_aai	= default_spi_write_aai,
 };
 
 static uint16_t it87spi_probe(uint16_t port)
@@ -335,7 +336,7 @@ static int it8716f_spi_page_program(struct flashctx *flash, uint8_t *buf,
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 1-10 ms, so wait in 1 ms steps.
 	 */
-	while (spi_read_status_register(flash) & JEDEC_RDSR_BIT_WIP)
+	while (spi_read_status_register(flash) & SPI_SR_WIP)
 		programmer_delay(1000);
 	return 0;
 }
