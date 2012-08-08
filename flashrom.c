@@ -37,6 +37,7 @@
 #include "flash.h"
 #include "flashchips.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 const char flashrom_version[] = FLASHROM_VERSION;
 char *chip_to_probe = NULL;
@@ -58,6 +59,10 @@ unsigned long flashbase;
 
 /* Is writing allowed with this programmer? */
 int programmer_may_write;
+
+#if CONFIG_INTERNAL+CONFIG_DUMMY+CONFIG_NIC3COM+CONFIG_NICREALTEK+CONFIG_NICNATSEMI+CONFIG_GFXNVIDIA+CONFIG_DRKAISER+CONFIG_SATASII+CONFIG_ATAHPT+CONFIG_FT2232_SPI+CONFIG_SERPROG+CONFIG_BUSPIRATE_SPI+CONFIG_DEDIPROG+CONFIG_RAYER_SPI+CONFIG_PONY_SPI+CONFIG_NICINTEL+CONFIG_NICINTEL_SPI+CONFIG_OGP_SPI+CONFIG_SATAMV+CONFIG_LINUX_SPI < 1
+#error You have to enable at least one programmer!
+#endif
 
 const struct programmer_entry programmer_table[] = {
 #if CONFIG_INTERNAL == 1
@@ -1525,8 +1530,10 @@ void print_buildinfo(void)
 #endif
 #if defined (__FLASHROM_LITTLE_ENDIAN__)
 	msg_gdbg(" little endian");
-#else
+#elif defined (__FLASHROM_BIG_ENDIAN__)
 	msg_gdbg(" big endian");
+#else
+#error Endianness could not be determined
 #endif
 	msg_gdbg("\n");
 }

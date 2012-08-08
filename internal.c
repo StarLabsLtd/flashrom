@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
@@ -158,7 +159,6 @@ enum chipbustype internal_buses_supported = BUS_NONE;
 
 static int internal_shutdown(void *data)
 {
-	release_io_perms();
 	return 0;
 }
 
@@ -225,7 +225,8 @@ int internal_init(void)
 	}
 	free(arg);
 
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 	if (register_shutdown(internal_shutdown, NULL))
 		return 1;
 
@@ -298,7 +299,7 @@ int internal_init(void)
 			msg_perr("Proceeding anyway because user forced us to.\n");
 		} else {
 			msg_perr("Aborting.\n");
-			exit(1);
+			return 1;
 		}
 	}
 

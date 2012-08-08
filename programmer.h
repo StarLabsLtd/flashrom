@@ -144,10 +144,11 @@ struct bitbang_spi_master {
 };
 
 #if CONFIG_INTERNAL == 1
+struct pci_dev;
 struct penable {
 	uint16_t vendor_id;
 	uint16_t device_id;
-	int status; /* OK=0 and NT=1 are defines only. Beware! */
+	const enum test_state status;
 	const char *vendor_name;
 	const char *device_name;
 	int (*doit) (struct pci_dev *dev, const char *name);
@@ -189,7 +190,7 @@ struct board_match {
 	const char *board_name;
 
 	int max_rom_decode_parallel;
-	int status;
+	const enum test_state status;
 	int (*enable) (void); /* May be NULL. */
 };
 
@@ -198,7 +199,7 @@ extern const struct board_match board_matches[];
 struct board_info {
 	const char *vendor;
 	const char *name;
-	const int working;
+	const enum test_state working;
 #ifdef CONFIG_PRINT_WIKI
 	const char *url;
 	const char *note;
@@ -223,11 +224,11 @@ extern struct pci_dev *pcidev_dev;
 struct pcidev_status {
 	uint16_t vendor_id;
 	uint16_t device_id;
-	int status;
+	const enum test_state status;
 	const char *vendor_name;
 	const char *device_name;
 };
-uintptr_t pcidev_validate(struct pci_dev *dev, int bar, const struct pcidev_status *devs);
+uintptr_t pcidev_readbar(struct pci_dev *dev, int bar);
 uintptr_t pcidev_init(int bar, const struct pcidev_status *devs);
 /* rpci_write_* are reversible writes. The original PCI config space register
  * contents will be restored on shutdown.
@@ -294,14 +295,14 @@ extern int superio_count;
 #define SUPERIO_VENDOR_WINBOND	0x2
 #endif
 #if NEED_PCI == 1
+struct pci_filter;
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
 struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t devclass);
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
 #endif
-void get_io_perms(void);
-void release_io_perms(void);
+int rget_io_perms(void);
 #if CONFIG_INTERNAL == 1
 extern int is_laptop;
 extern int laptop_ok;
@@ -424,7 +425,7 @@ extern const struct pcidev_status ata_hpt[];
 struct usbdev_status {
 	uint16_t vendor_id;
 	uint16_t device_id;
-	int status;
+	const enum test_state status;
 	const char *vendor_name;
 	const char *device_name;
 };

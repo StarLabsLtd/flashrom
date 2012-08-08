@@ -22,6 +22,7 @@
 #include <string.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define PCI_VENDOR_ID_NVIDIA	0x10de
 
@@ -83,7 +84,6 @@ static int gfxnvidia_shutdown(void *data)
 	 * by PCI restore.
 	 */
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
@@ -91,7 +91,8 @@ int gfxnvidia_init(void)
 {
 	uint32_t reg32;
 
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, gfx_nvidia);
 

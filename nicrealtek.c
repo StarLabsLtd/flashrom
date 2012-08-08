@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define PCI_VENDOR_ID_REALTEK	0x10ec
 #define PCI_VENDOR_ID_SMC1211	0x1113
@@ -55,13 +56,13 @@ static int nicrealtek_shutdown(void *data)
 {
 	/* FIXME: We forgot to disable software access again. */
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
 int nicrealtek_init(void)
 {
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_realtek);
 

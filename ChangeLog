@@ -1,4 +1,290 @@
 ------------------------------------------------------------------------
+r1563 | hailfinger | 2012-08-08 02:13:10 +0200 (Wed, 08 Aug 2012) | 5 lines
+
+Increase flashrom release number to 0.9.6.1
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1562 | hailfinger | 2012-08-07 13:59:59 +0200 (Tue, 07 Aug 2012) | 13 lines
+
+Fix missing #include hwaccess.h
+
+In r1549 #include "hwaccess.h" was moved to individual drivers.
+Unfortunately, flashrom.c was forgotten. This caused flashrom to falsely
+report an unknown PCI library version and big-endianness on all
+platforms.
+
+Add #include "hwaccess.h".
+Explicitly check for __FLASHROM_BIG_ENDIAN__
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1561 | stefanct | 2012-08-03 01:56:49 +0200 (Fri, 03 Aug 2012) | 6 lines
+
+Refine messages of SPI block protection disables.
+
+Make them real progress indicators with a final "done" message on success.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1560 | stefanct | 2012-08-03 01:51:28 +0200 (Fri, 03 Aug 2012) | 8 lines
+
+Clean up a25.c, at25.c, spi25.c.
+
+- introduce spi_prettyprint_status_register_atmel_at25_wpen()
+- use spi_prettyprint_status_register_bit() where possible
+- generify spi_prettyprint_status_register_bp3210 and use it in at25.c too
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1558 | hailfinger | 2012-08-03 00:00:05 +0200 (Fri, 03 Aug 2012) | 5 lines
+
+Increase flashrom release number to 0.9.6
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1557 | stefanct | 2012-07-30 21:42:33 +0200 (Mon, 30 Jul 2012) | 13 lines
+
+Remove more exit calls.
+
+This patch removes the remaining exit calls from
+ - sp_openserport
+ - sp_opensocket
+ - sp_docommand
+ - internal_init
+
+Almost all of this was done by Niklas.
+
+Signed-off-by: Niklas S?\195?\182derlund <niso@kth.se>
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1556 | stefanct | 2012-07-29 04:04:21 +0200 (Sun, 29 Jul 2012) | 14 lines
+
+print_wiki: fix columns calculations.
+
+for
+- chipsets
+- boards, and
+- chips
+
+Previously the chipset columns were not uniformly divided at all,
+which led to very odd table bottoms. This patches fixes this as far
+as wiki code can do (browser rendering can still create odd effects
+because we do not define cell heights).
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1555 | stefanct | 2012-07-28 21:35:26 +0200 (Sat, 28 Jul 2012) | 13 lines
+
+Introduce enum test_state.
+
+Previously boards in the wiki were tagged either as working or as known
+bad. But we added support to various boards via board enables that were
+then never tested because the owners have not reported back. This can
+now be tagged with NT and is shown appropriately.
+
+Also, the underlying data structure indicating state was converted from
+macros to an enum while preserving original integer values and is used
+for programmers and chipsets too.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1554 | stefanct | 2012-07-28 05:17:15 +0200 (Sat, 28 Jul 2012) | 90 lines
+
+Add a bunch of new/tested stuff and various small changes 13.
+
+Tested Mainboards:
+OK:
+ - ASRock A780FullHD
+   http://www.flashrom.org/pipermail/flashrom/2012-July/009599.html
+ - ASRock 880G Pro3
+   http://www.flashrom.org/pipermail/flashrom/2012-July/009492.html
+ - ASRock N61P-S
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009316.html
+ - ASUS M2N68-VM
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009334.html
+ - ASUS M3N78 PRO
+   http://www.flashrom.org/pipermail/flashrom/2012-July/009519.html
+ - ASUS M4N68T V2
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009277.html
+ - ASUS M5A78L-M LX
+   reported by clavile on IRC
+ - ASUS P8P67 PRO (rev. 3.0)
+   http://www.flashrom.org/pipermail/flashrom/2012-April/009188.html
+ - ASUS P8Z68-V
+   reported by Kano on IRC
+   http://paste.flashrom.org/view.php?id=1232
+ - ASUS SABERTOOTH 990FX
+   http://paste.flashrom.org/view.php?id=1214
+ - Dell Inspiron 1420
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009196.html
+ - ECS GF8200A
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009256.html
+ - GIGABYTE GA-H61M-D2H-USB3
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009333.html
+ - MSI MS-7250 (K9N SLI (rev 2.1))
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009436.html
+ - MSI MS-7676 (Z68MA-G45 (B3))
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009424.html
+ - Palit N61S
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009212.html
+
+NOT OK:
+ - ASRock H61M-ITX
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009224.html
+ - Dell Latitude E6520
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009197.html
+ - Dell Vostro 3700
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009197.html
+ - Intel DH61AG
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009417.html
+ - Intel DQ965GF
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009295.html
+ - HP/Compaq 8100 Elite CMT PC (304Bh)
+   http://paste.flashrom.org/view.php?id=1182
+ - HP Z400 Workstation (0AE4h)
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009350.html
+ - Supermicro X9DR3-F
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009422.html
+   
+
+Tested flash chips:
+ - mark AMIC A25L032 as TEST_OK_PREW (+PREW)
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009363.html
+ - mark Atmel AT25DF321A as TEST_OK_PREW (+REW)
+   http://www.flashrom.org/pipermail/flashrom/2012-July/009492.html
+ - mark Atmel AT26DF161 as TEST_OK_PR (+PR)
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009350.html
+ - mark Eon EN25QH16 as TEST_OK_PR (+PR)
+   http://www.flashrom.org/pipermail/flashrom/2012-July/009566.html
+ - mark SST SST39VF010 as TEST_OK_PREW (+W)
+   http://www.flashrom.org/pipermail/flashrom/2012-June/009425.html
+ - mark ST M25P64 as TEST_OK_PREW (+PREW)
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009332.html
+
+Tested chipset enables:
+ - Intel 3420
+   http://www.flashrom.org/pipermail/flashrom/2012-May/009332.html
+
+ - Add board enable for ASUS P5GD2-X
+   lspci: http://paste.flashrom.org/view.php?id=1234
+   write: http://paste.flashrom.org/view.php?id=1240
+
+Miscellaneous
+ - Reorder some boards in print.c.
+ - Remove broken abit URLs.
+ - Whitespace changes.
+ - Fix the maximum number of southbridge straps in the ICH descriptor structs.
+ - Refine documentation regarding ICH region lock bits.
+ - Demote verbosity of ICH Opcode reprogramming to -VV.
+ - Exclude Pony-SPI for DOS targets (missing serial support).
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1553 | stefanct | 2012-07-24 18:33:55 +0200 (Tue, 24 Jul 2012) | 7 lines
+
+Intel 7 Series fixes (addition of QM77, fixed straps printing).
+
+I looked at the datasheet to be sure that the strap names (SPI, PCI,
+LPC) are the same as on the series 5 and 6 chipsets.
+
+Signed-off-by: Helge Wagner <Helge.Wagner@ge.com>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1552 | hailfinger | 2012-07-22 14:01:43 +0200 (Sun, 22 Jul 2012) | 8 lines
+
+Always require the --programmer parameter on the command line if any
+flash chip access (probe/read/write/erase/...) is requested.
+
+Fix a few man page oddities as well.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1551 | hailfinger | 2012-07-21 19:27:08 +0200 (Sat, 21 Jul 2012) | 19 lines
+
+Automatically release I/O permissions on shutdown.
+
+get_io_perms() is renamed to rget_io_perms() and automatically registers
+a function to release I/O permissions on shutdown.
+
+Actually release I/O permissions on Solaris and iopl()-supporting
+operating systems like Linux.
+
+This patch fixes quite a few programmers which forgot to release I/O
+permissions on shutdown, and it simplifies the shutdown and error
+handling code for all others.
+
+Do not call exit(1) if I/O permissions are denied and return an error
+instead. This part of the patch was written by Niklas S?\195?\182derlund.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Signed-off-by: Niklas S?\195?\182derlund <niso@kth.se>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1550 | hailfinger | 2012-07-21 18:56:04 +0200 (Sat, 21 Jul 2012) | 6 lines
+
+Document --output in the man page.
+Add an examples section to the man page.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Paul Menzel <paulepanter@users.sourceforge.net>
+
+------------------------------------------------------------------------
+r1549 | hailfinger | 2012-07-20 22:35:14 +0200 (Fri, 20 Jul 2012) | 11 lines
+
+Hide hwaccess.h from public API.
+
+Move hwaccess.h #include from flash.h to individual drivers.
+libflashrom users need flash.h, but they do not care about hwaccess.h
+and should not see its definitions because they may conflict with
+other hardware access functions and #defines used by the libflashrom
+user.
+
+Signed-off-by: Patrick Georgi <patrick.georgi@secunet.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1548 | hailfinger | 2012-07-16 23:32:19 +0200 (Mon, 16 Jul 2012) | 12 lines
+
+Check vendor_id for PCI based external programmers.
+
+Restructure PCI device detection code.
+Rename pcidev_validate to pcidev_readbar.
+
+Note: Slight changes in behaviour are possible, especially on dual/quad
+chip NICs which appear as more than one PCI device. Found devices are no
+longer printed at _pinfo level, but rather at _pdbg level.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1547 | hailfinger | 2012-06-30 01:07:14 +0200 (Sat, 30 Jun 2012) | 8 lines
+
+Add board enable for MSI K9N SLI (MS-7250 VER:2.1)
+
+Handle PCI Device ID 0x0360 for MCP55 ISA bridge GPIO as well.
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested-by: Stefan A. Scholtz
+
+------------------------------------------------------------------------
 r1546 | hailfinger | 2012-06-19 14:06:53 +0200 (Tue, 19 Jun 2012) | 11 lines
 
 Add native SPI AAI write support to the Dediprog SF100 driver

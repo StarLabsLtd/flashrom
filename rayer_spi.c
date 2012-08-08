@@ -34,6 +34,7 @@
 #include <string.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 enum rayer_type {
 	TYPE_RAYER,
@@ -167,7 +168,8 @@ int rayer_spi_init(void)
 		rayer_miso_bit = 4;
 	}
 
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	/* Get the initial value before writing to any line. */
 	lpt_outbyte = INB(lpt_iobase);

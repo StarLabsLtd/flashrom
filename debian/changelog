@@ -1,3 +1,9 @@
+flashrom (0.9.6.1+r1563-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Uwe Hermann <uwe@debian.org>  Wed, 08 Aug 2012 23:39:15 +0200
+
 flashrom (0.9.5.2+r1546-1) unstable; urgency=medium
 
   * New upstream release.

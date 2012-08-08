@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 uint8_t *nicintel_bar;
 uint8_t *nicintel_control_bar;
@@ -63,7 +64,6 @@ static int nicintel_shutdown(void *data)
 	physunmap(nicintel_control_bar, NICINTEL_CONTROL_MEMMAP_SIZE);
 	physunmap(nicintel_bar, NICINTEL_MEMMAP_SIZE);
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
@@ -72,9 +72,10 @@ int nicintel_init(void)
 	uintptr_t addr;
 
 	/* Needed only for PCI accesses on some platforms.
-	 * FIXME: Refactor that into get_mem_perms/get_io_perms/get_pci_perms?
+	 * FIXME: Refactor that into get_mem_perms/rget_io_perms/get_pci_perms?
 	 */
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	/* No need to check for errors, pcidev_init() will not return in case
 	 * of errors.
@@ -87,7 +88,7 @@ int nicintel_init(void)
 		goto error_out_unmap;
 
 	/* FIXME: Using pcidev_dev _will_ cause pretty explosions in the future. */
-	addr = pcidev_validate(pcidev_dev, PCI_BASE_ADDRESS_0, nics_intel);
+	addr = pcidev_readbar(pcidev_dev, PCI_BASE_ADDRESS_0);
 	/* FIXME: This is not an aligned mapping. Use 4k? */
 	nicintel_control_bar = physmap("Intel NIC control/status reg",
 	                               addr, NICINTEL_CONTROL_MEMMAP_SIZE);
@@ -117,7 +118,6 @@ error_out_unmap:
 	physunmap(nicintel_bar, NICINTEL_MEMMAP_SIZE);
 error_out:
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 1;
 }
 

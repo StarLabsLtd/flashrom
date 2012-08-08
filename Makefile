@@ -73,7 +73,7 @@ CPPFLAGS += -I../libgetopt -I../libpci/include
 CPPFLAGS += -Wno-format
 # FIXME Check if we can achieve the same effect with -L../libgetopt -lgetopt
 LIBS += ../libgetopt/libgetopt.a
-# Bus Pirate and Serprog are not supported under DOS (missing serial support).
+# Bus Pirate, Serprog and Pony-SPI are not supported under DOS (missing serial support).
 ifeq ($(CONFIG_BUSPIRATE_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_BUSPIRATE_SPI=yes
 else
@@ -83,6 +83,11 @@ ifeq ($(CONFIG_SERPROG), yes)
 UNSUPPORTED_FEATURES += CONFIG_SERPROG=yes
 else
 override CONFIG_SERPROG = no
+endif
+ifeq ($(CONFIG_PONY_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_PONY_SPI=yes
+else
+override CONFIG_PONY_SPI = no
 endif
 # Dediprog and FT2232 are not supported under DOS (missing USB support).
 ifeq ($(CONFIG_DEDIPROG), yes)
@@ -275,9 +280,9 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 1546
+SVNVERSION := 1563
 
-RELEASE := 0.9.5.2
+RELEASE := 0.9.6.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
@@ -547,7 +552,7 @@ FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "UTSNAME := yes" .features && printf 
 FEATURE_LIBS += $(shell LC_ALL=C grep -q "NEEDLIBZ := yes" .libdeps && printf "%s" "-lz")
 
 LIBFLASHROM_OBJS = $(CHIP_OBJS) $(PROGRAMMER_OBJS) $(LIB_OBJS)
-OBJS = $(CLI_OBJS) $(LIBFLASHROM_OBJS) 
+OBJS = $(CLI_OBJS) $(LIBFLASHROM_OBJS)
 
 $(PROGRAM)$(EXEC_SUFFIX): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROGRAM)$(EXEC_SUFFIX) $(OBJS) $(FEATURE_LIBS) $(LIBS)

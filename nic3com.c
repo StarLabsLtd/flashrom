@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define BIOS_ROM_ADDR		0x04
 #define BIOS_ROM_DATA		0x08
@@ -81,13 +82,13 @@ static int nic3com_shutdown(void *data)
 	}
 
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
 int nic3com_init(void)
 {
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_3com);
 

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define PCI_VENDOR_ID_NATSEMI	0x100b
 
@@ -53,13 +54,13 @@ static const struct par_programmer par_programmer_nicnatsemi = {
 static int nicnatsemi_shutdown(void *data)
 {
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
 int nicnatsemi_init(void)
 {
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_natsemi);
 
