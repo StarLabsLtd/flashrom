@@ -1,9 +1,3 @@
-flashrom (0.9.7+r1782-1~bpo7+1) jessie-backports; urgency=medium
-
-  * Rebuild for wheezy-backports.
-
- -- Matt Taggart <taggart@debian.org>  Tue, 26 May 2015 11:49:44 -0700
-
 flashrom (0.9.7+r1782-1) unstable; urgency=high
 
   * New upstream release (Closes: #746734, #690478).
