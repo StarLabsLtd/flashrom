@@ -66,7 +66,7 @@ static void gfxnvidia_chip_writeb(const struct flashctx *flash, uint8_t val,
 				  chipaddr addr);
 static uint8_t gfxnvidia_chip_readb(const struct flashctx *flash,
 				    const chipaddr addr);
-static const struct par_programmer par_programmer_gfxnvidia = {
+static const struct par_master par_master_gfxnvidia = {
 		.chip_readb		= gfxnvidia_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
@@ -89,7 +89,7 @@ int gfxnvidia_init(void)
 	if (!dev)
 		return 1;
 
-	io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	uint32_t io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
 	if (!io_base_addr)
 		return 1;
 
@@ -107,7 +107,7 @@ int gfxnvidia_init(void)
 
 	/* Write/erase doesn't work. */
 	programmer_may_write = 0;
-	register_par_programmer(&par_programmer_gfxnvidia, BUS_PARALLEL);
+	register_par_master(&par_master_gfxnvidia, BUS_PARALLEL);
 
 	return 0;
 }

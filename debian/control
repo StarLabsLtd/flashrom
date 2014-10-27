@@ -3,13 +3,13 @@ Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
 Build-Depends: cdbs, debhelper (>= 9.0.0), libpci-dev, libftdi-dev
-Standards-Version: 3.9.5
+Standards-Version: 3.9.6
 Homepage: http://www.flashrom.org
 
 Package: flashrom
-Architecture: amd64 i386 kfreebsd-amd64 kfreebsd-i386 hurd-i386 netbsd-i386
+Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Recommends: dmidecode [i386 ia64 amd64 kfreebsd-i386 knetbsd-i386 kfreebsd-amd64]
+Recommends: dmidecode [any-i386 any-amd64 ia64 armhf]
 Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
  flashrom is a tool for identifying, reading, writing, verifying and erasing
  flash chips. It's often used to flash BIOS/EFI/coreboot/firmware/optionROM

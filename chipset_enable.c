@@ -260,9 +260,13 @@ static int enable_flash_piix4(struct pci_dev *dev, const char *name)
 	return 0;
 }
 
-/* Note: the ICH0-ICH5 BIOS_CNTL register is actually 16 bit wide, in Poulsbo, Tunnel Creek and other Atom
+/* Handle BIOS_CNTL (aka. BCR). Disable locks and enable writes. The register can either be in PCI config space
+ * at the offset given by 'bios_cntl' or at the memory-mapped address 'addr'.
+ *
+ * Note: the ICH0-ICH5 BIOS_CNTL register is actually 16 bit wide, in Poulsbo, Tunnel Creek and other Atom
  * chipsets/SoCs it is even 32b, but just treating it as 8 bit wide seems to work fine in practice. */
-static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_generation, uint8_t bios_cntl)
+static int enable_flash_ich_bios_cntl_common(enum ich_chipset ich_generation, void *addr,
+					     struct pci_dev *dev, uint8_t bios_cntl)
 {
 	uint8_t old, new, wanted;
 
@@ -273,8 +277,8 @@ static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_
 	case CHIPSET_ICH:
 	case CHIPSET_ICH2345:
 		break;
-	/* Atom chipsets are special: The second byte of BIOS_CNTL (D9h) contains a prefetch bit similar to what
-	 * other SPI-capable chipsets have at DCh.
+	/* Some Atom chipsets are special: The second byte of BIOS_CNTL (D9h) contains a prefetch bit similar to
+	 * what other SPI-capable chipsets have at DCh. Others like Bay Trail use a memmapped register.
 	 * The Tunnel Creek datasheet contains a lot of details about the SPI controller, among other things it
 	 * mentions that the prefetching and caching does only happen for direct memory reads.
 	 * Therefore - at least for Tunnel Creek - it should not matter to flashrom because we use the
@@ -285,9 +289,13 @@ static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_
 		old = pci_read_byte(dev, bios_cntl + 1);
 		msg_pdbg("BIOS Prefetch Enable: %sabled, ", (old & 1) ? "en" : "dis");
 		break;
+	case CHIPSET_BAYTRAIL:
 	case CHIPSET_ICH7:
 	default: /* Future version might behave the same */
-		old = (pci_read_byte(dev, bios_cntl) >> 2) & 0x3;
+		if (ich_generation == CHIPSET_BAYTRAIL)
+			old = (mmio_readl(addr) >> 2) & 0x3;
+		else
+			old = (pci_read_byte(dev, bios_cntl) >> 2) & 0x3;
 		msg_pdbg("SPI Read Configuration: ");
 		if (old == 3)
 			msg_pdbg("invalid prefetching/caching settings, ");
@@ -297,7 +305,11 @@ static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_
 				     (old & 0x1) ? "dis" : "en");
 	}
 
-	wanted = old = pci_read_byte(dev, bios_cntl);
+	if (ich_generation == CHIPSET_BAYTRAIL)
+		wanted = old = mmio_readl(addr);
+	else
+		wanted = old = pci_read_byte(dev, bios_cntl);
+
 	/*
 	 * Quote from the 6 Series datasheet (Document Number: 324645-004):
 	 * "Bit 5: SMM BIOS Write Protect Disable (SMM_BWP)
@@ -327,8 +339,13 @@ static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_
 
 	/* Only write the register if it's necessary */
 	if (wanted != old) {
-		rpci_write_byte(dev, bios_cntl, wanted);
-		new = pci_read_byte(dev, bios_cntl);
+		if (ich_generation == CHIPSET_BAYTRAIL) {
+			rmmio_writel(wanted, addr);
+			new = mmio_readl(addr);
+		} else {
+			rpci_write_byte(dev, bios_cntl, wanted);
+			new = pci_read_byte(dev, bios_cntl);
+		}
 	} else
 		new = old;
 
@@ -349,10 +366,22 @@ static int enable_flash_ich_bios_cntl(struct pci_dev *dev, enum ich_chipset ich_
 	return 0;
 }
 
+static int enable_flash_ich_bios_cntl_config_space(struct pci_dev *dev, enum ich_chipset ich_generation,
+						   uint8_t bios_cntl)
+{
+	return enable_flash_ich_bios_cntl_common(ich_generation, NULL, dev, bios_cntl);
+}
+
+static int enable_flash_ich_bios_cntl_memmapped(enum ich_chipset ich_generation, void *addr)
+{
+	return enable_flash_ich_bios_cntl_common(ich_generation, addr, NULL, 0);
+}
+
 static int enable_flash_ich_fwh_decode(struct pci_dev *dev, enum ich_chipset ich_generation)
 {
 	uint8_t fwh_sel1 = 0, fwh_sel2 = 0, fwh_dec_en_lo = 0, fwh_dec_en_hi = 0; /* silence compilers */
 	bool implemented = 0;
+	void *ilb = NULL; /* Only for Baytrail */
 	switch (ich_generation) {
 	case CHIPSET_ICH:
 		/* FIXME: Unlike later chipsets, ICH and ICH-0 do only support mapping of the top-most 4MB
@@ -373,6 +402,19 @@ static int enable_flash_ich_fwh_decode(struct pci_dev *dev, enum ich_chipset ich
 	case CHIPSET_CENTERTON:
 		/* FIXME: Similar to above FWH_DEC_EN (D4h) and FWH_SEL (D0h). */
 		break;
+	case CHIPSET_BAYTRAIL: {
+		uint32_t ilb_base = pci_read_long(dev, 0x50) & 0xfffffe00; /* bits 31:9 */
+		if (ilb_base == 0) {
+			msg_perr("Error: Invalid ILB_BASE_ADDRESS\n");
+			return ERROR_FATAL;
+		}
+		ilb = rphysmap("BYT IBASE", ilb_base, 512);
+		fwh_sel1 = 0x18;
+		fwh_dec_en_lo = 0xd8;
+		fwh_dec_en_hi = 0xd9;
+		implemented = 1;
+		break;
+	}
 	case CHIPSET_ICH6:
 	case CHIPSET_ICH7:
 	default: /* Future version might behave the same */
@@ -397,17 +439,27 @@ static int enable_flash_ich_fwh_decode(struct pci_dev *dev, enum ich_chipset ich
 			msg_perr("Error: fwh_idsel= specified, but value could not be converted.\n");
 			goto idsel_garbage_out;
 		}
-		if (fwh_idsel & 0xffff000000000000ULL) {
+		uint64_t fwh_mask = 0xffffffff;
+		if (fwh_sel2 > 0)
+			fwh_mask |= (0xffffULL << 32);
+		if (fwh_idsel & ~fwh_mask) {
 			msg_perr("Error: fwh_idsel= specified, but value had unused bits set.\n");
 			goto idsel_garbage_out;
 		}
-		uint64_t fwh_idsel_old = pci_read_long(dev, fwh_sel1);
-		fwh_idsel_old <<= 16;
-		fwh_idsel_old |= pci_read_word(dev, fwh_sel2);
-		msg_pdbg("\nSetting IDSEL from 0x%012" PRIx64 " to 0x%012" PRIx64 " for top 16 MB.",
+		uint64_t fwh_idsel_old;
+		if (ich_generation == CHIPSET_BAYTRAIL) {
+			fwh_idsel_old = mmio_readl(ilb + fwh_sel1);
+			rmmio_writel(fwh_idsel, ilb + fwh_sel1);
+		} else {
+			fwh_idsel_old = pci_read_long(dev, fwh_sel1) << 16;
+			rpci_write_long(dev, fwh_sel1, (fwh_idsel >> 16) & 0xffffffff);
+			if (fwh_sel2 > 0) {
+				fwh_idsel_old |= pci_read_word(dev, fwh_sel2);
+				rpci_write_word(dev, fwh_sel2, fwh_idsel & 0xffff);
+			}
+		}
+		msg_pdbg("Setting IDSEL from 0x%012" PRIx64 " to 0x%012" PRIx64 " for top 16 MB.\n",
 			 fwh_idsel_old, fwh_idsel);
-		rpci_write_long(dev, fwh_sel1, (fwh_idsel >> 16) & 0xffffffff);
-		rpci_write_word(dev, fwh_sel2, fwh_idsel & 0xffff);
 		/* FIXME: Decode settings are not changed. */
 	} else if (idsel) {
 		msg_perr("Error: fwh_idsel= specified, but no value given.\n");
@@ -418,7 +470,7 @@ idsel_garbage_out:
 	free(idsel);
 
 	if (!implemented) {
-		msg_pdbg2("FWH IDSEL handling is not implemented on this chipset.");
+		msg_pdbg2("FWH IDSEL handling is not implemented on this chipset.\n");
 		return 0;
 	}
 
@@ -429,12 +481,17 @@ idsel_garbage_out:
 	 */
 	int max_decode_fwh_idsel = 0, max_decode_fwh_decode = 0;
 	bool contiguous = 1;
-	uint32_t fwh_conf = pci_read_long(dev, fwh_sel1);
+	uint32_t fwh_conf;
+	if (ich_generation == CHIPSET_BAYTRAIL)
+		fwh_conf = mmio_readl(ilb + fwh_sel1);
+	else
+		fwh_conf = pci_read_long(dev, fwh_sel1);
+
 	int i;
 	/* FWH_SEL1 */
 	for (i = 7; i >= 0; i--) {
 		int tmp = (fwh_conf >> (i * 4)) & 0xf;
-		msg_pdbg("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
+		msg_pdbg("0x%08x/0x%08x FWH IDSEL: 0x%x\n",
 			 (0x1ff8 + i) * 0x80000,
 			 (0x1ff0 + i) * 0x80000,
 			 tmp);
@@ -444,18 +501,20 @@ idsel_garbage_out:
 			contiguous = 0;
 		}
 	}
-	/* FWH_SEL2 */
-	fwh_conf = pci_read_word(dev, fwh_sel2);
-	for (i = 3; i >= 0; i--) {
-		int tmp = (fwh_conf >> (i * 4)) & 0xf;
-		msg_pdbg("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
-			 (0xff4 + i) * 0x100000,
-			 (0xff0 + i) * 0x100000,
-			 tmp);
-		if ((tmp == 0) && contiguous) {
-			max_decode_fwh_idsel = (8 - i) * 0x100000;
-		} else {
-			contiguous = 0;
+	if (fwh_sel2 > 0) {
+		/* FWH_SEL2 */
+		fwh_conf = pci_read_word(dev, fwh_sel2);
+		for (i = 3; i >= 0; i--) {
+			int tmp = (fwh_conf >> (i * 4)) & 0xf;
+			msg_pdbg("0x%08x/0x%08x FWH IDSEL: 0x%x\n",
+				 (0xff4 + i) * 0x100000,
+				 (0xff0 + i) * 0x100000,
+				 tmp);
+			if ((tmp == 0) && contiguous) {
+				max_decode_fwh_idsel = (8 - i) * 0x100000;
+			} else {
+				contiguous = 0;
+			}
 		}
 	}
 	contiguous = 1;
@@ -465,7 +524,7 @@ idsel_garbage_out:
 	fwh_conf |= pci_read_byte(dev, fwh_dec_en_lo);
 	for (i = 7; i >= 0; i--) {
 		int tmp = (fwh_conf >> (i + 0x8)) & 0x1;
-		msg_pdbg("\n0x%08x/0x%08x FWH decode %sabled",
+		msg_pdbg("0x%08x/0x%08x FWH decode %sabled\n",
 			 (0x1ff8 + i) * 0x80000,
 			 (0x1ff0 + i) * 0x80000,
 			 tmp ? "en" : "dis");
@@ -477,7 +536,7 @@ idsel_garbage_out:
 	}
 	for (i = 3; i >= 0; i--) {
 		int tmp = (fwh_conf >> i) & 0x1;
-		msg_pdbg("\n0x%08x/0x%08x FWH decode %sabled",
+		msg_pdbg("0x%08x/0x%08x FWH decode %sabled\n",
 			 (0xff4 + i) * 0x100000,
 			 (0xff0 + i) * 0x100000,
 			 tmp ? "en" : "dis");
@@ -488,7 +547,7 @@ idsel_garbage_out:
 		}
 	}
 	max_rom_decode.fwh = min(max_decode_fwh_idsel, max_decode_fwh_decode);
-	msg_pdbg("\nMaximum FWH chip size: 0x%x bytes", max_rom_decode.fwh);
+	msg_pdbg("Maximum FWH chip size: 0x%x bytes\n", max_rom_decode.fwh);
 
 	return 0;
 }
@@ -502,7 +561,7 @@ static int enable_flash_ich_fwh(struct pci_dev *dev, enum ich_chipset ich_genera
 		return err;
 
 	internal_buses_supported = BUS_FWH;
-	return enable_flash_ich_bios_cntl(dev, ich_generation, bios_cntl);
+	return enable_flash_ich_bios_cntl_config_space(dev, ich_generation, bios_cntl);
 }
 
 static int enable_flash_ich0(struct pci_dev *dev, const char *name)
@@ -525,14 +584,17 @@ static int enable_flash_poulsbo(struct pci_dev *dev, const char *name)
 	return enable_flash_ich_fwh(dev, CHIPSET_POULSBO, 0xd8);
 }
 
-static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_generation, uint8_t bios_cntl)
+static void enable_flash_ich_handle_gcs(struct pci_dev *dev, enum ich_chipset ich_generation, uint32_t gcs, bool top_swap)
 {
+	msg_pdbg("GCS = 0x%x: ", gcs);
+	msg_pdbg("BIOS Interface Lock-Down: %sabled, ", (gcs & 0x1) ? "en" : "dis");
+
 	static const char *const straps_names_EP80579[] = { "SPI", "reserved", "reserved", "LPC" };
 	static const char *const straps_names_ich7_nm10[] = { "reserved", "SPI", "PCI", "LPC" };
 	static const char *const straps_names_tunnel_creek[] = { "SPI", "LPC" };
 	static const char *const straps_names_ich8910[] = { "SPI", "SPI", "PCI", "LPC" };
 	static const char *const straps_names_pch567[] = { "LPC", "reserved", "PCI", "SPI" };
-	static const char *const straps_names_pch8[] = { "LPC", "reserved", "reserved", "SPI" };
+	static const char *const straps_names_pch89_baytrail[] = { "LPC", "reserved", "reserved", "SPI" };
 	static const char *const straps_names_pch8_lp[] = { "SPI", "LPC" };
 	static const char *const straps_names_unknown[] = { "unknown", "unknown", "unknown", "unknown" };
 
@@ -561,7 +623,9 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 		straps_names = straps_names_pch567;
 		break;
 	case CHIPSET_8_SERIES_LYNX_POINT:
-		straps_names = straps_names_pch8;
+	case CHIPSET_9_SERIES_WILDCAT_POINT:
+	case CHIPSET_BAYTRAIL:
+		straps_names = straps_names_pch89_baytrail;
 		break;
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
 		straps_names = straps_names_pch8_lp;
@@ -576,6 +640,30 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 		break;
 	}
 
+	uint8_t bbs;
+	switch (ich_generation) {
+	case CHIPSET_TUNNEL_CREEK:
+		bbs = (gcs >> 1) & 0x1;
+		break;
+	case CHIPSET_8_SERIES_LYNX_POINT_LP:
+		/* Lynx Point LP uses a single bit for BBS */
+		bbs = (gcs >> 10) & 0x1;
+		break;
+	default:
+		/* Other chipsets use two bits for BBS */
+		bbs = (gcs >> 10) & 0x3;
+		break;
+	}
+	msg_pdbg("Boot BIOS Straps: 0x%x (%s)\n", bbs, straps_names[bbs]);
+
+	/* Centerton has its TS bit in [GPE0BLK] + 0x30 while the exact location for Tunnel Creek is unknown. */
+	if (ich_generation != CHIPSET_TUNNEL_CREEK && ich_generation != CHIPSET_CENTERTON)
+		msg_pdbg("Top Swap: %s\n", (top_swap) ? "enabled (A16(+) inverted)" : "not enabled");
+}
+
+static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_generation, uint8_t bios_cntl)
+{
+
 	/* Get physical address of Root Complex Register Block */
 	uint32_t rcra = pci_read_long(dev, 0xf0) & 0xffffc000;
 	msg_pdbg("Root Complex Register Block address = 0x%x\n", rcra);
@@ -585,31 +673,7 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 	if (rcrb == ERROR_PTR)
 		return ERROR_FATAL;
 
-	uint32_t gcs = mmio_readl(rcrb + 0x3410);
-	msg_pdbg("GCS = 0x%x: ", gcs);
-	msg_pdbg("BIOS Interface Lock-Down: %sabled, ", (gcs & 0x1) ? "en" : "dis");
-
-	uint8_t bbs;
-	switch (ich_generation) {
-	case CHIPSET_TUNNEL_CREEK:
-		bbs = (gcs >> 1) & 0x1;
-		break;
-	case CHIPSET_8_SERIES_LYNX_POINT_LP:
-	case CHIPSET_8_SERIES_WELLSBURG: // FIXME: check datasheet
-		/* Lynx Point LP uses a single bit for GCS */
-		bbs = (gcs >> 10) & 0x1;
-		break;
-	default:
-		/* Older chipsets use two bits for GCS */
-		bbs = (gcs >> 10) & 0x3;
-		break;
-	}
-	msg_pdbg("Boot BIOS Straps: 0x%x (%s)\n", bbs, straps_names[bbs]);
-
-	if (ich_generation != CHIPSET_TUNNEL_CREEK && ich_generation != CHIPSET_CENTERTON) {
-		uint8_t buc = mmio_readb(rcrb + 0x3414);
-		msg_pdbg("Top Swap : %s\n", (buc & 1) ? "enabled (A16(+) inverted)" : "not enabled");
-	}
+	enable_flash_ich_handle_gcs(dev, ich_generation, mmio_readl(rcrb + 0x3410), mmio_readb(rcrb + 0x3414));
 
 	/* Handle FWH-related parameters and initialization */
 	int ret_fwh = enable_flash_ich_fwh(dev, ich_generation, bios_cntl);
@@ -619,6 +683,7 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 	/* SPIBAR is at RCRB+0x3020 for ICH[78], Tunnel Creek and Centerton, and RCRB+0x3800 for ICH9. */
 	uint16_t spibar_offset;
 	switch (ich_generation) {
+	case CHIPSET_BAYTRAIL:
 	case CHIPSET_ICH_UNKNOWN:
 		return ERROR_FATAL;
 	case CHIPSET_ICH7:
@@ -710,6 +775,63 @@ static int enable_flash_pch8_lp(struct pci_dev *dev, const char *name)
 static int enable_flash_pch8_wb(struct pci_dev *dev, const char *name)
 {
 	return enable_flash_ich_spi(dev, CHIPSET_8_SERIES_WELLSBURG, 0xdc);
+}
+
+/* Wildcat Point */
+static int enable_flash_pch9(struct pci_dev *dev, const char *name)
+{
+	return enable_flash_ich_spi(dev, CHIPSET_9_SERIES_WILDCAT_POINT, 0xdc);
+}
+
+/* Silvermont architecture: Bay Trail(-T/-I), Avoton/Rangeley.
+ * These have a distinctly different behavior compared to other Intel chipsets and hence are handled separately.
+ *
+ * Differences include:
+ *	- RCBA at LPC config 0xF0 too but mapped range is only 4 B long instead of 16 kB.
+ *	- GCS at [RCRB] + 0 (instead of [RCRB] + 0x3410).
+ *	- TS (Top Swap) in GCS (instead of [RCRB] + 0x3414).
+ *	- SPIBAR (coined SBASE) at LPC config 0x54 (instead of [RCRB] + 0x3800).
+ *	- BIOS_CNTL (coined BCR) at [SPIBAR] + 0xFC (instead of LPC config 0xDC).
+ */
+static int enable_flash_silvermont(struct pci_dev *dev, const char *name)
+{
+	enum ich_chipset ich_generation = CHIPSET_BAYTRAIL;
+
+	/* Get physical address of Root Complex Register Block */
+	uint32_t rcba = pci_read_long(dev, 0xf0) & 0xfffffc00;
+	msg_pdbg("Root Complex Register Block address = 0x%x\n", rcba);
+
+	/* Handle GCS (in RCRB) */
+	void *rcrb = physmap("BYT RCRB", rcba, 4);
+	uint32_t gcs = mmio_readl(rcrb + 0);
+	enable_flash_ich_handle_gcs(dev, ich_generation, gcs, gcs & 0x2);
+	physunmap(rcrb, 4);
+
+	/* Handle fwh_idsel parameter */
+	int ret_fwh = enable_flash_ich_fwh_decode(dev, ich_generation);
+	if (ret_fwh == ERROR_FATAL)
+		return ret_fwh;
+
+	internal_buses_supported = BUS_FWH;
+
+	/* Get physical address of SPI Base Address and map it */
+	uint32_t sbase = pci_read_long(dev, 0x54) & 0xfffffe00;
+	msg_pdbg("SPI_BASE_ADDRESS = 0x%x\n", sbase);
+	void *spibar = rphysmap("BYT SBASE", sbase, 512); /* Last defined address on Bay Trail is 0x100 */
+
+	/* Enable Flash Writes.
+	 * Silvermont-based: BCR at SBASE + 0xFC (some bits of BCR are also accessible via BC at IBASE + 0x1C).
+	 */
+	enable_flash_ich_bios_cntl_memmapped(ich_generation, spibar + 0xFC);
+
+	int ret_spi = ich_init_spi(dev, spibar, ich_generation);
+	if (ret_spi == ERROR_FATAL)
+		return ret_spi;
+
+	if (ret_fwh || ret_spi)
+		return ERROR_NONFATAL;
+
+	return 0;
 }
 
 static int via_no_byte_merge(struct pci_dev *dev, const char *name)
@@ -982,7 +1104,7 @@ static int enable_flash_vt82c586(struct pci_dev *dev, const char *name)
 /* Works for VT82C686A/B too. */
 static int enable_flash_vt82c596(struct pci_dev *dev, const char *name)
 {
-	/* Enable decoding of 0xFFF80000 to 0xFFFFFFFF. (1 MB) */
+	/* Enable decoding of 0xFFF00000 to 0xFFFFFFFF. (1 MB) */
 	max_rom_decode.parallel = 1024 * 1024;
 	return enable_flash_amd_via(dev, name, 0xE0);
 }
@@ -999,20 +1121,23 @@ static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 		/* No protection flags for this region?*/
 		if ((prot & 0x3) == 0)
 			continue;
-		msg_pinfo("SB600 %s%sprotected from 0x%08x to 0x%08x\n",
-			  (prot & 0x1) ? "write " : "",
+		msg_pdbg("Chipset %s%sprotected flash from 0x%08x to 0x%08x, unlocking...",
 			  (prot & 0x2) ? "read " : "",
+			  (prot & 0x1) ? "write " : "",
 			  (prot & 0xfffff800),
 			  (prot & 0xfffff800) + (((prot & 0x7fc) << 8) | 0x3ff));
 		prot &= 0xfffffffc;
 		rpci_write_byte(dev, reg, prot);
 		prot = pci_read_long(dev, reg);
-		if (prot & 0x3)
-			msg_perr("SB600 %s%sunprotect failed from 0x%08x to 0x%08x\n",
-				 (prot & 0x1) ? "write " : "",
+		if ((prot & 0x3) != 0) {
+			msg_perr("Disabling %s%sprotection of flash addresses from 0x%08x to 0x%08x failed.\n",
 				 (prot & 0x2) ? "read " : "",
+				 (prot & 0x1) ? "write " : "",
 				 (prot & 0xfffff800),
 				 (prot & 0xfffff800) + (((prot & 0x7fc) << 8) | 0x3ff));
+			continue;
+		}
+		msg_pdbg("done.\n");
 	}
 
 	internal_buses_supported = BUS_LPC | BUS_FWH;
@@ -1244,8 +1369,6 @@ static int enable_flash_mcp6x_7x(struct pci_dev *dev, const char *name)
 	int ret = 0, want_spi = 0;
 	uint8_t val;
 
-	msg_pinfo("This chipset is not really supported yet. Guesswork...\n");
-
 	/* dev is the ISA bridge. No idea what the stuff below does. */
 	val = pci_read_byte(dev, 0x8a);
 	msg_pdbg("ISA/LPC bridge reg 0x8a contents: 0x%02x, bit 6 is %i, bit 5 "
@@ -1264,17 +1387,15 @@ static int enable_flash_mcp6x_7x(struct pci_dev *dev, const char *name)
 		 */
 		internal_buses_supported = BUS_NONE;
 		msg_pdbg("Flash bus type is SPI\n");
-		msg_pinfo("SPI on this chipset is WIP. Please report any "
-			  "success or failure by mailing us the verbose "
-			  "output to flashrom@flashrom.org, thanks!\n");
 		break;
 	default:
 		/* Should not happen. */
 		internal_buses_supported = BUS_NONE;
-		msg_pdbg("Flash bus type is unknown (none)\n");
-		msg_pinfo("Something went wrong with bus type detection.\n");
-		goto out_msg;
-		break;
+		msg_pwarn("Flash bus type is unknown (none)\n");
+		msg_pinfo("Please send the log files created by \"flashrom -p internal -o logfile\" to \n"
+			  "flashrom@flashrom.org with \"your board name: flashrom -V\" as the subject to\n"
+			  "help us finish support for your chipset. Thanks.\n");
+		return ERROR_NONFATAL;
 	}
 
 	/* Force enable SPI and disable LPC? Not a good idea. */
@@ -1286,13 +1407,6 @@ static int enable_flash_mcp6x_7x(struct pci_dev *dev, const char *name)
 
 	if (mcp6x_spi_init(want_spi))
 		ret = 1;
-
-out_msg:
-	msg_pinfo("Please send the output of \"flashrom -V\" to "
-		  "flashrom@flashrom.org with\n"
-		  "your board name: flashrom -V as the subject to help us "
-		  "finish support for your\n"
-		  "chipset. Thanks.\n");
 
 	return ret;
 }
@@ -1368,60 +1482,60 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 /* Please keep this list numerically sorted by vendor/device ID. */
 const struct penable chipset_enables[] = {
 #if defined(__i386__) || defined(__x86_64__)
-	{0x1002, 0x4377, OK, "ATI", "SB400",		enable_flash_sb400},
-	{0x1002, 0x438d, OK, "AMD", "SB600",		enable_flash_sb600},
-	{0x1002, 0x439d, OK, "AMD", "SB7x0/SB8x0/SB9x0", enable_flash_sb600},
-	{0x100b, 0x0510, NT, "AMD", "SC1100",		enable_flash_sc1100},
-	{0x1022, 0x2080, OK, "AMD", "CS5536",		enable_flash_cs5536},
-	{0x1022, 0x2090, OK, "AMD", "CS5536",		enable_flash_cs5536},
-	{0x1022, 0x3000, OK, "AMD", "Elan SC520",	get_flashbase_sc520},
-	{0x1022, 0x7440, OK, "AMD", "AMD-768",		enable_flash_amd_768_8111},
-	{0x1022, 0x7468, OK, "AMD", "AMD-8111",		enable_flash_amd_768_8111},
-	{0x1022, 0x780e, OK, "AMD", "FCH",		enable_flash_sb600},
-	{0x1039, 0x0406, NT, "SiS", "501/5101/5501",	enable_flash_sis501},
-	{0x1039, 0x0496, NT, "SiS", "85C496+497",	enable_flash_sis85c496},
-	{0x1039, 0x0530, OK, "SiS", "530",		enable_flash_sis530},
-	{0x1039, 0x0540, NT, "SiS", "540",		enable_flash_sis540},
-	{0x1039, 0x0620, NT, "SiS", "620",		enable_flash_sis530},
-	{0x1039, 0x0630, NT, "SiS", "630",		enable_flash_sis540},
-	{0x1039, 0x0635, NT, "SiS", "635",		enable_flash_sis540},
-	{0x1039, 0x0640, NT, "SiS", "640",		enable_flash_sis540},
-	{0x1039, 0x0645, NT, "SiS", "645",		enable_flash_sis540},
-	{0x1039, 0x0646, OK, "SiS", "645DX",		enable_flash_sis540},
-	{0x1039, 0x0648, NT, "SiS", "648",		enable_flash_sis540},
-	{0x1039, 0x0650, OK, "SiS", "650",		enable_flash_sis540},
-	{0x1039, 0x0651, OK, "SiS", "651",		enable_flash_sis540},
-	{0x1039, 0x0655, NT, "SiS", "655",		enable_flash_sis540},
-	{0x1039, 0x0661, OK, "SiS", "661",		enable_flash_sis540},
-	{0x1039, 0x0730, OK, "SiS", "730",		enable_flash_sis540},
-	{0x1039, 0x0733, NT, "SiS", "733",		enable_flash_sis540},
-	{0x1039, 0x0735, OK, "SiS", "735",		enable_flash_sis540},
-	{0x1039, 0x0740, NT, "SiS", "740",		enable_flash_sis540},
-	{0x1039, 0x0741, OK, "SiS", "741",		enable_flash_sis540},
-	{0x1039, 0x0745, OK, "SiS", "745",		enable_flash_sis540},
-	{0x1039, 0x0746, NT, "SiS", "746",		enable_flash_sis540},
-	{0x1039, 0x0748, NT, "SiS", "748",		enable_flash_sis540},
-	{0x1039, 0x0755, OK, "SiS", "755",		enable_flash_sis540},
-	{0x1039, 0x5511, NT, "SiS", "5511",		enable_flash_sis5511},
-	{0x1039, 0x5571, NT, "SiS", "5571",		enable_flash_sis530},
-	{0x1039, 0x5591, NT, "SiS", "5591/5592",	enable_flash_sis530},
-	{0x1039, 0x5596, NT, "SiS", "5596",		enable_flash_sis5511},
-	{0x1039, 0x5597, NT, "SiS", "5597/5598/5581/5120", enable_flash_sis530},
-	{0x1039, 0x5600, NT, "SiS", "600",		enable_flash_sis530},
-	{0x1078, 0x0100, OK, "AMD", "CS5530(A)",	enable_flash_cs5530},
-	{0x10b9, 0x1533, OK, "ALi", "M1533",		enable_flash_ali_m1533},
-	{0x10de, 0x0030, OK, "NVIDIA", "nForce4/MCP4",	enable_flash_nvidia_nforce2},
-	{0x10de, 0x0050, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* LPC */
-	{0x10de, 0x0051, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* Pro */
-	{0x10de, 0x0060, OK, "NVIDIA", "NForce2",	enable_flash_nvidia_nforce2},
-	{0x10de, 0x00e0, OK, "NVIDIA", "NForce3",	enable_flash_nvidia_nforce2},
+	{0x1002, 0x4377, OK,  "ATI", "SB400",				enable_flash_sb400},
+	{0x1002, 0x438d, OK,  "AMD", "SB600",				enable_flash_sb600},
+	{0x1002, 0x439d, OK,  "AMD", "SB7x0/SB8x0/SB9x0",		enable_flash_sb600},
+	{0x100b, 0x0510, NT,  "AMD", "SC1100",				enable_flash_sc1100},
+	{0x1022, 0x2080, OK,  "AMD", "CS5536",				enable_flash_cs5536},
+	{0x1022, 0x2090, OK,  "AMD", "CS5536",				enable_flash_cs5536},
+	{0x1022, 0x3000, OK,  "AMD", "Elan SC520",			get_flashbase_sc520},
+	{0x1022, 0x7440, OK,  "AMD", "AMD-768",				enable_flash_amd_768_8111},
+	{0x1022, 0x7468, OK,  "AMD", "AMD-8111",			enable_flash_amd_768_8111},
+	{0x1022, 0x780e, OK,  "AMD", "FCH",				enable_flash_sb600},
+	{0x1039, 0x0406, NT,  "SiS", "501/5101/5501",			enable_flash_sis501},
+	{0x1039, 0x0496, NT,  "SiS", "85C496+497",			enable_flash_sis85c496},
+	{0x1039, 0x0530, OK,  "SiS", "530",				enable_flash_sis530},
+	{0x1039, 0x0540, NT,  "SiS", "540",				enable_flash_sis540},
+	{0x1039, 0x0620, NT,  "SiS", "620",				enable_flash_sis530},
+	{0x1039, 0x0630, NT,  "SiS", "630",				enable_flash_sis540},
+	{0x1039, 0x0635, NT,  "SiS", "635",				enable_flash_sis540},
+	{0x1039, 0x0640, NT,  "SiS", "640",				enable_flash_sis540},
+	{0x1039, 0x0645, NT,  "SiS", "645",				enable_flash_sis540},
+	{0x1039, 0x0646, OK,  "SiS", "645DX",				enable_flash_sis540},
+	{0x1039, 0x0648, OK,  "SiS", "648",				enable_flash_sis540},
+	{0x1039, 0x0650, OK,  "SiS", "650",				enable_flash_sis540},
+	{0x1039, 0x0651, OK,  "SiS", "651",				enable_flash_sis540},
+	{0x1039, 0x0655, NT,  "SiS", "655",				enable_flash_sis540},
+	{0x1039, 0x0661, OK,  "SiS", "661",				enable_flash_sis540},
+	{0x1039, 0x0730, OK,  "SiS", "730",				enable_flash_sis540},
+	{0x1039, 0x0733, NT,  "SiS", "733",				enable_flash_sis540},
+	{0x1039, 0x0735, OK,  "SiS", "735",				enable_flash_sis540},
+	{0x1039, 0x0740, NT,  "SiS", "740",				enable_flash_sis540},
+	{0x1039, 0x0741, OK,  "SiS", "741",				enable_flash_sis540},
+	{0x1039, 0x0745, OK,  "SiS", "745",				enable_flash_sis540},
+	{0x1039, 0x0746, NT,  "SiS", "746",				enable_flash_sis540},
+	{0x1039, 0x0748, NT,  "SiS", "748",				enable_flash_sis540},
+	{0x1039, 0x0755, OK,  "SiS", "755",				enable_flash_sis540},
+	{0x1039, 0x5511, NT,  "SiS", "5511",				enable_flash_sis5511},
+	{0x1039, 0x5571, NT,  "SiS", "5571",				enable_flash_sis530},
+	{0x1039, 0x5591, NT,  "SiS", "5591/5592",			enable_flash_sis530},
+	{0x1039, 0x5596, NT,  "SiS", "5596",				enable_flash_sis5511},
+	{0x1039, 0x5597, NT,  "SiS", "5597/5598/5581/5120",		enable_flash_sis530},
+	{0x1039, 0x5600, NT,  "SiS", "600",				enable_flash_sis530},
+	{0x1078, 0x0100, OK,  "AMD", "CS5530(A)",			enable_flash_cs5530},
+	{0x10b9, 0x1533, OK,  "ALi", "M1533",				enable_flash_ali_m1533},
+	{0x10de, 0x0030, OK,  "NVIDIA", "nForce4/MCP4",			enable_flash_nvidia_nforce2},
+	{0x10de, 0x0050, OK,  "NVIDIA", "CK804",			enable_flash_ck804}, /* LPC */
+	{0x10de, 0x0051, OK,  "NVIDIA", "CK804",			enable_flash_ck804}, /* Pro */
+	{0x10de, 0x0060, OK,  "NVIDIA", "NForce2",			enable_flash_nvidia_nforce2},
+	{0x10de, 0x00e0, OK,  "NVIDIA", "NForce3",			enable_flash_nvidia_nforce2},
 	/* Slave, should not be here, to fix known bug for A01. */
-	{0x10de, 0x00d3, OK, "NVIDIA", "CK804",		enable_flash_ck804},
-	{0x10de, 0x0260, OK, "NVIDIA", "MCP51",		enable_flash_ck804},
-	{0x10de, 0x0261, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
-	{0x10de, 0x0262, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
-	{0x10de, 0x0263, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
-	{0x10de, 0x0360, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* M57SLI*/
+	{0x10de, 0x00d3, OK,  "NVIDIA", "CK804",			enable_flash_ck804},
+	{0x10de, 0x0260, OK,  "NVIDIA", "MCP51",			enable_flash_ck804},
+	{0x10de, 0x0261, OK,  "NVIDIA", "MCP51",			enable_flash_ck804},
+	{0x10de, 0x0262, NT,  "NVIDIA", "MCP51",			enable_flash_ck804},
+	{0x10de, 0x0263, NT,  "NVIDIA", "MCP51",			enable_flash_ck804},
+	{0x10de, 0x0360, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* M57SLI*/
 	/* 10de:0361 is present in Tyan S2915 OEM systems, but not connected to
 	 * the flash chip. Instead, 10de:0364 is connected to the flash chip.
 	 * Until we have PCI device class matching or some fallback mechanism,
@@ -1429,221 +1543,237 @@ const struct penable chipset_enables[] = {
 	 * dual-MCP55 boards.
 	 */
 #if 0
-	{0x10de, 0x0361, NT, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0361, NT,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
 #endif
-	{0x10de, 0x0362, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0363, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0364, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0365, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0366, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0367, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* Pro */
-	{0x10de, 0x03e0, OK, "NVIDIA", "MCP61",		enable_flash_mcp6x_7x},
-	{0x10de, 0x03e1, OK, "NVIDIA", "MCP61",		enable_flash_mcp6x_7x},
-	{0x10de, 0x03e3, NT, "NVIDIA", "MCP61",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0440, NT, "NVIDIA", "MCP65",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0441, NT, "NVIDIA", "MCP65",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0442, NT, "NVIDIA", "MCP65",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0443, NT, "NVIDIA", "MCP65",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0548, OK, "NVIDIA", "MCP67",		enable_flash_mcp6x_7x},
-	{0x10de, 0x075c, OK, "NVIDIA", "MCP78S",	enable_flash_mcp6x_7x},
-	{0x10de, 0x075d, OK, "NVIDIA", "MCP78S",	enable_flash_mcp6x_7x},
-	{0x10de, 0x07d7, OK, "NVIDIA", "MCP73",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0aac, OK, "NVIDIA", "MCP79",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0aad, NT, "NVIDIA", "MCP79",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0aae, NT, "NVIDIA", "MCP79",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0aaf, NT, "NVIDIA", "MCP79",		enable_flash_mcp6x_7x},
-	{0x10de, 0x0d80, NT, "NVIDIA", "MCP89",		enable_flash_mcp6x_7x},
+	{0x10de, 0x0362, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0363, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0364, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0365, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0366, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0367, OK,  "NVIDIA", "MCP55",			enable_flash_mcp55}, /* Pro */
+	{0x10de, 0x03e0, OK,  "NVIDIA", "MCP61",			enable_flash_mcp6x_7x},
+	{0x10de, 0x03e1, OK,  "NVIDIA", "MCP61",			enable_flash_mcp6x_7x},
+	{0x10de, 0x03e3, NT,  "NVIDIA", "MCP61",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0440, NT,  "NVIDIA", "MCP65",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0441, NT,  "NVIDIA", "MCP65",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0442, NT,  "NVIDIA", "MCP65",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0443, NT,  "NVIDIA", "MCP65",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0548, OK,  "NVIDIA", "MCP67",			enable_flash_mcp6x_7x},
+	{0x10de, 0x075c, OK,  "NVIDIA", "MCP78S",			enable_flash_mcp6x_7x},
+	{0x10de, 0x075d, OK,  "NVIDIA", "MCP78S",			enable_flash_mcp6x_7x},
+	{0x10de, 0x07d7, OK,  "NVIDIA", "MCP73",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0aac, OK,  "NVIDIA", "MCP79",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0aad, NT,  "NVIDIA", "MCP79",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0aae, NT,  "NVIDIA", "MCP79",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0aaf, NT,  "NVIDIA", "MCP79",			enable_flash_mcp6x_7x},
+	{0x10de, 0x0d80, NT,  "NVIDIA", "MCP89",			enable_flash_mcp6x_7x},
 	/* VIA northbridges */
-	{0x1106, 0x0585, NT, "VIA", "VT82C585VPX",	via_no_byte_merge},
-	{0x1106, 0x0595, NT, "VIA", "VT82C595",		via_no_byte_merge},
-	{0x1106, 0x0597, NT, "VIA", "VT82C597",		via_no_byte_merge},
-	{0x1106, 0x0601, NT, "VIA", "VT8601/VT8601A",	via_no_byte_merge},
-	{0x1106, 0x0691, OK, "VIA", "VT82C69x",		via_no_byte_merge},
-	{0x1106, 0x8601, NT, "VIA", "VT8601T",		via_no_byte_merge},
+	{0x1106, 0x0585, NT,  "VIA", "VT82C585VPX",			via_no_byte_merge},
+	{0x1106, 0x0595, NT,  "VIA", "VT82C595",			via_no_byte_merge},
+	{0x1106, 0x0597, NT,  "VIA", "VT82C597",			via_no_byte_merge},
+	{0x1106, 0x0601, NT,  "VIA", "VT8601/VT8601A",			via_no_byte_merge},
+	{0x1106, 0x0691, OK,  "VIA", "VT82C69x",			via_no_byte_merge},
+	{0x1106, 0x8601, NT,  "VIA", "VT8601T",				via_no_byte_merge},
 	/* VIA southbridges */
-	{0x1106, 0x0586, OK, "VIA", "VT82C586A/B",	enable_flash_vt82c586},
-	{0x1106, 0x0596, OK, "VIA", "VT82C596",		enable_flash_vt82c596},
-	{0x1106, 0x0686, OK, "VIA", "VT82C686A/B",	enable_flash_vt82c596},
-	{0x1106, 0x3074, OK, "VIA", "VT8233",		enable_flash_vt823x},
-	{0x1106, 0x3147, OK, "VIA", "VT8233A",		enable_flash_vt823x},
-	{0x1106, 0x3177, OK, "VIA", "VT8235",		enable_flash_vt823x},
-	{0x1106, 0x3227, OK, "VIA", "VT8237(R)",	enable_flash_vt823x},
-	{0x1106, 0x3337, OK, "VIA", "VT8237A",		enable_flash_vt823x},
-	{0x1106, 0x3372, OK, "VIA", "VT8237S",		enable_flash_vt8237s_spi},
-	{0x1106, 0x8231, NT, "VIA", "VT8231",		enable_flash_vt823x},
-	{0x1106, 0x8324, OK, "VIA", "CX700",		enable_flash_vt823x},
-	{0x1106, 0x8353, NT, "VIA", "VX800/VX820",	enable_flash_vt_vx},
-	{0x1106, 0x8409, NT, "VIA", "VX855/VX875",	enable_flash_vt_vx},
-	{0x1106, 0x8410, NT, "VIA", "VX900",		enable_flash_vt_vx},
-	{0x1166, 0x0200, OK, "Broadcom", "OSB4",	enable_flash_osb4},
-	{0x1166, 0x0205, OK, "Broadcom", "HT-1000",	enable_flash_ht1000},
-	{0x17f3, 0x6030, OK, "RDC", "R8610/R3210",	enable_flash_rdc_r8610},
-	{0x8086, 0x0c60, NT, "Intel", "S12x0",		enable_flash_s12x0},
-	{0x8086, 0x122e, OK, "Intel", "PIIX",		enable_flash_piix4},
-	{0x8086, 0x1234, NT, "Intel", "MPIIX",		enable_flash_piix4},
-	{0x8086, 0x1c44, OK, "Intel", "Z68",		enable_flash_pch6},
-	{0x8086, 0x1c46, OK, "Intel", "P67",		enable_flash_pch6},
-	{0x8086, 0x1c47, NT, "Intel", "UM67",		enable_flash_pch6},
-	{0x8086, 0x1c49, NT, "Intel", "HM65",		enable_flash_pch6},
-	{0x8086, 0x1c4a, OK, "Intel", "H67",		enable_flash_pch6},
-	{0x8086, 0x1c4b, NT, "Intel", "HM67",		enable_flash_pch6},
-	{0x8086, 0x1c4c, NT, "Intel", "Q65",		enable_flash_pch6},
-	{0x8086, 0x1c4d, NT, "Intel", "QS67",		enable_flash_pch6},
-	{0x8086, 0x1c4e, NT, "Intel", "Q67",		enable_flash_pch6},
-	{0x8086, 0x1c4f, NT, "Intel", "QM67",		enable_flash_pch6},
-	{0x8086, 0x1c50, NT, "Intel", "B65",		enable_flash_pch6},
-	{0x8086, 0x1c52, NT, "Intel", "C202",		enable_flash_pch6},
-	{0x8086, 0x1c54, NT, "Intel", "C204",		enable_flash_pch6},
-	{0x8086, 0x1c56, NT, "Intel", "C206",		enable_flash_pch6},
-	{0x8086, 0x1c5c, OK, "Intel", "H61",		enable_flash_pch6},
-	{0x8086, 0x1d40, OK, "Intel", "X79",		enable_flash_pch6},
-	{0x8086, 0x1d41, OK, "Intel", "X79",		enable_flash_pch6},
-	{0x8086, 0x1e44, OK, "Intel", "Z77",		enable_flash_pch7},
-	{0x8086, 0x1e46, NT, "Intel", "Z75",		enable_flash_pch7},
-	{0x8086, 0x1e47, NT, "Intel", "Q77",		enable_flash_pch7},
-	{0x8086, 0x1e48, NT, "Intel", "Q75",		enable_flash_pch7},
-	{0x8086, 0x1e49, OK, "Intel", "B75",		enable_flash_pch7},
-	{0x8086, 0x1e4a, OK, "Intel", "H77",		enable_flash_pch7},
-	{0x8086, 0x1e53, NT, "Intel", "C216",		enable_flash_pch7},
-	{0x8086, 0x1e55, OK, "Intel", "QM77",		enable_flash_pch7},
-	{0x8086, 0x1e56, NT, "Intel", "QS77",		enable_flash_pch7},
-	{0x8086, 0x1e57, NT, "Intel", "HM77",		enable_flash_pch7},
-	{0x8086, 0x1e58, NT, "Intel", "UM77",		enable_flash_pch7},
-	{0x8086, 0x1e59, NT, "Intel", "HM76",		enable_flash_pch7},
-	{0x8086, 0x1e5d, NT, "Intel", "HM75",		enable_flash_pch7},
-	{0x8086, 0x1e5e, NT, "Intel", "HM70",		enable_flash_pch7},
-	{0x8086, 0x1e5f, NT, "Intel", "NM70",		enable_flash_pch7},
-	{0x8086, 0x2310, NT, "Intel", "DH89xxCC",	enable_flash_pch7},
-	{0x8086, 0x2390, NT, "Intel", "Coleto Creek",	enable_flash_pch7},
-	{0x8086, 0x2410, OK, "Intel", "ICH",		enable_flash_ich0},
-	{0x8086, 0x2420, OK, "Intel", "ICH0",		enable_flash_ich0},
-	{0x8086, 0x2440, OK, "Intel", "ICH2",		enable_flash_ich2345},
-	{0x8086, 0x244c, OK, "Intel", "ICH2-M",		enable_flash_ich2345},
-	{0x8086, 0x2450, NT, "Intel", "C-ICH",		enable_flash_ich2345},
-	{0x8086, 0x2480, OK, "Intel", "ICH3-S",		enable_flash_ich2345},
-	{0x8086, 0x248c, OK, "Intel", "ICH3-M",		enable_flash_ich2345},
-	{0x8086, 0x24c0, OK, "Intel", "ICH4/ICH4-L",	enable_flash_ich2345},
-	{0x8086, 0x24cc, OK, "Intel", "ICH4-M",		enable_flash_ich2345},
-	{0x8086, 0x24d0, OK, "Intel", "ICH5/ICH5R",	enable_flash_ich2345},
-	{0x8086, 0x25a1, OK, "Intel", "6300ESB",	enable_flash_ich2345},
-	{0x8086, 0x2640, OK, "Intel", "ICH6/ICH6R",	enable_flash_ich6},
-	{0x8086, 0x2641, OK, "Intel", "ICH6-M",		enable_flash_ich6},
-	{0x8086, 0x2642, NT, "Intel", "ICH6W/ICH6RW",	enable_flash_ich6},
-	{0x8086, 0x2670, OK, "Intel", "631xESB/632xESB/3100", enable_flash_ich6},
-	{0x8086, 0x27b0, OK, "Intel", "ICH7DH",		enable_flash_ich7},
-	{0x8086, 0x27b8, OK, "Intel", "ICH7/ICH7R",	enable_flash_ich7},
-	{0x8086, 0x27b9, OK, "Intel", "ICH7M",		enable_flash_ich7},
-	{0x8086, 0x27bc, OK, "Intel", "NM10",		enable_flash_ich7},
-	{0x8086, 0x27bd, OK, "Intel", "ICH7MDH",	enable_flash_ich7},
-	{0x8086, 0x2810, OK, "Intel", "ICH8/ICH8R",	enable_flash_ich8},
-	{0x8086, 0x2811, OK, "Intel", "ICH8M-E",	enable_flash_ich8},
-	{0x8086, 0x2812, OK, "Intel", "ICH8DH",		enable_flash_ich8},
-	{0x8086, 0x2814, OK, "Intel", "ICH8DO",		enable_flash_ich8},
-	{0x8086, 0x2815, OK, "Intel", "ICH8M",		enable_flash_ich8},
-	{0x8086, 0x2910, OK, "Intel", "ICH9 Engineering Sample", enable_flash_ich9},
-	{0x8086, 0x2912, OK, "Intel", "ICH9DH",		enable_flash_ich9},
-	{0x8086, 0x2914, OK, "Intel", "ICH9DO",		enable_flash_ich9},
-	{0x8086, 0x2916, OK, "Intel", "ICH9R",		enable_flash_ich9},
-	{0x8086, 0x2917, OK, "Intel", "ICH9M-E",	enable_flash_ich9},
-	{0x8086, 0x2918, OK, "Intel", "ICH9",		enable_flash_ich9},
-	{0x8086, 0x2919, OK, "Intel", "ICH9M",		enable_flash_ich9},
-	{0x8086, 0x3a10, NT, "Intel", "ICH10R Engineering Sample", enable_flash_ich10},
-	{0x8086, 0x3a14, OK, "Intel", "ICH10DO",	enable_flash_ich10},
-	{0x8086, 0x3a16, OK, "Intel", "ICH10R",		enable_flash_ich10},
-	{0x8086, 0x3a18, OK, "Intel", "ICH10",		enable_flash_ich10},
-	{0x8086, 0x3a1a, OK, "Intel", "ICH10D",		enable_flash_ich10},
-	{0x8086, 0x3a1e, NT, "Intel", "ICH10 Engineering Sample", enable_flash_ich10},
-	{0x8086, 0x3b00, NT, "Intel", "3400 Desktop",	enable_flash_pch5},
-	{0x8086, 0x3b01, NT, "Intel", "3400 Mobile",	enable_flash_pch5},
-	{0x8086, 0x3b02, NT, "Intel", "P55",		enable_flash_pch5},
-	{0x8086, 0x3b03, NT, "Intel", "PM55",		enable_flash_pch5},
-	{0x8086, 0x3b06, OK, "Intel", "H55",		enable_flash_pch5},
-	{0x8086, 0x3b07, OK, "Intel", "QM57",		enable_flash_pch5},
-	{0x8086, 0x3b08, NT, "Intel", "H57",		enable_flash_pch5},
-	{0x8086, 0x3b09, NT, "Intel", "HM55",		enable_flash_pch5},
-	{0x8086, 0x3b0a, NT, "Intel", "Q57",		enable_flash_pch5},
-	{0x8086, 0x3b0b, NT, "Intel", "HM57",		enable_flash_pch5},
-	{0x8086, 0x3b0d, NT, "Intel", "3400 Mobile SFF", enable_flash_pch5},
-	{0x8086, 0x3b0e, NT, "Intel", "B55",		enable_flash_pch5},
-	{0x8086, 0x3b0f, OK, "Intel", "QS57",		enable_flash_pch5},
-	{0x8086, 0x3b12, NT, "Intel", "3400",		enable_flash_pch5},
-	{0x8086, 0x3b14, OK, "Intel", "3420",		enable_flash_pch5},
-	{0x8086, 0x3b16, NT, "Intel", "3450",		enable_flash_pch5},
-	{0x8086, 0x3b1e, NT, "Intel", "B55",		enable_flash_pch5},
-	{0x8086, 0x5031, OK, "Intel", "EP80579",	enable_flash_ich7},
-	{0x8086, 0x7000, OK, "Intel", "PIIX3",		enable_flash_piix4},
-	{0x8086, 0x7110, OK, "Intel", "PIIX4/4E/4M",	enable_flash_piix4},
-	{0x8086, 0x7198, OK, "Intel", "440MX",		enable_flash_piix4},
-	{0x8086, 0x8119, OK, "Intel", "SCH Poulsbo",	enable_flash_poulsbo},
-	{0x8086, 0x8186, OK, "Intel", "Atom E6xx(T)/Tunnel Creek", enable_flash_tunnelcreek},
-	{0x8086, 0x8c40, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c41, NT, "Intel", "Lynx Point Mobile Engineering Sample", enable_flash_pch8},
-	{0x8086, 0x8c42, NT, "Intel", "Lynx Point Desktop Engineering Sample", enable_flash_pch8},
-	{0x8086, 0x8c43, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c44, NT, "Intel", "Z87",		enable_flash_pch8},
-	{0x8086, 0x8c45, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c46, NT, "Intel", "Z85",		enable_flash_pch8},
-	{0x8086, 0x8c47, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c48, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c49, NT, "Intel", "HM86",		enable_flash_pch8},
-	{0x8086, 0x8c4a, OK, "Intel", "H87",		enable_flash_pch8},
-	{0x8086, 0x8c4b, NT, "Intel", "HM87",		enable_flash_pch8},
-	{0x8086, 0x8c4c, NT, "Intel", "Q85",		enable_flash_pch8},
-	{0x8086, 0x8c4d, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c4e, NT, "Intel", "Q87",		enable_flash_pch8},
-	{0x8086, 0x8c4f, NT, "Intel", "QM87",		enable_flash_pch8},
-	{0x8086, 0x8c50, NT, "Intel", "B85",		enable_flash_pch8},
-	{0x8086, 0x8c51, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c52, NT, "Intel", "C222",		enable_flash_pch8},
-	{0x8086, 0x8c53, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c54, NT, "Intel", "C224",		enable_flash_pch8},
-	{0x8086, 0x8c55, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c56, NT, "Intel", "C226",		enable_flash_pch8},
-	{0x8086, 0x8c57, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c58, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c59, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c5a, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c5b, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c5c, NT, "Intel", "H81",		enable_flash_pch8},
-	{0x8086, 0x8c5d, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c5e, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x8c5f, NT, "Intel", "Lynx Point",	enable_flash_pch8},
-	{0x8086, 0x9c41, NT, "Intel", "Lynx Point LP Engineering Sample", enable_flash_pch8_lp},
-	{0x8086, 0x9c43, NT, "Intel", "Lynx Point LP Premium", enable_flash_pch8_lp},
-	{0x8086, 0x9c45, NT, "Intel", "Lynx Point LP Mainstream", enable_flash_pch8_lp},
-	{0x8086, 0x9c47, NT, "Intel", "Lynx Point LP Value", enable_flash_pch8_lp},
- 	{0x8086, 0x8d40, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d41, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d42, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d43, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d44, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d45, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d46, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d47, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d48, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d49, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4a, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4b, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4c, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4d, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4e, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d4f, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d50, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d51, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d52, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d53, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d54, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d55, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d56, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d57, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d58, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d59, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5a, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5b, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5c, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5d, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5e, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
- 	{0x8086, 0x8d5f, NT, "Intel", "Wellsburg",	enable_flash_pch8_wb},
+	{0x1106, 0x0586, OK,  "VIA", "VT82C586A/B",			enable_flash_vt82c586},
+	{0x1106, 0x0596, OK,  "VIA", "VT82C596",			enable_flash_vt82c596},
+	{0x1106, 0x0686, OK,  "VIA", "VT82C686A/B",			enable_flash_vt82c596},
+	{0x1106, 0x3074, OK,  "VIA", "VT8233",				enable_flash_vt823x},
+	{0x1106, 0x3147, OK,  "VIA", "VT8233A",				enable_flash_vt823x},
+	{0x1106, 0x3177, OK,  "VIA", "VT8235",				enable_flash_vt823x},
+	{0x1106, 0x3227, OK,  "VIA", "VT8237(R)",			enable_flash_vt823x},
+	{0x1106, 0x3337, OK,  "VIA", "VT8237A",				enable_flash_vt823x},
+	{0x1106, 0x3372, OK,  "VIA", "VT8237S",				enable_flash_vt8237s_spi},
+	{0x1106, 0x8231, NT,  "VIA", "VT8231",				enable_flash_vt823x},
+	{0x1106, 0x8324, OK,  "VIA", "CX700",				enable_flash_vt823x},
+	{0x1106, 0x8353, NT,  "VIA", "VX800/VX820",			enable_flash_vt_vx},
+	{0x1106, 0x8409, NT,  "VIA", "VX855/VX875",			enable_flash_vt_vx},
+	{0x1106, 0x8410, NT,  "VIA", "VX900",				enable_flash_vt_vx},
+	{0x1166, 0x0200, OK,  "Broadcom", "OSB4",			enable_flash_osb4},
+	{0x1166, 0x0205, OK,  "Broadcom", "HT-1000",			enable_flash_ht1000},
+	{0x17f3, 0x6030, OK,  "RDC", "R8610/R3210",			enable_flash_rdc_r8610},
+	{0x8086, 0x0c60, NT,  "Intel", "S12x0",				enable_flash_s12x0},
+	{0x8086, 0x0f1c, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
+	{0x8086, 0x0f1d, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
+	{0x8086, 0x0f1e, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
+	{0x8086, 0x0f1f, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
+	{0x8086, 0x122e, OK,  "Intel", "PIIX",				enable_flash_piix4},
+	{0x8086, 0x1234, NT,  "Intel", "MPIIX",				enable_flash_piix4},
+	{0x8086, 0x1c44, DEP, "Intel", "Z68",				enable_flash_pch6},
+	{0x8086, 0x1c46, DEP, "Intel", "P67",				enable_flash_pch6},
+	{0x8086, 0x1c47, NT,  "Intel", "UM67",				enable_flash_pch6},
+	{0x8086, 0x1c49, NT,  "Intel", "HM65",				enable_flash_pch6},
+	{0x8086, 0x1c4a, DEP, "Intel", "H67",				enable_flash_pch6},
+	{0x8086, 0x1c4b, NT,  "Intel", "HM67",				enable_flash_pch6},
+	{0x8086, 0x1c4c, NT,  "Intel", "Q65",				enable_flash_pch6},
+	{0x8086, 0x1c4d, NT,  "Intel", "QS67",				enable_flash_pch6},
+	{0x8086, 0x1c4e, NT,  "Intel", "Q67",				enable_flash_pch6},
+	{0x8086, 0x1c4f, DEP, "Intel", "QM67",				enable_flash_pch6},
+	{0x8086, 0x1c50, NT,  "Intel", "B65",				enable_flash_pch6},
+	{0x8086, 0x1c52, NT,  "Intel", "C202",				enable_flash_pch6},
+	{0x8086, 0x1c54, DEP, "Intel", "C204",				enable_flash_pch6},
+	{0x8086, 0x1c56, NT,  "Intel", "C206",				enable_flash_pch6},
+	{0x8086, 0x1c5c, DEP, "Intel", "H61",				enable_flash_pch6},
+	{0x8086, 0x1d40, DEP, "Intel", "C60x/X79",			enable_flash_pch6},
+	{0x8086, 0x1d41, DEP, "Intel", "C60x/X79",			enable_flash_pch6},
+	{0x8086, 0x1e44, DEP, "Intel", "Z77",				enable_flash_pch7},
+	{0x8086, 0x1e46, NT,  "Intel", "Z75",				enable_flash_pch7},
+	{0x8086, 0x1e47, NT,  "Intel", "Q77",				enable_flash_pch7},
+	{0x8086, 0x1e48, NT,  "Intel", "Q75",				enable_flash_pch7},
+	{0x8086, 0x1e49, DEP, "Intel", "B75",				enable_flash_pch7},
+	{0x8086, 0x1e4a, DEP, "Intel", "H77",				enable_flash_pch7},
+	{0x8086, 0x1e53, NT,  "Intel", "C216",				enable_flash_pch7},
+	{0x8086, 0x1e55, DEP, "Intel", "QM77",				enable_flash_pch7},
+	{0x8086, 0x1e56, NT,  "Intel", "QS77",				enable_flash_pch7},
+	{0x8086, 0x1e57, DEP, "Intel", "HM77",				enable_flash_pch7},
+	{0x8086, 0x1e58, NT,  "Intel", "UM77",				enable_flash_pch7},
+	{0x8086, 0x1e59, NT,  "Intel", "HM76",				enable_flash_pch7},
+	{0x8086, 0x1e5d, NT,  "Intel", "HM75",				enable_flash_pch7},
+	{0x8086, 0x1e5e, NT,  "Intel", "HM70",				enable_flash_pch7},
+	{0x8086, 0x1e5f, DEP, "Intel", "NM70",				enable_flash_pch7},
+	{0x8086, 0x1f38, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x1f39, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x1f3a, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x1f3b, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x2310, NT,  "Intel", "DH89xxCC (Cave Creek)",		enable_flash_pch7},
+	{0x8086, 0x2390, NT,  "Intel", "Coleto Creek",			enable_flash_pch7},
+	{0x8086, 0x2410, OK,  "Intel", "ICH",				enable_flash_ich0},
+	{0x8086, 0x2420, OK,  "Intel", "ICH0",				enable_flash_ich0},
+	{0x8086, 0x2440, OK,  "Intel", "ICH2",				enable_flash_ich2345},
+	{0x8086, 0x244c, OK,  "Intel", "ICH2-M",			enable_flash_ich2345},
+	{0x8086, 0x2450, NT,  "Intel", "C-ICH",				enable_flash_ich2345},
+	{0x8086, 0x2480, OK,  "Intel", "ICH3-S",			enable_flash_ich2345},
+	{0x8086, 0x248c, OK,  "Intel", "ICH3-M",			enable_flash_ich2345},
+	{0x8086, 0x24c0, OK,  "Intel", "ICH4/ICH4-L",			enable_flash_ich2345},
+	{0x8086, 0x24cc, OK,  "Intel", "ICH4-M",			enable_flash_ich2345},
+	{0x8086, 0x24d0, OK,  "Intel", "ICH5/ICH5R",			enable_flash_ich2345},
+	{0x8086, 0x25a1, OK,  "Intel", "6300ESB",			enable_flash_ich2345},
+	{0x8086, 0x2640, OK,  "Intel", "ICH6/ICH6R",			enable_flash_ich6},
+	{0x8086, 0x2641, OK,  "Intel", "ICH6-M",			enable_flash_ich6},
+	{0x8086, 0x2642, NT,  "Intel", "ICH6W/ICH6RW",			enable_flash_ich6},
+	{0x8086, 0x2670, OK,  "Intel", "631xESB/632xESB/3100",		enable_flash_ich6},
+	{0x8086, 0x27b0, OK,  "Intel", "ICH7DH",			enable_flash_ich7},
+	{0x8086, 0x27b8, OK,  "Intel", "ICH7/ICH7R",			enable_flash_ich7},
+	{0x8086, 0x27b9, OK,  "Intel", "ICH7M",				enable_flash_ich7},
+	{0x8086, 0x27bc, OK,  "Intel", "NM10",				enable_flash_ich7},
+	{0x8086, 0x27bd, OK,  "Intel", "ICH7MDH",			enable_flash_ich7},
+	{0x8086, 0x2810, DEP, "Intel", "ICH8/ICH8R",			enable_flash_ich8},
+	{0x8086, 0x2811, DEP, "Intel", "ICH8M-E",			enable_flash_ich8},
+	{0x8086, 0x2812, DEP, "Intel", "ICH8DH",			enable_flash_ich8},
+	{0x8086, 0x2814, DEP, "Intel", "ICH8DO",			enable_flash_ich8},
+	{0x8086, 0x2815, DEP, "Intel", "ICH8M",				enable_flash_ich8},
+	{0x8086, 0x2910, DEP, "Intel", "ICH9 Eng. Sample",		enable_flash_ich9},
+	{0x8086, 0x2912, DEP, "Intel", "ICH9DH",			enable_flash_ich9},
+	{0x8086, 0x2914, DEP, "Intel", "ICH9DO",			enable_flash_ich9},
+	{0x8086, 0x2916, DEP, "Intel", "ICH9R",				enable_flash_ich9},
+	{0x8086, 0x2917, DEP, "Intel", "ICH9M-E",			enable_flash_ich9},
+	{0x8086, 0x2918, DEP, "Intel", "ICH9",				enable_flash_ich9},
+	{0x8086, 0x2919, DEP, "Intel", "ICH9M",				enable_flash_ich9},
+	{0x8086, 0x3a10, NT,  "Intel", "ICH10R Eng. Sample",		enable_flash_ich10},
+	{0x8086, 0x3a14, DEP, "Intel", "ICH10DO",			enable_flash_ich10},
+	{0x8086, 0x3a16, DEP, "Intel", "ICH10R",			enable_flash_ich10},
+	{0x8086, 0x3a18, DEP, "Intel", "ICH10",				enable_flash_ich10},
+	{0x8086, 0x3a1a, DEP, "Intel", "ICH10D",			enable_flash_ich10},
+	{0x8086, 0x3a1e, NT,  "Intel", "ICH10 Eng. Sample",		enable_flash_ich10},
+	{0x8086, 0x3b00, NT,  "Intel", "3400 Desktop",			enable_flash_pch5},
+	{0x8086, 0x3b01, NT,  "Intel", "3400 Mobile",			enable_flash_pch5},
+	{0x8086, 0x3b02, NT,  "Intel", "P55",				enable_flash_pch5},
+	{0x8086, 0x3b03, NT,  "Intel", "PM55",				enable_flash_pch5},
+	{0x8086, 0x3b06, DEP, "Intel", "H55",				enable_flash_pch5},
+	{0x8086, 0x3b07, DEP, "Intel", "QM57",				enable_flash_pch5},
+	{0x8086, 0x3b08, NT,  "Intel", "H57",				enable_flash_pch5},
+	{0x8086, 0x3b09, NT,  "Intel", "HM55",				enable_flash_pch5},
+	{0x8086, 0x3b0a, NT,  "Intel", "Q57",				enable_flash_pch5},
+	{0x8086, 0x3b0b, NT,  "Intel", "HM57",				enable_flash_pch5},
+	{0x8086, 0x3b0d, NT,  "Intel", "3400 Mobile SFF",		enable_flash_pch5},
+	{0x8086, 0x3b0e, NT,  "Intel", "B55",				enable_flash_pch5},
+	{0x8086, 0x3b0f, DEP, "Intel", "QS57",				enable_flash_pch5},
+	{0x8086, 0x3b12, NT,  "Intel", "3400",				enable_flash_pch5},
+	{0x8086, 0x3b14, DEP, "Intel", "3420",				enable_flash_pch5},
+	{0x8086, 0x3b16, NT,  "Intel", "3450",				enable_flash_pch5},
+	{0x8086, 0x3b1e, NT,  "Intel", "B55",				enable_flash_pch5},
+	{0x8086, 0x5031, OK,  "Intel", "EP80579",			enable_flash_ich7},
+	{0x8086, 0x7000, OK,  "Intel", "PIIX3",				enable_flash_piix4},
+	{0x8086, 0x7110, OK,  "Intel", "PIIX4/4E/4M",			enable_flash_piix4},
+	{0x8086, 0x7198, OK,  "Intel", "440MX",				enable_flash_piix4},
+	{0x8086, 0x8119, OK,  "Intel", "SCH Poulsbo",			enable_flash_poulsbo},
+	{0x8086, 0x8186, OK,  "Intel", "Atom E6xx(T) (Tunnel Creek)",	enable_flash_tunnelcreek},
+	{0x8086, 0x8c40, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c41, NT,  "Intel", "Lynx Point Mobile Eng. Sample",	enable_flash_pch8},
+	{0x8086, 0x8c42, NT,  "Intel", "Lynx Point Desktop Eng. Sample",enable_flash_pch8},
+	{0x8086, 0x8c43, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c44, DEP, "Intel", "Z87",				enable_flash_pch8},
+	{0x8086, 0x8c45, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c46, NT,  "Intel", "Z85",				enable_flash_pch8},
+	{0x8086, 0x8c47, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c48, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c49, NT,  "Intel", "HM86",				enable_flash_pch8},
+	{0x8086, 0x8c4a, DEP, "Intel", "H87",				enable_flash_pch8},
+	{0x8086, 0x8c4b, DEP, "Intel", "HM87",				enable_flash_pch8},
+	{0x8086, 0x8c4c, NT,  "Intel", "Q85",				enable_flash_pch8},
+	{0x8086, 0x8c4d, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c4e, NT,  "Intel", "Q87",				enable_flash_pch8},
+	{0x8086, 0x8c4f, NT,  "Intel", "QM87",				enable_flash_pch8},
+	{0x8086, 0x8c50, DEP, "Intel", "B85",				enable_flash_pch8},
+	{0x8086, 0x8c51, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c52, NT,  "Intel", "C222",				enable_flash_pch8},
+	{0x8086, 0x8c53, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c54, NT,  "Intel", "C224",				enable_flash_pch8},
+	{0x8086, 0x8c55, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c56, NT,  "Intel", "C226",				enable_flash_pch8},
+	{0x8086, 0x8c57, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c58, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c59, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c5a, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c5b, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c5c, NT,  "Intel", "H81",				enable_flash_pch8},
+	{0x8086, 0x8c5d, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c5e, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8c5f, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x9c41, NT,  "Intel", "Lynx Point LP Eng. Sample",	enable_flash_pch8_lp},
+	{0x8086, 0x9c43, NT,  "Intel", "Lynx Point LP Premium",		enable_flash_pch8_lp},
+	{0x8086, 0x9c45, NT,  "Intel", "Lynx Point LP Mainstream",	enable_flash_pch8_lp},
+	{0x8086, 0x9c47, NT,  "Intel", "Lynx Point LP Value",		enable_flash_pch8_lp},
+ 	{0x8086, 0x8d40, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d41, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d42, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d43, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d44, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d45, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d46, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d47, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d48, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d49, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4a, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4b, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4c, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4d, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4e, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d4f, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d50, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d51, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d52, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d53, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d54, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d55, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d56, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d57, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d58, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d59, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5a, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5b, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5c, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5d, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5e, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+ 	{0x8086, 0x8d5f, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
+	{0x8086, 0x9cc1, NT,  "Intel", "Haswell U Sample",		enable_flash_pch9},
+	{0x8086, 0x9cc2, NT,  "Intel", "Broadwell U Sample",		enable_flash_pch9},
+	{0x8086, 0x9cc3, NT,  "Intel", "Broadwell U Premium",		enable_flash_pch9},
+	{0x8086, 0x9cc5, NT,  "Intel", "Broadwell U Base",		enable_flash_pch9},
+	{0x8086, 0x9cc6, NT,  "Intel", "Broadwell Y Sample",		enable_flash_pch9},
+	{0x8086, 0x9cc7, NT,  "Intel", "Broadwell Y Premium",		enable_flash_pch9},
+	{0x8086, 0x9cc9, NT,  "Intel", "Broadwell Y Base",		enable_flash_pch9},
+	{0x8086, 0x9ccb, NT,  "Intel", "Broadwell H",			enable_flash_pch9},
 #endif
 	{0},
 };

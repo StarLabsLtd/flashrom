@@ -108,10 +108,10 @@ static int it8716f_spi_send_command(struct flashctx *flash,
 				    unsigned char *readarr);
 static int it8716f_spi_chip_read(struct flashctx *flash, uint8_t *buf,
 				 unsigned int start, unsigned int len);
-static int it8716f_spi_chip_write_256(struct flashctx *flash, uint8_t *buf,
+static int it8716f_spi_chip_write_256(struct flashctx *flash, const uint8_t *buf,
 				      unsigned int start, unsigned int len);
 
-static const struct spi_programmer spi_programmer_it87xx = {
+static const struct spi_master spi_master_it87xx = {
 	.type		= SPI_CONTROLLER_IT87XX,
 	.max_data_read	= MAX_DATA_UNSPECIFIED,
 	.max_data_write	= MAX_DATA_UNSPECIFIED,
@@ -228,7 +228,7 @@ static uint16_t it87spi_probe(uint16_t port)
 	if (internal_buses_supported & BUS_SPI)
 		msg_pdbg("Overriding chipset SPI with IT87 SPI.\n");
 	/* FIXME: Add the SPI bus or replace the other buses with it? */
-	register_spi_programmer(&spi_programmer_it87xx);
+	register_spi_master(&spi_master_it87xx);
 	return 0;
 }
 
@@ -264,9 +264,8 @@ int init_superio_ite(void)
 			ret |= it87spi_probe(superios[i].port);
 			break;
 		default:
-			msg_pdbg("Super I/O ID 0x%04hx is not on the list of "
-				 "flash capable controllers.\n",
-				 superios[i].model);
+			msg_pdbg2("Super I/O ID 0x%04hx is not on the list of flash-capable controllers.\n",
+				  superios[i].model);
 		}
 	}
 	return ret;
@@ -348,8 +347,7 @@ static int it8716f_spi_send_command(struct flashctx *flash,
 }
 
 /* Page size is usually 256 bytes */
-static int it8716f_spi_page_program(struct flashctx *flash, uint8_t *buf,
-				    unsigned int start)
+static int it8716f_spi_page_program(struct flashctx *flash, const uint8_t *buf, unsigned int start)
 {
 	unsigned int i;
 	int result;
@@ -394,7 +392,7 @@ static int it8716f_spi_chip_read(struct flashctx *flash, uint8_t *buf,
 	return 0;
 }
 
-static int it8716f_spi_chip_write_256(struct flashctx *flash, uint8_t *buf,
+static int it8716f_spi_chip_write_256(struct flashctx *flash, const uint8_t *buf,
 				      unsigned int start, unsigned int len)
 {
 	const struct flashchip *chip = flash->chip;

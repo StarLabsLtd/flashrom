@@ -43,10 +43,10 @@ static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 				  unsigned char *rxbuf);
 static int linux_spi_read(struct flashctx *flash, uint8_t *buf,
 			  unsigned int start, unsigned int len);
-static int linux_spi_write_256(struct flashctx *flash, uint8_t *buf,
+static int linux_spi_write_256(struct flashctx *flash, const uint8_t *buf,
 			       unsigned int start, unsigned int len);
 
-static const struct spi_programmer spi_programmer_linux = {
+static const struct spi_master spi_master_linux = {
 	.type		= SPI_CONTROLLER_LINUX,
 	.max_data_read	= MAX_DATA_UNSPECIFIED, /* TODO? */
 	.max_data_write	= MAX_DATA_UNSPECIFIED, /* TODO? */
@@ -120,7 +120,7 @@ int linux_spi_init(void)
 		return 1;
 	}
 
-	register_spi_programmer(&spi_programmer_linux);
+	register_spi_master(&spi_master_linux);
 
 	return 0;
 }
@@ -142,11 +142,11 @@ static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 	int iocontrol_code;
 	struct spi_ioc_transfer msg[2] = {
 		{
-			.tx_buf = (uint64_t)(ptrdiff_t)txbuf,
+			.tx_buf = (uint64_t)(uintptr_t)txbuf,
 			.len = writecnt,
 		},
 		{
-			.rx_buf = (uint64_t)(ptrdiff_t)rxbuf,
+			.rx_buf = (uint64_t)(uintptr_t)rxbuf,
 			.len = readcnt,
 		},
 	};
@@ -179,8 +179,7 @@ static int linux_spi_read(struct flashctx *flash, uint8_t *buf,
 				(unsigned int)getpagesize());
 }
 
-static int linux_spi_write_256(struct flashctx *flash, uint8_t *buf,
-			       unsigned int start, unsigned int len)
+static int linux_spi_write_256(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len)
 {
 	return spi_write_chunked(flash, buf, start, len,
 				((unsigned int)getpagesize()) - 4);

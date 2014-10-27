@@ -69,8 +69,8 @@ const struct dev_entry devs_ft2232spi[] = {
 	{FIC_VID, OPENMOKO_DBGBOARD_PID, OK, "FIC", "OpenMoko Neo1973 Debug board (V2+)"},
 	{OLIMEX_VID, OLIMEX_ARM_OCD_PID, NT, "Olimex", "ARM-USB-OCD"},
 	{OLIMEX_VID, OLIMEX_ARM_TINY_PID, OK, "Olimex", "ARM-USB-TINY"},
-	{OLIMEX_VID, OLIMEX_ARM_OCD_H_PID, NT, "Olimex", "ARM-USB-OCD-H"},
-	{OLIMEX_VID, OLIMEX_ARM_TINY_H_PID, NT, "Olimex", "ARM-USB-TINY-H"},
+	{OLIMEX_VID, OLIMEX_ARM_OCD_H_PID, OK, "Olimex", "ARM-USB-OCD-H"},
+	{OLIMEX_VID, OLIMEX_ARM_TINY_H_PID, OK, "Olimex", "ARM-USB-TINY-H"},
 
 	{0},
 };
@@ -146,7 +146,7 @@ static int ft2232_spi_send_command(struct flashctx *flash,
 				   const unsigned char *writearr,
 				   unsigned char *readarr);
 
-static const struct spi_programmer spi_programmer_ft2232 = {
+static const struct spi_master spi_master_ft2232 = {
 	.type		= SPI_CONTROLLER_FT2232,
 	.max_data_read	= 64 * 1024,
 	.max_data_write	= 256,
@@ -389,7 +389,7 @@ int ft2232_spi_init(void)
 		goto ftdi_err;
 	}
 
-	register_spi_programmer(&spi_programmer_ft2232);
+	register_spi_master(&spi_master_ft2232);
 
 	return 0;
 

@@ -1,3 +1,16 @@
+flashrom (0.9.7+r1852-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Standards-Version: 3.9.6 (no changes required).
+  * Use 'Architecture: any', flashrom should build/work pretty much everywhere.
+  * debian/patches:
+      + 10_disable_linuxspi.patch: Drop.
+      + 20_svn_version.patch: Update.
+  * Shorten dmidecode 'Recommends' to [any-i386 any-amd64 ia64 armhf].
+  * Add missing upstream ChangeLog file (via "svn log").
+
+ -- Uwe Hermann <uwe@debian.org>  Mon, 27 Oct 2014 21:20:52 +0100
+
 flashrom (0.9.7+r1782-1) unstable; urgency=high
 
   * New upstream release (Closes: #746734, #690478).

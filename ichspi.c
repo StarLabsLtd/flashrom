@@ -612,7 +612,8 @@ static void ich_set_bbar(uint32_t min_addr)
 		bbar_off = 0x50;
 		break;
 	case CHIPSET_ICH8:
-		msg_perr("BBAR offset is unknown on ICH8!\n");
+	case CHIPSET_BAYTRAIL:
+		msg_pdbg("BBAR offset is unknown!\n");
 		return;
 	case CHIPSET_ICH9:
 	default:		/* Future version might behave the same */
@@ -640,7 +641,7 @@ static void ich_set_bbar(uint32_t min_addr)
 
 /* Read len bytes from the fdata/spid register into the data array.
  *
- * Note that using len > flash->pgm->spi.max_data_read will return garbage or
+ * Note that using len > flash->mst->spi.max_data_read will return garbage or
  * may even crash.
  */
 static void ich_read_data(uint8_t *data, int len, int reg0_off)
@@ -658,7 +659,7 @@ static void ich_read_data(uint8_t *data, int len, int reg0_off)
 
 /* Fill len bytes from the data array into the fdata/spid registers.
  *
- * Note that using len > flash->pgm->spi.max_data_write will trash the registers
+ * Note that using len > flash->mst->spi.max_data_write will trash the registers
  * following the data registers.
  */
 static void ich_fill_data(const uint8_t *data, int len, int reg0_off)
@@ -965,7 +966,7 @@ static int run_opcode(const struct flashctx *flash, OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data)
 {
 	/* max_data_read == max_data_write for all Intel/VIA SPI masters */
-	uint8_t maxlength = flash->pgm->spi.max_data_read;
+	uint8_t maxlength = flash->mst->spi.max_data_read;
 
 	if (ich_generation == CHIPSET_ICH_UNKNOWN) {
 		msg_perr("%s: unsupported chipset\n", __func__);
@@ -1272,6 +1273,7 @@ static int ich_hwseq_block_erase(struct flashctx *flash, unsigned int addr,
 	}
 
 	msg_pdbg("Erasing %d bytes starting at 0x%06x.\n", len, addr);
+	ich_hwseq_set_addr(addr);
 
 	/* make sure FDONE, FCERR, AEL are cleared by writing 1 to them */
 	REGWRITE16(ICH9_REG_HSFS, REGREAD16(ICH9_REG_HSFS));
@@ -1307,7 +1309,11 @@ static int ich_hwseq_read(struct flashctx *flash, uint8_t *buf,
 	REGWRITE16(ICH9_REG_HSFS, REGREAD16(ICH9_REG_HSFS));
 
 	while (len > 0) {
-		block_len = min(len, flash->pgm->opaque.max_data_read);
+		/* Obey programmer limit... */
+		block_len = min(len, flash->mst->opaque.max_data_read);
+		/* as well as flash chip page borders as demanded in the Intel datasheets. */
+		block_len = min(block_len, 256 - (addr & 0xFF));
+
 		ich_hwseq_set_addr(addr);
 		hsfc = REGREAD16(ICH9_REG_HSFC);
 		hsfc &= ~HSFC_FCYCLE; /* set read operation */
@@ -1327,8 +1333,7 @@ static int ich_hwseq_read(struct flashctx *flash, uint8_t *buf,
 	return 0;
 }
 
-static int ich_hwseq_write(struct flashctx *flash, uint8_t *buf,
-			   unsigned int addr, unsigned int len)
+static int ich_hwseq_write(struct flashctx *flash, const uint8_t *buf, unsigned int addr, unsigned int len)
 {
 	uint16_t hsfc;
 	uint16_t timeout = 100 * 60;
@@ -1346,7 +1351,10 @@ static int ich_hwseq_write(struct flashctx *flash, uint8_t *buf,
 
 	while (len > 0) {
 		ich_hwseq_set_addr(addr);
-		block_len = min(len, flash->pgm->opaque.max_data_write);
+		/* Obey programmer limit... */
+		block_len = min(len, flash->mst->opaque.max_data_write);
+		/* as well as flash chip page borders as demanded in the Intel datasheets. */
+		block_len = min(block_len, 256 - (addr & 0xFF));
 		ich_fill_data(buf, block_len, ICH9_REG_FDATA0);
 		hsfc = REGREAD16(ICH9_REG_HSFC);
 		hsfc &= ~HSFC_FCYCLE; /* clear operation */
@@ -1522,7 +1530,7 @@ static void ich9_set_pr(int i, int read_prot, int write_prot)
 	msg_gspew("resulted in 0x%08x.\n", mmio_readl(addr));
 }
 
-static const struct spi_programmer spi_programmer_ich7 = {
+static const struct spi_master spi_master_ich7 = {
 	.type = SPI_CONTROLLER_ICH7,
 	.max_data_read = 64,
 	.max_data_write = 64,
@@ -1533,7 +1541,7 @@ static const struct spi_programmer spi_programmer_ich7 = {
 	.write_aai = default_spi_write_aai,
 };
 
-static const struct spi_programmer spi_programmer_ich9 = {
+static const struct spi_master spi_master_ich9 = {
 	.type = SPI_CONTROLLER_ICH9,
 	.max_data_read = 64,
 	.max_data_write = 64,
@@ -1544,7 +1552,7 @@ static const struct spi_programmer spi_programmer_ich9 = {
 	.write_aai = default_spi_write_aai,
 };
 
-static const struct opaque_programmer opaque_programmer_ich_hwseq = {
+static const struct opaque_master opaque_master_ich_hwseq = {
 	.max_data_read = 64,
 	.max_data_write = 64,
 	.probe = ich_hwseq_probe,
@@ -1605,7 +1613,7 @@ int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_gen)
 		}
 		ich_init_opcodes();
 		ich_set_bbar(0);
-		register_spi_programmer(&spi_programmer_ich7);
+		register_spi_master(&spi_master_ich7);
 		break;
 	case CHIPSET_ICH8:
 	default:		/* Future version might behave the same */
@@ -1730,35 +1738,35 @@ int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_gen)
 			tmp = mmio_readl(ich_spibar + ICH8_REG_VSCC);
 			msg_pdbg("0xC1: 0x%08x (VSCC)\n", tmp);
 			msg_pdbg("VSCC: ");
-			prettyprint_ich_reg_vscc(tmp, MSG_DEBUG);
+			prettyprint_ich_reg_vscc(tmp, MSG_DEBUG, true);
 		} else {
-			ichspi_bbar = mmio_readl(ich_spibar + ICH9_REG_BBAR);
-			msg_pdbg("0xA0: 0x%08x (BBAR)\n",
-				     ichspi_bbar);
+			if (ich_generation != CHIPSET_BAYTRAIL && desc_valid) {
+				ichspi_bbar = mmio_readl(ich_spibar + ICH9_REG_BBAR);
+				msg_pdbg("0xA0: 0x%08x (BBAR)\n",
+					     ichspi_bbar);
+				ich_set_bbar(0);
+			}
 
 			if (desc_valid) {
 				tmp = mmio_readl(ich_spibar + ICH9_REG_LVSCC);
 				msg_pdbg("0xC4: 0x%08x (LVSCC)\n", tmp);
 				msg_pdbg("LVSCC: ");
-				prettyprint_ich_reg_vscc(tmp, MSG_DEBUG);
+				prettyprint_ich_reg_vscc(tmp, MSG_DEBUG, true);
 
 				tmp = mmio_readl(ich_spibar + ICH9_REG_UVSCC);
 				msg_pdbg("0xC8: 0x%08x (UVSCC)\n", tmp);
 				msg_pdbg("UVSCC: ");
-				prettyprint_ich_reg_vscc(tmp, MSG_DEBUG);
+				prettyprint_ich_reg_vscc(tmp, MSG_DEBUG, false);
 
 				tmp = mmio_readl(ich_spibar + ICH9_REG_FPB);
 				msg_pdbg("0xD0: 0x%08x (FPB)\n", tmp);
 			}
-			ich_set_bbar(0);
 		}
 
-		msg_pdbg("\n");
 		if (desc_valid) {
-			if (read_ich_descriptors_via_fdo(ich_spibar, &desc) ==
-			    ICH_RET_OK)
-				prettyprint_ich_descriptors(CHIPSET_ICH_UNKNOWN,
-							    &desc);
+			if (read_ich_descriptors_via_fdo(ich_spibar, &desc) == ICH_RET_OK)
+				prettyprint_ich_descriptors(ich_gen, &desc);
+
 			/* If the descriptor is valid and indicates multiple
 			 * flash devices we need to use hwseq to be able to
 			 * access the second flash device.
@@ -1784,11 +1792,24 @@ int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_gen)
 					 "valid. Aborting.\n");
 				return ERROR_FATAL;
 			}
-			hwseq_data.size_comp0 = getFCBA_component_density(&desc, 0);
-			hwseq_data.size_comp1 = getFCBA_component_density(&desc, 1);
-			register_opaque_programmer(&opaque_programmer_ich_hwseq);
+
+			int tmpi = getFCBA_component_density(ich_generation, &desc, 0);
+			if (tmpi < 0) {
+				msg_perr("Could not determine density of flash component %d.\n", 0);
+				return ERROR_FATAL;
+			}
+			hwseq_data.size_comp0 = tmpi;
+
+			tmpi = getFCBA_component_density(ich_generation, &desc, 1);
+			if (tmpi < 0) {
+				msg_perr("Could not determine density of flash component %d.\n", 1);
+				return ERROR_FATAL;
+			}
+			hwseq_data.size_comp1 = tmpi;
+
+			register_opaque_master(&opaque_master_ich_hwseq);
 		} else {
-			register_spi_programmer(&spi_programmer_ich9);
+			register_spi_master(&spi_master_ich9);
 		}
 		break;
 	}
@@ -1796,7 +1817,7 @@ int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_gen)
 	return 0;
 }
 
-static const struct spi_programmer spi_programmer_via = {
+static const struct spi_master spi_master_via = {
 	.type = SPI_CONTROLLER_VIA,
 	.max_data_read = 16,
 	.max_data_write = 16,
@@ -1819,7 +1840,7 @@ int via_init_spi(struct pci_dev *dev, uint32_t mmio_base)
 	/* Not sure if it speaks all these bus protocols. */
 	internal_buses_supported = BUS_LPC | BUS_FWH;
 	ich_generation = CHIPSET_ICH7;
-	register_spi_programmer(&spi_programmer_via);
+	register_spi_master(&spi_master_via);
 
 	msg_pdbg("0x00: 0x%04x     (SPIS)\n", mmio_readw(ich_spibar + 0));
 	msg_pdbg("0x02: 0x%04x     (SPIC)\n", mmio_readw(ich_spibar + 2));

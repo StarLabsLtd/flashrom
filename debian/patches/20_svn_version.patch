@@ -9,7 +9,7 @@ Index: a/Makefile
  # Note to packagers: Any tree exported with "make export" or "make tarball"
  # will not require subversion. The downloadable snapshots are already exported.
 -SVNVERSION := $(shell ./util/getrevision.sh -u)
-+SVNVERSION := r1782
++SVNVERSION := r1852
  
  RELEASE := 0.9.7
  VERSION := $(RELEASE)-$(SVNVERSION)
