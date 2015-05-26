@@ -1,0 +1,15 @@
+Set the svn revision (shows up in 'flashrom -R' output).
+
+Index: a/Makefile
+===================================================================
+--- a/Makefile	2014-05-03 18:31:37.000000000 +0200
++++ b/Makefile	2014-05-03 18:32:35.000000000 +0200
+@@ -348,7 +348,7 @@
+ # Set the flashrom version string from the highest revision number of the checked out flashrom files.
+ # Note to packagers: Any tree exported with "make export" or "make tarball"
+ # will not require subversion. The downloadable snapshots are already exported.
+-SVNVERSION := $(shell ./util/getrevision.sh -u)
++SVNVERSION := r1782
+ 
+ RELEASE := 0.9.7
+ VERSION := $(RELEASE)-$(SVNVERSION)

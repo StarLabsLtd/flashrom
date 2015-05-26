@@ -20,8 +20,6 @@
 
 /* Datasheets can be found on http://www.siliconimage.com. Great thanks! */
 
-#include <stdlib.h>
-#include "flash.h"
 #include "programmer.h"
 #include "hwaccess.h"
 
@@ -29,10 +27,10 @@
 
 #define SATASII_MEMMAP_SIZE	0x100
 
-uint8_t *sii_bar;
+static uint8_t *sii_bar;
 static uint16_t id;
 
-const struct pcidev_status satas_sii[] = {
+const struct dev_entry satas_sii[] = {
 	{0x1095, 0x0680, OK, "Silicon Image", "PCI0680 Ultra ATA-133 Host Ctrl"},
 	{0x1095, 0x3112, OK, "Silicon Image", "SiI 3112 [SATALink/SATARaid] SATA Ctrl"},
 	{0x1095, 0x3114, OK, "Silicon Image", "SiI 3114 [SATALink/SATARaid] SATA Ctrl"},
@@ -40,13 +38,11 @@ const struct pcidev_status satas_sii[] = {
 	{0x1095, 0x3132, OK, "Silicon Image", "SiI 3132 SATA Raid II Ctrl"},
 	{0x1095, 0x3512, OK, "Silicon Image", "SiI 3512 [SATALink/SATARaid] SATA Ctrl"},
 
-	{},
+	{0},
 };
 
-static void satasii_chip_writeb(const struct flashctx *flash, uint8_t val,
-				chipaddr addr);
-static uint8_t satasii_chip_readb(const struct flashctx *flash,
-				  const chipaddr addr);
+static void satasii_chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr);
+static uint8_t satasii_chip_readb(const struct flashctx *flash, const chipaddr addr);
 static const struct par_programmer par_programmer_satasii = {
 		.chip_readb		= satasii_chip_readb,
 		.chip_readw		= fallback_chip_readw,
@@ -58,54 +54,65 @@ static const struct par_programmer par_programmer_satasii = {
 		.chip_writen		= fallback_chip_writen,
 };
 
-static int satasii_shutdown(void *data)
+static uint32_t satasii_wait_done(void)
 {
-	physunmap(sii_bar, SATASII_MEMMAP_SIZE);
-	pci_cleanup(pacc);
-	return 0;
+	uint32_t ctrl_reg;
+	int i = 0;
+	while ((ctrl_reg = pci_mmio_readl(sii_bar)) & (1 << 25)) {
+		if (++i > 10000) {
+			msg_perr("%s: control register stuck at %08x, ignoring.\n",
+				 __func__, pci_mmio_readl(sii_bar));
+			break;
+		}
+	}
+	return ctrl_reg;
 }
 
 int satasii_init(void)
 {
+	struct pci_dev *dev = NULL;
 	uint32_t addr;
 	uint16_t reg_offset;
 
 	if (rget_io_perms())
 		return 1;
 
-	pcidev_init(PCI_BASE_ADDRESS_0, satas_sii);
+	dev = pcidev_init(satas_sii, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
 
-	id = pcidev_dev->device_id;
+	id = dev->device_id;
 
 	if ((id == 0x3132) || (id == 0x3124)) {
-		addr = pci_read_long(pcidev_dev, PCI_BASE_ADDRESS_0) & ~0x07;
+		addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+		if (!addr)
+			return 1;
 		reg_offset = 0x70;
 	} else {
-		addr = pci_read_long(pcidev_dev, PCI_BASE_ADDRESS_5) & ~0x07;
+		addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_5);
+		if (!addr)
+			return 1;
 		reg_offset = 0x50;
 	}
 
-	sii_bar = physmap("SATA SIL registers", addr, SATASII_MEMMAP_SIZE) +
-		  reg_offset;
+	sii_bar = rphysmap("SATA SiI registers", addr, SATASII_MEMMAP_SIZE);
+	if (sii_bar == ERROR_PTR)
+		return 1;
+	sii_bar += reg_offset;
 
 	/* Check if ROM cycle are OK. */
 	if ((id != 0x0680) && (!(pci_mmio_readl(sii_bar) & (1 << 26))))
-		msg_pinfo("Warning: Flash seems unconnected.\n");
-
-	if (register_shutdown(satasii_shutdown, NULL))
-		return 1;
+		msg_pwarn("Warning: Flash seems unconnected.\n");
 
 	register_par_programmer(&par_programmer_satasii, BUS_PARALLEL);
 
 	return 0;
 }
 
-static void satasii_chip_writeb(const struct flashctx *flash, uint8_t val,
-				chipaddr addr)
+static void satasii_chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr)
 {
-	uint32_t ctrl_reg, data_reg;
-
-	while ((ctrl_reg = pci_mmio_readl(sii_bar)) & (1 << 25)) ;
+	uint32_t data_reg;
+	uint32_t ctrl_reg = satasii_wait_done();
 
 	/* Mask out unused/reserved bits, set writes and start transaction. */
 	ctrl_reg &= 0xfcf80000;
@@ -115,15 +122,12 @@ static void satasii_chip_writeb(const struct flashctx *flash, uint8_t val,
 	pci_mmio_writel(data_reg, (sii_bar + 4));
 	pci_mmio_writel(ctrl_reg, sii_bar);
 
-	while (pci_mmio_readl(sii_bar) & (1 << 25)) ;
+	satasii_wait_done();
 }
 
-static uint8_t satasii_chip_readb(const struct flashctx *flash,
-				  const chipaddr addr)
+static uint8_t satasii_chip_readb(const struct flashctx *flash, const chipaddr addr)
 {
-	uint32_t ctrl_reg;
-
-	while ((ctrl_reg = pci_mmio_readl(sii_bar)) & (1 << 25)) ;
+	uint32_t ctrl_reg = satasii_wait_done();
 
 	/* Mask out unused/reserved bits, set reads and start transaction. */
 	ctrl_reg &= 0xfcf80000;
@@ -131,7 +135,7 @@ static uint8_t satasii_chip_readb(const struct flashctx *flash,
 
 	pci_mmio_writel(ctrl_reg, sii_bar);
 
-	while (pci_mmio_readl(sii_bar) & (1 << 25)) ;
+	satasii_wait_done();
 
 	return (pci_mmio_readl(sii_bar + 4)) & 0xff;
 }

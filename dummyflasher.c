@@ -66,7 +66,7 @@ int spi_ignorelist_size = 0;
 static uint8_t emu_status = 0;
 
 /* A legit complete SFDP table based on the MX25L6436E (rev. 1.8) datasheet. */
-static const uint8_t const sfdp_table[] = {
+static const uint8_t sfdp_table[] = {
 	0x53, 0x46, 0x44, 0x50, // @0x00: SFDP signature
 	0x00, 0x01, 0x01, 0xFF, // @0x04: revision 1.0, 2 headers
 	0x00, 0x00, 0x01, 0x09, // @0x08: JEDEC SFDP header rev. 1.0, 9 DW long
@@ -150,8 +150,9 @@ static int dummy_shutdown(void *data)
 	if (emu_chip != EMULATE_NONE) {
 		if (emu_persistent_image) {
 			msg_pdbg("Writing %s\n", emu_persistent_image);
-			write_buf_to_file(flashchip_contents, emu_chip_size,
-					  emu_persistent_image);
+			write_buf_to_file(flashchip_contents, emu_chip_size, emu_persistent_image);
+			free(emu_persistent_image);
+			emu_persistent_image = NULL;
 		}
 		free(flashchip_contents);
 	}
@@ -411,43 +412,41 @@ dummy_init_out:
 	return 0;
 }
 
-void *dummy_map(const char *descr, unsigned long phys_addr, size_t len)
+void *dummy_map(const char *descr, uintptr_t phys_addr, size_t len)
 {
-	msg_pspew("%s: Mapping %s, 0x%lx bytes at 0x%08lx\n",
-		  __func__, descr, (unsigned long)len, phys_addr);
+	msg_pspew("%s: Mapping %s, 0x%zx bytes at 0x%*" PRIxPTR "\n",
+		  __func__, descr, len, PRIxPTR_WIDTH, phys_addr);
 	return (void *)phys_addr;
 }
 
 void dummy_unmap(void *virt_addr, size_t len)
 {
-	msg_pspew("%s: Unmapping 0x%lx bytes at %p\n",
-		  __func__, (unsigned long)len, virt_addr);
+	msg_pspew("%s: Unmapping 0x%zx bytes at %p\n", __func__, len, virt_addr);
 }
 
 static void dummy_chip_writeb(const struct flashctx *flash, uint8_t val,
 			      chipaddr addr)
 {
-	msg_pspew("%s: addr=0x%lx, val=0x%02x\n", __func__, addr, val);
+	msg_pspew("%s: addr=0x%" PRIxPTR ", val=0x%02x\n", __func__, addr, val);
 }
 
 static void dummy_chip_writew(const struct flashctx *flash, uint16_t val,
 			      chipaddr addr)
 {
-	msg_pspew("%s: addr=0x%lx, val=0x%04x\n", __func__, addr, val);
+	msg_pspew("%s: addr=0x%" PRIxPTR ", val=0x%04x\n", __func__, addr, val);
 }
 
 static void dummy_chip_writel(const struct flashctx *flash, uint32_t val,
 			      chipaddr addr)
 {
-	msg_pspew("%s: addr=0x%lx, val=0x%08x\n", __func__, addr, val);
+	msg_pspew("%s: addr=0x%" PRIxPTR ", val=0x%08x\n", __func__, addr, val);
 }
 
 static void dummy_chip_writen(const struct flashctx *flash, uint8_t *buf,
 			      chipaddr addr, size_t len)
 {
 	size_t i;
-	msg_pspew("%s: addr=0x%lx, len=0x%08lx, writing data (hex):",
-		  __func__, addr, (unsigned long)len);
+	msg_pspew("%s: addr=0x%" PRIxPTR ", len=0x%zx, writing data (hex):", __func__, addr, len);
 	for (i = 0; i < len; i++) {
 		if ((i % 16) == 0)
 			msg_pspew("\n");
@@ -458,29 +457,28 @@ static void dummy_chip_writen(const struct flashctx *flash, uint8_t *buf,
 static uint8_t dummy_chip_readb(const struct flashctx *flash,
 				const chipaddr addr)
 {
-	msg_pspew("%s:  addr=0x%lx, returning 0xff\n", __func__, addr);
+	msg_pspew("%s:  addr=0x%" PRIxPTR ", returning 0xff\n", __func__, addr);
 	return 0xff;
 }
 
 static uint16_t dummy_chip_readw(const struct flashctx *flash,
 				 const chipaddr addr)
 {
-	msg_pspew("%s:  addr=0x%lx, returning 0xffff\n", __func__, addr);
+	msg_pspew("%s:  addr=0x%" PRIxPTR ", returning 0xffff\n", __func__, addr);
 	return 0xffff;
 }
 
 static uint32_t dummy_chip_readl(const struct flashctx *flash,
 				 const chipaddr addr)
 {
-	msg_pspew("%s:  addr=0x%lx, returning 0xffffffff\n", __func__, addr);
+	msg_pspew("%s:  addr=0x%" PRIxPTR ", returning 0xffffffff\n", __func__, addr);
 	return 0xffffffff;
 }
 
 static void dummy_chip_readn(const struct flashctx *flash, uint8_t *buf,
 			     const chipaddr addr, size_t len)
 {
-	msg_pspew("%s:  addr=0x%lx, len=0x%lx, returning array of 0xff\n",
-		  __func__, addr, (unsigned long)len);
+	msg_pspew("%s:  addr=0x%" PRIxPTR ", len=0x%zx, returning array of 0xff\n", __func__, addr, len);
 	memset(buf, 0xff, len);
 	return;
 }
@@ -493,6 +491,9 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 {
 	unsigned int offs, i, toread;
 	static int unsigned aai_offs;
+	const unsigned char sst25vf040_rems_response[2] = {0xbf, 0x44};
+	const unsigned char sst25vf032b_rems_response[2] = {0xbf, 0x4a};
+	const unsigned char mx25l6436_rems_response[2] = {0xc2, 0x16};
 
 	if (writecnt == 0) {
 		msg_perr("No command sent to the chip!\n");
@@ -529,20 +530,54 @@ static int emulate_spi_chip_response(unsigned int writecnt,
 
 	switch (writearr[0]) {
 	case JEDEC_RES:
-		if (emu_chip != EMULATE_ST_M25P10_RES)
+		if (writecnt < JEDEC_RES_OUTSIZE)
 			break;
-		/* Respond with ST_M25P10_RES. */
-		if (readcnt > 0)
-			readarr[0] = 0x10;
+		/* offs calculation is only needed for SST chips which treat RES like REMS. */
+		offs = writearr[1] << 16 | writearr[2] << 8 | writearr[3];
+		offs += writecnt - JEDEC_REMS_OUTSIZE;
+		switch (emu_chip) {
+		case EMULATE_ST_M25P10_RES:
+			if (readcnt > 0)
+				memset(readarr, 0x10, readcnt);
+			break;
+		case EMULATE_SST_SST25VF040_REMS:
+			for (i = 0; i < readcnt; i++)
+				readarr[i] = sst25vf040_rems_response[(offs + i) % 2];
+			break;
+		case EMULATE_SST_SST25VF032B:
+			for (i = 0; i < readcnt; i++)
+				readarr[i] = sst25vf032b_rems_response[(offs + i) % 2];
+			break;
+		case EMULATE_MACRONIX_MX25L6436:
+			if (readcnt > 0)
+				memset(readarr, 0x16, readcnt);
+			break;
+		default: /* ignore */
+			break;
+		}
 		break;
 	case JEDEC_REMS:
-		if (emu_chip != EMULATE_SST_SST25VF040_REMS)
+		/* REMS response has wraparound and uses an address parameter. */
+		if (writecnt < JEDEC_REMS_OUTSIZE)
 			break;
-		/* Respond with SST_SST25VF040_REMS. */
-		if (readcnt > 0)
-			readarr[0] = 0xbf;
-		if (readcnt > 1)
-			readarr[1] = 0x44;
+		offs = writearr[1] << 16 | writearr[2] << 8 | writearr[3];
+		offs += writecnt - JEDEC_REMS_OUTSIZE;
+		switch (emu_chip) {
+		case EMULATE_SST_SST25VF040_REMS:
+			for (i = 0; i < readcnt; i++)
+				readarr[i] = sst25vf040_rems_response[(offs + i) % 2];
+			break;
+		case EMULATE_SST_SST25VF032B:
+			for (i = 0; i < readcnt; i++)
+				readarr[i] = sst25vf032b_rems_response[(offs + i) % 2];
+			break;
+		case EMULATE_MACRONIX_MX25L6436:
+			for (i = 0; i < readcnt; i++)
+				readarr[i] = mx25l6436_rems_response[(offs + i) % 2];
+			break;
+		default: /* ignore */
+			break;
+		}
 		break;
 	case JEDEC_RDID:
 		switch (emu_chip) {

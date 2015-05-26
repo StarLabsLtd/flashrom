@@ -19,6 +19,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
+#include <errno.h>
 #include <usb.h>
 #include "flash.h"
 #include "chipdrivers.h"
@@ -46,7 +48,8 @@ static void print_hex(void *buf, size_t len)
 #endif
 
 /* Might be useful for other USB devices as well. static for now. */
-static struct usb_device *get_device_by_vid_pid(uint16_t vid, uint16_t pid)
+/* device parameter allows user to specify one device of multiple installed */
+static struct usb_device *get_device_by_vid_pid(uint16_t vid, uint16_t pid, unsigned int device)
 {
 	struct usb_bus *bus;
 	struct usb_device *dev;
@@ -54,8 +57,11 @@ static struct usb_device *get_device_by_vid_pid(uint16_t vid, uint16_t pid)
 	for (bus = usb_get_busses(); bus; bus = bus->next)
 		for (dev = bus->devices; dev; dev = dev->next)
 			if ((dev->descriptor.idVendor == vid) &&
-			    (dev->descriptor.idProduct == pid))
-				return dev;
+			    (dev->descriptor.idProduct == pid)) {
+				if (device == 0)
+					return dev;
+				device--;
+			}
 
 	return NULL;
 }
@@ -152,7 +158,23 @@ static int dediprog_set_spi_voltage(int millivolt)
 	return 0;
 }
 
-#if 0
+struct dediprog_spispeeds {
+	const char *const name;
+	const int speed;
+};
+
+static const struct dediprog_spispeeds spispeeds[] = {
+	{ "24M",	0x0 },
+	{ "12M",	0x2 },
+	{ "8M",		0x1 },
+	{ "3M",		0x3 },
+	{ "2.18M",	0x4 },
+	{ "1.5M",	0x5 },
+	{ "750k",	0x6 },
+	{ "375k",	0x7 },
+	{ NULL,		0x0 },
+};
+
 /* After dediprog_set_spi_speed, the original app always calls
  * dediprog_set_spi_voltage(0) and then
  * dediprog_check_devicestring() four times in a row.
@@ -160,56 +182,23 @@ static int dediprog_set_spi_voltage(int millivolt)
  * This looks suspiciously like the microprocessor in the SF100 has to be
  * restarted/reinitialized in case the speed changes.
  */
-static int dediprog_set_spi_speed(uint16_t speed)
+static int dediprog_set_spi_speed(unsigned int spispeed_idx)
 {
-	int ret;
-	unsigned int khz;
-
-	/* Case 1 and 2 are in weird order. Probably an organically "grown"
-	 * interface.
-	 * Base frequency is 24000 kHz, divisors are (in order)
-	 * 1, 3, 2, 8, 11, 16, 32, 64.
-	 */
-	switch (speed) {
-	case 0x0:
-		khz = 24000;
-		break;
-	case 0x1:
-		khz = 8000;
-		break;
-	case 0x2:
-		khz = 12000;
-		break;
-	case 0x3:
-		khz = 3000;
-		break;
-	case 0x4:
-		khz = 2180;
-		break;
-	case 0x5:
-		khz = 1500;
-		break;
-	case 0x6:
-		khz = 750;
-		break;
-	case 0x7:
-		khz = 375;
-		break;
-	default:
-		msg_perr("Unknown frequency selector 0x%x! Aborting.\n", speed);
-		return 1;
+	if (dediprog_firmwareversion < FIRMWARE_VERSION(5, 0, 0)) {
+		msg_pwarn("Skipping to set SPI speed because firmware is too old.\n");
+		return 0;
 	}
-	msg_pdbg("Setting SPI speed to %u kHz\n", khz);
 
-	ret = usb_control_msg(dediprog_handle, 0x42, 0x61, speed, 0xff, NULL,
-			      0x0, DEFAULT_TIMEOUT);
+	msg_pdbg("SPI speed is %s Hz\n", spispeeds[spispeed_idx].name);
+
+	int ret = usb_control_msg(dediprog_handle, 0x42, 0x61, spispeeds[spispeed_idx].speed, 0xff,
+				  NULL, 0x0, DEFAULT_TIMEOUT);
 	if (ret != 0x0) {
-		msg_perr("Command Set SPI Speed 0x%x failed!\n", speed);
+		msg_perr("Command Set SPI Speed 0x%x failed!\n", spispeeds[spispeed_idx].speed);
 		return 1;
 	}
 	return 0;
 }
-#endif
 
 /* Bulk read interface, will read multiple 512 byte chunks aligned to 512 bytes.
  * @start	start address
@@ -381,7 +370,7 @@ static int dediprog_spi_write(struct flashctx *flash, uint8_t *buf,
 			      unsigned int start, unsigned int len, uint8_t dedi_spi_cmd)
 {
 	int ret;
-	const unsigned int chunksize = flash->page_size;
+	const unsigned int chunksize = flash->chip->page_size;
 	unsigned int residue = start % chunksize ? chunksize - start % chunksize : 0;
 	unsigned int bulklen;
 
@@ -574,19 +563,22 @@ static int dediprog_command_b(void)
 }
 #endif
 
-/* Command C is only sent after dediprog_check_devicestring, but not after every
+/* Command Chip Select is only sent after dediprog_check_devicestring, but not after every
  * invocation of dediprog_check_devicestring. It is only sent after the first
  * dediprog_command_a(); dediprog_check_devicestring() sequence in each session.
- * I'm tempted to call this one start_SPI_engine or finish_init.
+ * Bit #1 of the value changes the chip select: 0 is target 1, 1 is target 2 and parameter target can be 1 or 2
+ * respectively. We don't know how to encode "3, Socket" and "0, reference card" yet. On SF100 the vendor
+ * software "DpCmd 6.0.4.06" selects target 2 when requesting 3 (which is unavailable on that hardware).
  */
-static int dediprog_command_c(void)
+static int dediprog_chip_select(int target)
 {
 	int ret;
-
-	ret = usb_control_msg(dediprog_handle, 0x42, 0x4, 0x0, 0x0, NULL,
+	uint16_t value = ((target - 1) & 1) << 1;
+	msg_pdbg("Selecting target chip %i\n", target);
+	ret = usb_control_msg(dediprog_handle, 0x42, 0x4, value, 0x0, NULL,
 			      0x0, DEFAULT_TIMEOUT);
 	if (ret != 0x0) {
-		msg_perr("Command C failed (%s)!\n", usb_strerror());
+		msg_perr("Command Chip Select failed (%s)!\n", usb_strerror());
 		return 1;
 	}
 	return 0;
@@ -736,6 +728,28 @@ static int parse_voltage(char *voltage)
 	return millivolt;
 }
 
+static int dediprog_setup(long target)
+{
+	/* URB 6. Command A. */
+	if (dediprog_command_a()) {
+		return 1;
+	}
+	/* URB 7. Command A. */
+	if (dediprog_command_a()) {
+		return 1;
+	}
+	/* URB 8. Command Prepare Receive Device String. */
+	/* URB 9. Command Receive Device String. */
+	if (dediprog_check_devicestring()) {
+		return 1;
+	}
+	/* URB 10. Command Chip Select */
+	if (dediprog_chip_select(target)) {
+		return 1;
+	}
+	return 0;
+}
+
 static const struct spi_programmer spi_programmer_dediprog = {
 	.type		= SPI_CONTROLLER_DEDIPROG,
 	.max_data_read	= MAX_DATA_UNSPECIFIED,
@@ -777,12 +791,30 @@ static int dediprog_shutdown(void *data)
 int dediprog_init(void)
 {
 	struct usb_device *dev;
-	char *voltage;
+	char *voltage, *device, *spispeed, *target_str;
+	int spispeed_idx = 1;
 	int millivolt = 3500;
-	int ret;
+	long usedevice = 0;
+	long target = 1;
+	int i, ret;
 
 	msg_pspew("%s\n", __func__);
 
+	spispeed = extract_programmer_param("spispeed");
+	if (spispeed) {
+		for (i = 0; spispeeds[i].name; ++i) {
+			if (!strcasecmp(spispeeds[i].name, spispeed)) {
+				spispeed_idx = i;
+				break;
+			}
+		}
+		if (!spispeeds[i].name) {
+			msg_perr("Error: Invalid spispeed value: '%s'.\n", spispeed);
+			free(spispeed);
+			return 1;
+		}
+		free(spispeed);
+	}
 	voltage = extract_programmer_param("voltage");
 	if (voltage) {
 		millivolt = parse_voltage(voltage);
@@ -792,11 +824,59 @@ int dediprog_init(void)
 		msg_pinfo("Setting voltage to %i mV\n", millivolt);
 	}
 
+	device = extract_programmer_param("device");
+	if (device) {
+		char *dev_suffix;
+		errno = 0;
+		usedevice = strtol(device, &dev_suffix, 10);
+		if (errno != 0 || device == dev_suffix) {
+			msg_perr("Error: Could not convert 'device'.\n");
+			free(device);
+			return 1;
+		}
+		if (usedevice < 0 || usedevice > UINT_MAX) {
+			msg_perr("Error: Value for 'device' is out of range.\n");
+			free(device);
+			return 1;
+		}
+		if (strlen(dev_suffix) > 0) {
+			msg_perr("Error: Garbage following 'device' value.\n");
+			free(device);
+			return 1;
+		}
+		msg_pinfo("Using device %li.\n", usedevice);
+	}
+	free(device);
+
+	target_str = extract_programmer_param("target");
+	if (target_str) {
+		char *target_suffix;
+		errno = 0;
+		target = strtol(target_str, &target_suffix, 10);
+		if (errno != 0 || target_str == target_suffix) {
+			msg_perr("Error: Could not convert 'target'.\n");
+			free(target_str);
+			return 1;
+		}
+		if (target < 1 || target > 2) {
+			msg_perr("Error: Value for 'target' is out of range.\n");
+			free(target_str);
+			return 1;
+		}
+		if (strlen(target_suffix) > 0) {
+			msg_perr("Error: Garbage following 'target' value.\n");
+			free(target_str);
+			return 1;
+		}
+		msg_pinfo("Using target %li.\n", target);
+	}
+	free(target_str);
+
 	/* Here comes the USB stuff. */
 	usb_init();
 	usb_find_busses();
 	usb_find_devices();
-	dev = get_device_by_vid_pid(0x0483, 0xdada);
+	dev = get_device_by_vid_pid(0x0483, 0xdada, (unsigned int) usedevice);
 	if (!dev) {
 		msg_perr("Could not find a Dediprog SF100 on USB!\n");
 		return 1;
@@ -804,6 +884,10 @@ int dediprog_init(void)
 	msg_pdbg("Found USB device (%04x:%04x).\n",
 		 dev->descriptor.idVendor, dev->descriptor.idProduct);
 	dediprog_handle = usb_open(dev);
+	if (!dediprog_handle) {
+		msg_perr("Could not open USB device: %s\n", usb_strerror());
+		return 1;
+	}
 	ret = usb_set_configuration(dediprog_handle, 1);
 	if (ret < 0) {
 		msg_perr("Could not set USB device configuration: %i %s\n",
@@ -821,33 +905,24 @@ int dediprog_init(void)
 		return 1;
 	}
 	dediprog_endpoint = 2;
-	
+
 	if (register_shutdown(dediprog_shutdown, NULL))
 		return 1;
 
 	dediprog_set_leds(PASS_ON|BUSY_ON|ERROR_ON);
 
-	/* URB 6. Command A. */
-	if (dediprog_command_a()) {
+	/* Perform basic setup. */
+	if (dediprog_setup(target)) {
 		dediprog_set_leds(PASS_OFF|BUSY_OFF|ERROR_ON);
 		return 1;
 	}
-	/* URB 7. Command A. */
-	if (dediprog_command_a()) {
+
+	/* After setting voltage and speed, perform setup again. */
+	if (dediprog_set_spi_voltage(0) || dediprog_set_spi_speed(spispeed_idx) || dediprog_setup(target)) {
 		dediprog_set_leds(PASS_OFF|BUSY_OFF|ERROR_ON);
 		return 1;
 	}
-	/* URB 8. Command Prepare Receive Device String. */
-	/* URB 9. Command Receive Device String. */
-	if (dediprog_check_devicestring()) {
-		dediprog_set_leds(PASS_OFF|BUSY_OFF|ERROR_ON);
-		return 1;
-	}
-	/* URB 10. Command C. */
-	if (dediprog_command_c()) {
-		dediprog_set_leds(PASS_OFF|BUSY_OFF|ERROR_ON);
-		return 1;
-	}
+
 	/* URB 11. Command Set SPI Voltage. */
 	if (dediprog_set_spi_voltage(millivolt)) {
 		dediprog_set_leds(PASS_OFF|BUSY_OFF|ERROR_ON);

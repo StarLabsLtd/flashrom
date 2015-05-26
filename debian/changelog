@@ -1,3 +1,17 @@
+flashrom (0.9.7+r1782-1~bpo7+1) jessie-backports; urgency=medium
+
+  * Rebuild for wheezy-backports.
+
+ -- Matt Taggart <taggart@debian.org>  Tue, 26 May 2015 11:49:44 -0700
+
+flashrom (0.9.7+r1782-1) unstable; urgency=high
+
+  * New upstream release (Closes: #746734, #690478).
+  * debian/compat: Upgrade from 5 to 9.
+  * Standards-Version: 3.9.5 (no changes required).
+
+ -- Uwe Hermann <uwe@debian.org>  Sat, 03 May 2014 17:39:35 +0200
+
 flashrom (0.9.6.1+r1563-1) unstable; urgency=low
 
   * New upstream release.

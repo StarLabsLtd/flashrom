@@ -2,8 +2,8 @@ Source: flashrom
 Section: electronics
 Priority: extra
 Maintainer: Uwe Hermann <uwe@debian.org>
-Build-Depends: cdbs, debhelper (>= 5), libpci-dev, libftdi-dev
-Standards-Version: 3.9.3
+Build-Depends: cdbs, debhelper (>= 9.0.0), libpci-dev, libftdi-dev
+Standards-Version: 3.9.5
 Homepage: http://www.flashrom.org
 
 Package: flashrom

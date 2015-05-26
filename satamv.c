@@ -29,11 +29,11 @@
 uint8_t *mv_bar;
 uint16_t mv_iobar;
 
-const struct pcidev_status satas_mv[] = {
+const struct dev_entry satas_mv[] = {
 	/* 88SX6041 and 88SX6042 are the same according to the datasheet. */
 	{0x11ab, 0x7042, OK, "Marvell", "88SX7042 PCI-e 4-port SATA-II"},
 
-	{},
+	{0},
 };
 
 #define NVRAM_PARAM			0x1045c
@@ -57,13 +57,6 @@ static const struct par_programmer par_programmer_satamv = {
 		.chip_writen		= fallback_chip_writen,
 };
 
-static int satamv_shutdown(void *data)
-{
-	physunmap(mv_bar, 0x20000);
-	pci_cleanup(pacc);
-	return 0;
-}
-
 /*
  * Random notes:
  * FCE#		Flash Chip Enable
@@ -82,6 +75,7 @@ static int satamv_shutdown(void *data)
  */
 int satamv_init(void)
 {
+	struct pci_dev *dev = NULL;
 	uintptr_t addr;
 	uint32_t tmp;
 
@@ -89,16 +83,16 @@ int satamv_init(void)
 		return 1;
 
 	/* BAR0 has all internal registers memory mapped. */
-	/* No need to check for errors, pcidev_init() will not return in case
-	 * of errors.
-	 */
-	addr = pcidev_init(PCI_BASE_ADDRESS_0, satas_mv);
+	dev = pcidev_init(satas_mv, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
 
-	mv_bar = physmap("Marvell 88SX7042 registers", addr, 0x20000);
+	addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!addr)
+		return 1;
+
+	mv_bar = rphysmap("Marvell 88SX7042 registers", addr, 0x20000);
 	if (mv_bar == ERROR_PTR)
-		goto error_out;
-
-	if (register_shutdown(satamv_shutdown, NULL))
 		return 1;
 
 	tmp = pci_mmio_readl(mv_bar + FLASH_PARAM);
@@ -144,13 +138,15 @@ int satamv_init(void)
 	pci_rmmio_writel(tmp, mv_bar + GPIO_PORT_CONTROL);
 
 	/* Get I/O BAR location. */
-	tmp = pci_read_long(pcidev_dev, PCI_BASE_ADDRESS_2) &
-	      PCI_BASE_ADDRESS_IO_MASK;
+	addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_2);
+	if (!addr)
+		return 1;
+
 	/* Truncate to reachable range.
 	 * FIXME: Check if the I/O BAR is actually reachable.
 	 * This is an arch specific check.
 	 */
-	mv_iobar = tmp & 0xffff;
+	mv_iobar = addr & 0xffff;
 	msg_pspew("Activating I/O BAR at 0x%04x\n", mv_iobar);
 
 	/* 512 kByte with two 8-bit latches, and
@@ -159,10 +155,6 @@ int satamv_init(void)
 	register_par_programmer(&par_programmer_satamv, BUS_PARALLEL);
 
 	return 0;
-
-error_out:
-	pci_cleanup(pacc);
-	return 1;
 }
 
 /* BAR2 (MEM) can map NVRAM and flash. We set it to flash in the init function.

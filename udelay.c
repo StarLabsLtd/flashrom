@@ -30,12 +30,12 @@
 /* loops per microsecond */
 static unsigned long micro = 1;
 
-__attribute__ ((noinline)) void myusec_delay(int usecs)
+__attribute__ ((noinline)) void myusec_delay(unsigned int usecs)
 {
 	unsigned long i;
 	for (i = 0; i < usecs * micro; i++) {
 		/* Make sure the compiler doesn't optimize the loop away. */
-		asm volatile ("" : : "rm" (i) );
+		__asm__ volatile ("" : : "rm" (i) );
 	}
 }
 
@@ -63,7 +63,7 @@ static unsigned long measure_os_delay_resolution(void)
 	return timeusec;
 }
 
-static unsigned long measure_delay(int usecs)
+static unsigned long measure_delay(unsigned int usecs)
 {
 	unsigned long timeusec;
 	struct timeval start, end;
@@ -169,13 +169,23 @@ recalibrate:
 	msg_pinfo("OK.\n");
 }
 
-void internal_delay(int usecs)
+/* Not very precise sleep. */
+void internal_sleep(unsigned int usecs)
 {
-	/* If the delay is >1 s, use usleep because timing does not need to
-	 * be so precise.
-	 */
+#ifdef _WIN32
+	Sleep((usecs + 999) / 1000);
+#else
+	sleep(usecs / 1000000);
+	usleep(usecs % 1000000);
+#endif
+}
+
+/* Precise delay. */
+void internal_delay(unsigned int usecs)
+{
+	/* If the delay is >1 s, use internal_sleep because timing does not need to be so precise. */
 	if (usecs > 1000000) {
-		usleep(usecs);
+		internal_sleep(usecs);
 	} else {
 		myusec_delay(usecs);
 	}
@@ -189,7 +199,7 @@ void myusec_calibrate_delay(void)
 	get_cpu_speed();
 }
 
-void internal_delay(int usecs)
+void internal_delay(unsigned int usecs)
 {
 	udelay(usecs);
 }

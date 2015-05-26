@@ -46,11 +46,11 @@ int close_logfile(void)
 int open_logfile(const char * const filename)
 {
 	if (!filename) {
-		msg_gerr("No filename specified.\n");
+		msg_gerr("No logfile name specified.\n");
 		return 1;
 	}
 	if ((logfile = fopen(filename, "w")) == NULL) {
-		perror(filename);
+		msg_gerr("Error: opening log file \"%s\" failed: %s\n", filename, strerror(errno));
 		return 1;
 	}
 	return 0;
@@ -74,16 +74,15 @@ int print(enum msglevel level, const char *fmt, ...)
 	int ret = 0;
 	FILE *output_type = stdout;
 
-	if (level == MSG_ERROR)
+	if (level < MSG_INFO)
 		output_type = stderr;
 
 	if (level <= verbose_screen) {
 		va_start(ap, fmt);
 		ret = vfprintf(output_type, fmt, ap);
 		va_end(ap);
-		/* msg_*spew usually happens inside chip accessors in possibly
-		 * time-critical operations. Don't slow them down by flushing.
-		 */
+		/* msg_*spew often happens inside chip accessors in possibly
+		 * time-critical operations. Don't slow them down by flushing. */
 		if (level != MSG_SPEW)
 			fflush(output_type);
 	}

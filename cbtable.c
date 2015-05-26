@@ -24,36 +24,85 @@
 
 #include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <ctype.h>
+#include <strings.h>
 #include <string.h>
 #include "flash.h"
 #include "programmer.h"
 #include "coreboot_tables.h"
 
-char *lb_part = NULL, *lb_vendor = NULL;
-int partvendor_from_cbtable = 0;
+static char *cb_vendor = NULL, *cb_model = NULL;
 
-/* Parse the [<vendor>:]<board> string specified by the user as part of
- * -p internal:mainboard=[<vendor>:]<board> and set lb_vendor and lb_part
- * to the extracted values.
- * Note: strtok modifies the original string, so we work on a copy and allocate
- * memory for lb_vendor and lb_part with strdup.
+/* Tries to find coreboot IDs in the supplied image and compares them to the current IDs.
+ * Returns...
+ * 	-1	if IDs in the image do not match the IDs embedded in the current firmware,
+ * 	 0	if the IDs could not be found in the image or if they match correctly.
  */
-void lb_vendor_dev_from_string(const char *boardstring)
+int cb_check_image(uint8_t *image, int size)
 {
-	/* strtok may modify the original string. */
-	char *tempstr = strdup(boardstring);
-	char *tempstr2 = NULL;
-	strtok(tempstr, ":");
-	tempstr2 = strtok(NULL, ":");
-	if (tempstr2) {
-		lb_vendor = strdup(tempstr);
-		lb_part = strdup(tempstr2);
-	} else {
-		lb_vendor = NULL;
-		lb_part = strdup(tempstr);
+	const char *image_vendor = NULL;
+	const char *image_model = NULL;
+	unsigned int *walk;
+	unsigned int mb_part_offset, mb_vendor_offset;
+	char *mb_part, *mb_vendor;
+
+	walk = (unsigned int *)(image + size - 0x10);
+	walk--;
+
+	if ((*walk) == 0 || ((*walk) & 0x3ff) != 0) {
+		/* Some NVIDIA chipsets store chipset soft straps (IIRC Hypertransport init info etc.) in
+		 * flash at exactly the location where coreboot image size, coreboot vendor name pointer and
+		 * coreboot board name pointer are usually stored. In this case coreboot uses an alternate
+		 * location for the coreboot image data. */
+		walk = (unsigned int *)(image + size - 0x80);
+		walk--;
 	}
-	free(tempstr);
+
+	/*
+	 * Check if coreboot last image size is 0 or not a multiple of 1k or
+	 * bigger than the chip or if the pointers to vendor ID or mainboard ID
+	 * are outside the image of if the start of ID strings are nonsensical
+	 * (nonprintable and not \0).
+	 */
+	mb_part_offset = *(walk - 1);
+	mb_vendor_offset = *(walk - 2);
+	if ((*walk) == 0 || ((*walk) & 0x3ff) != 0 || (*walk) > size ||
+	    mb_part_offset > size || mb_vendor_offset > size) {
+		msg_pdbg("Flash image seems to be a legacy BIOS. Disabling coreboot-related checks.\n");
+		return 0;
+	}
+
+	mb_part = (char *)(image + size - mb_part_offset);
+	mb_vendor = (char *)(image + size - mb_vendor_offset);
+	if (!isprint((unsigned char)*mb_part) ||
+	    !isprint((unsigned char)*mb_vendor)) {
+		msg_pdbg("Flash image seems to have garbage in the ID location. "
+			 "Disabling coreboot-related checks.\n");
+		return 0;
+	}
+
+	msg_pdbg("coreboot last image size (not ROM size) is %d bytes.\n", *walk);
+
+	image_vendor = strdup(mb_vendor);
+	image_model = strdup(mb_part);
+	msg_pdbg("Manufacturer: %s\n", image_vendor);
+	msg_pdbg("Mainboard ID: %s\n", image_model);
+
+	/* If these are not set, the coreboot table was not found. */
+	if (!cb_vendor || !cb_model)
+		return 0;
+
+	/* These comparisons are case insensitive to make things a little less user^Werror prone. */
+	if (!strcasecmp(image_vendor, cb_vendor) && !strcasecmp(image_model, cb_model)) {
+		msg_pdbg2("This coreboot image matches this mainboard.\n");
+	} else {
+		msg_perr("This coreboot image (%s:%s) does not appear to\n"
+			 "be correct for the detected mainboard (%s:%s).\n",
+			 image_vendor, image_model, cb_vendor, cb_model);
+		return -1;
+	}
+
+	return 0;
 }
 
 static unsigned long compute_checksum(void *addr, unsigned long length)
@@ -162,22 +211,15 @@ static void find_mainboard(struct lb_record *ptr, unsigned long addr)
 	rec = (struct lb_mainboard *)ptr;
 	max_size = rec->size - sizeof(*rec);
 	msg_pdbg("Vendor ID: %.*s, part ID: %.*s\n",
-	       max_size - rec->vendor_idx,
-	       rec->strings + rec->vendor_idx,
-	       max_size - rec->part_number_idx,
-	       rec->strings + rec->part_number_idx);
-	snprintf(vendor, 255, "%.*s", max_size - rec->vendor_idx,
-		 rec->strings + rec->vendor_idx);
-	snprintf(part, 255, "%.*s", max_size - rec->part_number_idx,
-		 rec->strings + rec->part_number_idx);
+	         max_size - rec->vendor_idx,
+	         rec->strings + rec->vendor_idx,
+	         max_size - rec->part_number_idx,
+	         rec->strings + rec->part_number_idx);
+	snprintf(vendor, 255, "%.*s", max_size - rec->vendor_idx, rec->strings + rec->vendor_idx);
+	snprintf(part, 255, "%.*s", max_size - rec->part_number_idx, rec->strings + rec->part_number_idx);
 
-	if (lb_part) {
-		msg_pdbg("Overwritten by command line, vendor ID: %s, part ID: %s.\n", lb_vendor, lb_part);
-	} else {
-		partvendor_from_cbtable = 1;
-		lb_part = strdup(part);
-		lb_vendor = strdup(vendor);
-	}
+	cb_vendor = strdup(vendor);
+	cb_model = strdup(part);
 }
 
 static struct lb_record *next_record(struct lb_record *rec)
@@ -185,8 +227,7 @@ static struct lb_record *next_record(struct lb_record *rec)
 	return (struct lb_record *)(((char *)rec) + rec->size);
 }
 
-static void search_lb_records(struct lb_record *rec, struct lb_record *last,
-			      unsigned long addr)
+static void search_lb_records(struct lb_record *rec, struct lb_record *last, unsigned long addr)
 {
 	struct lb_record *next;
 	int count;
@@ -204,14 +245,15 @@ static void search_lb_records(struct lb_record *rec, struct lb_record *last,
 }
 
 #define BYTES_TO_MAP (1024*1024)
-int coreboot_init(void)
+/* returns 0 if the table was parsed successfully and cb_vendor/cb_model have been set. */
+int cb_parse_table(const char **vendor, const char **model)
 {
 	uint8_t *table_area;
 	unsigned long addr, start;
 	struct lb_header *lb_table;
 	struct lb_record *rec, *last;
 
-#ifdef __DARWIN__
+#if defined(__MACH__) && defined(__APPLE__)
 	/* This is a hack. DirectHW fails to map physical address 0x00000000.
 	 * Why?
 	 */
@@ -219,7 +261,7 @@ int coreboot_init(void)
 #else
 	start = 0x0;
 #endif
-	table_area = physmap_try_ro("low megabyte", start, BYTES_TO_MAP - start);
+	table_area = physmap_ro_unaligned("low megabyte", start, BYTES_TO_MAP - start);
 	if (ERROR_PTR == table_area) {
 		msg_perr("Failed getting access to coreboot low tables.\n");
 		return -1;
@@ -234,11 +276,11 @@ int coreboot_init(void)
 		if (forward->tag == LB_TAG_FORWARD) {
 			start = forward->forward;
 			start &= ~(getpagesize() - 1);
-			physunmap(table_area, BYTES_TO_MAP);
-			table_area = physmap_try_ro("high tables", start, BYTES_TO_MAP);
+			physunmap_unaligned(table_area, BYTES_TO_MAP);
+			// FIXME: table_area is never unmapped below, nor is it unmapped above in the no-forward case
+			table_area = physmap_ro_unaligned("high tables", start, BYTES_TO_MAP);
 			if (ERROR_PTR == table_area) {
-				msg_perr("Failed getting access to coreboot "
-					 "high tables.\n");
+				msg_perr("Failed getting access to coreboot high tables.\n");
 				return -1;
 			}
 			lb_table = find_lb_table(table_area, 0x00000, 0x1000);
@@ -260,6 +302,7 @@ int coreboot_init(void)
 	     lb_table->table_bytes, lb_table->table_checksum,
 	     lb_table->table_entries);
 	search_lb_records(rec, last, addr + lb_table->header_bytes);
-
+	*vendor = cb_vendor;
+	*model = cb_model;
 	return 0;
 }

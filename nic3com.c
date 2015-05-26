@@ -36,7 +36,7 @@
 static uint32_t internal_conf;
 static uint16_t id;
 
-const struct pcidev_status nics_3com[] = {
+const struct dev_entry nics_3com[] = {
 	/* 3C90xB */
 	{0x10b7, 0x9055, OK, "3COM", "3C90xB: PCI 10/100 Mbps; shared 10BASE-T/100BASE-TX"},
 	{0x10b7, 0x9001, NT, "3COM", "3C90xB: PCI 10/100 Mbps; shared 10BASE-T/100BASE-T4" },
@@ -53,7 +53,7 @@ const struct pcidev_status nics_3com[] = {
 	/* 3C980C */
 	{0x10b7, 0x9805, NT, "3COM", "3C980C: EtherLink Server 10/100 PCI (TX)" },
 
-	{},
+	{0},
 };
 
 static void nic3com_chip_writeb(const struct flashctx *flash, uint8_t val,
@@ -81,18 +81,25 @@ static int nic3com_shutdown(void *data)
 		OUTL(internal_conf, io_base_addr + INTERNAL_CONFIG);
 	}
 
-	pci_cleanup(pacc);
 	return 0;
 }
 
 int nic3com_init(void)
 {
+	struct pci_dev *dev = NULL;
+
 	if (rget_io_perms())
 		return 1;
 
-	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_3com);
+	dev = pcidev_init(nics_3com, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
 
-	id = pcidev_dev->device_id;
+	io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!io_base_addr)
+		return 1;
+
+	id = dev->device_id;
 
 	/* 3COM 3C90xB cards need a special fixup. */
 	if (id == 0x9055 || id == 0x9001 || id == 0x9004 || id == 0x9005

@@ -27,11 +27,11 @@
 uint8_t *nicintel_bar;
 uint8_t *nicintel_control_bar;
 
-const struct pcidev_status nics_intel[] = {
+const struct dev_entry nics_intel[] = {
 	{PCI_VENDOR_ID_INTEL, 0x1209, NT, "Intel", "8255xER/82551IT Fast Ethernet Controller"},
 	{PCI_VENDOR_ID_INTEL, 0x1229, OK, "Intel", "82557/8/9/0/1 Ethernet Pro 100"},
 
-	{},
+	{0},
 };
 
 /* Arbitrary limit, taken from the datasheet I just had lying around.
@@ -59,16 +59,9 @@ static const struct par_programmer par_programmer_nicintel = {
 		.chip_writen		= fallback_chip_writen,
 };
 
-static int nicintel_shutdown(void *data)
-{
-	physunmap(nicintel_control_bar, NICINTEL_CONTROL_MEMMAP_SIZE);
-	physunmap(nicintel_bar, NICINTEL_MEMMAP_SIZE);
-	pci_cleanup(pacc);
-	return 0;
-}
-
 int nicintel_init(void)
 {
+	struct pci_dev *dev = NULL;
 	uintptr_t addr;
 
 	/* Needed only for PCI accesses on some platforms.
@@ -77,25 +70,25 @@ int nicintel_init(void)
 	if (rget_io_perms())
 		return 1;
 
-	/* No need to check for errors, pcidev_init() will not return in case
-	 * of errors.
-	 * FIXME: BAR2 is not available if the device uses the CardBus function.
-	 */
-	addr = pcidev_init(PCI_BASE_ADDRESS_2, nics_intel);
+	/* FIXME: BAR2 is not available if the device uses the CardBus function. */
+	dev = pcidev_init(nics_intel, PCI_BASE_ADDRESS_2);
+	if (!dev)
+		return 1;
 
-	nicintel_bar = physmap("Intel NIC flash", addr, NICINTEL_MEMMAP_SIZE);
+	addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_2);
+	if (!addr)
+		return 1;
+
+	nicintel_bar = rphysmap("Intel NIC flash", addr, NICINTEL_MEMMAP_SIZE);
 	if (nicintel_bar == ERROR_PTR)
-		goto error_out_unmap;
+		return 1;
 
-	/* FIXME: Using pcidev_dev _will_ cause pretty explosions in the future. */
-	addr = pcidev_readbar(pcidev_dev, PCI_BASE_ADDRESS_0);
-	/* FIXME: This is not an aligned mapping. Use 4k? */
-	nicintel_control_bar = physmap("Intel NIC control/status reg",
-	                               addr, NICINTEL_CONTROL_MEMMAP_SIZE);
+	addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!addr)
+		return 1;
+
+	nicintel_control_bar = rphysmap("Intel NIC control/status reg", addr, NICINTEL_CONTROL_MEMMAP_SIZE);
 	if (nicintel_control_bar == ERROR_PTR)
-		goto error_out;
-
-	if (register_shutdown(nicintel_shutdown, NULL))
 		return 1;
 
 	/* FIXME: This register is pretty undocumented in all publicly available
@@ -113,12 +106,6 @@ int nicintel_init(void)
 	register_par_programmer(&par_programmer_nicintel, BUS_PARALLEL);
 
 	return 0;
-
-error_out_unmap:
-	physunmap(nicintel_bar, NICINTEL_MEMMAP_SIZE);
-error_out:
-	pci_cleanup(pacc);
-	return 1;
 }
 
 static void nicintel_chip_writeb(const struct flashctx *flash, uint8_t val,

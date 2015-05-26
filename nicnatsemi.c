@@ -30,10 +30,11 @@
 #define BOOT_ROM_ADDR		0x50
 #define BOOT_ROM_DATA		0x54
 
-const struct pcidev_status nics_natsemi[] = {
+const struct dev_entry nics_natsemi[] = {
 	{0x100b, 0x0020, NT, "National Semiconductor", "DP83815/DP83816"},
 	{0x100b, 0x0022, NT, "National Semiconductor", "DP83820"},
-	{},
+
+	{0},
 };
 
 static void nicnatsemi_chip_writeb(const struct flashctx *flash, uint8_t val,
@@ -51,20 +52,19 @@ static const struct par_programmer par_programmer_nicnatsemi = {
 		.chip_writen		= fallback_chip_writen,
 };
 
-static int nicnatsemi_shutdown(void *data)
-{
-	pci_cleanup(pacc);
-	return 0;
-}
-
 int nicnatsemi_init(void)
 {
+	struct pci_dev *dev = NULL;
+
 	if (rget_io_perms())
 		return 1;
 
-	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_natsemi);
+	dev = pcidev_init(nics_natsemi, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
 
-	if (register_shutdown(nicnatsemi_shutdown, NULL))
+	io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!io_base_addr)
 		return 1;
 
 	/* The datasheet shows address lines MA0-MA16 in one place and MA0-MA15
