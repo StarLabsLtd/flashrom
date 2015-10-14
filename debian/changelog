@@ -1,3 +1,13 @@
+flashrom (0.9.7+r1852-1.1) unstable; urgency=medium
+
+  * Non-maintainer upload.
+  * Fix FTBFS on mipsel.
+    Patch by Dejan Latinovic <Dejan.Latinovic@imgtec.com>.
+    Add mips-fix-internal.patch.
+    Closes: #775428.
+
+ -- Anibal Monsalve Salazar <anibal@debian.org>  Wed, 14 Oct 2015 09:21:36 +0100
+
 flashrom (0.9.7+r1852-1) unstable; urgency=medium
 
   * New upstream release.
