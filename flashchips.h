@@ -27,7 +27,7 @@
 /*
  * Please keep this list sorted alphabetically by manufacturer. The first
  * entry of each section should be the manufacturer ID, followed by the
- * list of devices from that manufacturer (sorted by device IDs).
+ * list of devices from that manufacturer (sorted by device ID).
  *
  * Most LPC/FWH parts (parallel flash) have 8-bit device IDs if there is no
  * continuation code.
@@ -64,9 +64,9 @@
 #define AMD_AM29F004BB		0x7B
 #define AMD_AM29F004BT		0x77
 #define AMD_AM29F016D		0xAD
-#define AMD_AM29F010B		0x20	/* Same as Am29F010A */
-#define AMD_AM29F040B		0xA4
-#define AMD_AM29F080B		0xD5
+#define AMD_AM29F010		0x20	/* Same as Am29F010A and Am29F010B */
+#define AMD_AM29F040		0xA4	/* Same as AM29F040B */
+#define AMD_AM29F080		0xD5	/* Same as Am29F080B */
 #define AMD_AM29F200BB		0x57
 #define AMD_AM29F200BT		0x51
 #define AMD_AM29F400BB		0xAB
@@ -237,28 +237,36 @@
  */
 #define EON_ID			0x7F1C	/* EON Silicon Devices */
 #define EON_ID_NOPREFIX		0x1C	/* EON, missing 0x7F prefix */
-#define EON_EN25B05		0x2010	/* Same as P05, 2^19 kbit or 2^16 kByte */
+#define EON_EN25B05		0x2010	/* Same as EN25P05, can be distinguished by RES/REMS: */
+#define EON_EN25P05		0x05
 #define EON_EN25B05T		0x25
 #define EON_EN25B05B		0x95
-#define EON_EN25B10		0x2011	/* Same as P10 */
+#define EON_EN25B10		0x2011	/* Same as EN25P10, can be distinguished by RES/REMS: */
+#define EON_EN25P10		0x10
 #define EON_EN25B10T		0x40
 #define EON_EN25B10B		0x30
-#define EON_EN25B20		0x2012	/* Same as P20 */
+#define EON_EN25B20		0x2012	/* Same as EN25P20, can be distinguished by RES/REMS: */
+#define EON_EN25P20		0x11
 #define EON_EN25B20T		0x41
 #define EON_EN25B20B		0x31
-#define EON_EN25B40		0x2013	/* Same as P40 */
+#define EON_EN25B40		0x2013	/* Same as EN25P40, can be distinguished by RES/REMS: */
+#define EON_EN25P40		0x12
 #define EON_EN25B40T		0x42
 #define EON_EN25B40B		0x32
-#define EON_EN25B80		0x2014	/* Same as P80 */
+#define EON_EN25B80		0x2014	/* Same as EN25P80, can be distinguished by RES/REMS: */
+#define EON_EN25P80		0x13
 #define EON_EN25B80T		0x43
 #define EON_EN25B80B		0x33
-#define EON_EN25B16		0x2015	/* Same as P16 */
+#define EON_EN25B16		0x2015	/* Same as EN25P16, can be distinguished by RES/REMS: */
+#define EON_EN25P16		0x14
 #define EON_EN25B16T		0x44
 #define EON_EN25B16B		0x34
-#define EON_EN25B32		0x2016	/* Same as P32 */
+#define EON_EN25B32		0x2016	/* Same as EN25P32, can be distinguished by RES/REMS: */
+#define EON_EN25P32		0x15
 #define EON_EN25B32T		0x45
 #define EON_EN25B32B		0x35
-#define EON_EN25B64		0x2017	/* Same as P64 */
+#define EON_EN25B64		0x2017	/* Same as EN25P64, can be distinguished by RES/REMS: */
+#define EON_EN25P64		0x16
 #define EON_EN25B64T		0x46
 #define EON_EN25B64B		0x36
 #define EON_EN25F05		0x3110
@@ -293,8 +301,10 @@
 #define EON_EN29F010		0x20
 #define EON_EN29F040A		0x7F04
 #define EON_EN29LV010		0x7F6E
-#define EON_EN29LV040A		0x7F4F	/* EN29LV040(A) */
+#define EON_EN29LV040		0x4F	/* Same as EN29LV040A */
 #define EON_EN29LV640B		0xCB
+#define EON_EN29LV640T		0xC9
+#define EON_EN29LV640U		0x7E
 #define EON_EN29F002T		0x7F92	/* Same as EN29F002A */
 #define EON_EN29F002B		0x7F97	/* Same as EN29F002AN */
 #define EON_EN29GL064HL		0x7E0C01	/* Uniform Sectors, WP protects Top OR Bottom sector */
@@ -361,13 +371,14 @@
 #define GIGADEVICE_GD25Q16	0x4015	/* Same as GD25Q16B (which has OTP) */
 #define GIGADEVICE_GD25Q32	0x4016	/* Same as GD25Q32B */
 #define GIGADEVICE_GD25Q64	0x4017	/* Same as GD25Q64B */
-#define GIGADEVICE_GD25Q128	0x4018	/* GD25Q128B only? */
+#define GIGADEVICE_GD25Q128	0x4018	/* GD25Q128B and GD25Q128C only, can be distinguished by SFDP */
 #define GIGADEVICE_GD25LQ40	0x6013
 #define GIGADEVICE_GD25LQ80	0x6014
 #define GIGADEVICE_GD25LQ16	0x6015
 #define GIGADEVICE_GD25LQ32	0x6016
 #define GIGADEVICE_GD25LQ64	0x6017	/* Same as GD25LQ64B (which is faster) */
 #define GIGADEVICE_GD25LQ128	0x6018
+#define GIGADEVICE_GD25VQ41B	0x4213
 #define GIGADEVICE_GD29GL064CAB	0x7E0601
 
 #define HYUNDAI_ID		0xAD	/* Hyundai */
@@ -458,13 +469,13 @@
  * and use the same set of IDs. */
 #define MACRONIX_MX25L512	0x2010	/* Same as MX25L512E, MX25V512, MX25V512C */
 #define MACRONIX_MX25L1005	0x2011	/* Same as MX25L1005C, MX25L1006E */
-#define MACRONIX_MX25L2005	0x2012	/* Same as MX25L2005C */
-#define MACRONIX_MX25L4005	0x2013	/* Same as MX25L4005A, MX25L4005C */
-#define MACRONIX_MX25L8005	0x2014	/* Same as MX25V8005; FIXME: MX25L8073E (4k 0x20) */
-#define MACRONIX_MX25L1605	0x2015	/* MX25L1605 (64k 0x20); MX25L1605A/MX25L1606E (4k 0x20, 64k 0x52); MX25L1605D/MX25L1608D/MX25L1673E (4k 0x20) */
-#define MACRONIX_MX25L3205	0x2016	/* MX25L3205, MX25L3205A (64k 0x20); MX25L3205D/MX25L3208D (4k 0x20); MX25L3206E (4k 0x20, 64k 0x52); MX25L3273E (4k 0x20, 32k 0x52) */
-#define MACRONIX_MX25L6405	0x2017	/* MX25L6405, MX25L6405D (64k 0x20); MX25L6406E/MX25L6436E (4k 0x20); MX25L6445E/MX25L6473E (4k 0x20, 32k 0x52) */
-#define MACRONIX_MX25L12805	0x2018	/* Same as MX25L12805D, MX25L12835F, MX25L12845E (the latter two support completely new ID commands) */
+#define MACRONIX_MX25L2005	0x2012	/* Same as MX25L2005C, MX25L2006E */
+#define MACRONIX_MX25L4005	0x2013	/* Same as MX25L4005A, MX25L4005C, MX25L4006E */
+#define MACRONIX_MX25L8005	0x2014	/* Same as MX25V8005, MX25L8006E, MX25L8008E, FIXME: MX25L8073E (4k 0x20) */
+#define MACRONIX_MX25L1605	0x2015	/* MX25L1605 (64k 0x20); MX25L1605A/MX25L1606E/MX25L1608E (4k 0x20, 64k 0x52); MX25L1605D/MX25L1608D/MX25L1673E (4k 0x20) */
+#define MACRONIX_MX25L3205	0x2016	/* MX25L3205, MX25L3205A (64k 0x20); MX25L3205D/MX25L3208D (4k 0x20); MX25L3206E/MX25L3208E (4k 0x20, 64k 0x52); MX25L3273E (4k 0x20, 32k 0x52) */
+#define MACRONIX_MX25L6405	0x2017	/* MX25L6405, MX25L6405D (64k 0x20); MX25L6406E/MX25L6408E (4k 0x20); MX25L6436E/MX25L6445E/MX25L6465E/MX25L6473E (4k 0x20, 32k 0x52) */
+#define MACRONIX_MX25L12805D	0x2018	/* MX25L12805D (no 32k); MX25L12865E, MX25L12835F, MX25L12845E (32k 0x52) */
 #define MACRONIX_MX25L25635F	0x2019	/* Same as MX25L25639F, but the latter seems to not support REMS */
 #define MACRONIX_MX25L1635D	0x2415
 #define MACRONIX_MX25L1635E	0x2515	/* MX25L1635{E} */
@@ -474,6 +485,7 @@
 #define MACRONIX_MX25U12835E	0x2538	/* Same as MX25U12835F */
 #define MACRONIX_MX25U25635F	0x2539
 #define MACRONIX_MX25L3235D	0x5E16	/* MX25L3225D/MX25L3235D/MX25L3237D */
+#define MACRONIX_MX25L6495F	0x9517
 
 #define MACRONIX_MX29F001B	0x19
 #define MACRONIX_MX29F001T	0x18
@@ -549,6 +561,11 @@
 #define PMC_PM25LD512		0x20	/* Same as Pm25LD512C, but the latter has more locking options. */
 #define PMC_PM25LD010		0x21	/* Same as Pm25LD010C, but the latter has more locking options. */
 #define PMC_PM25LD020		0x22	/* Same as Pm25LD020C, but the latter has more locking options. */
+#define PMC_PM25LQ020		0x42
+#define PMC_PM25LQ040		0x43
+#define PMC_PM25LQ080		0x44
+#define PMC_PM25LQ016		0x45
+#define PMC_PM25LQ032C		0x46
 #define PMC_PM25LV512		0x7B	/* Same as Pm25LV512A */
 #define PMC_PM25LV010		0x7C	/* Same as Pm25LV010A, but the former does not support RDID but RES3 only. */
 #define PMC_PM25LV020		0x7D
@@ -579,6 +596,7 @@
 #define SANYO_LE25FW418A	0x10	/* RES2 and some weird 1 byte RDID variant */
 #define SANYO_LE25FW406A	0x1A	/* RES2, no datasheet */
 #define SANYO_LE25FU406B	0x1E	/* LE25FW418A without HD_READ mode option variant */
+#define SANYO_LE25FU406C	0x0613	/* Also known as LE25U40CMC apparently */
 #define SANYO_LE25FW806		0x26	/* RES2 and some weird 1 byte RDID variant */
 #define SANYO_LE25FW808		0x20	/* RES2 and some weird 1 byte RDID variant */
 
@@ -600,7 +618,7 @@
 #define SPANSION_S25FL016A	0x0214
 #define SPANSION_S25FL032A	0x0215	/* Same as S25FL032P, but the latter supports EDI and CFI */
 #define SPANSION_S25FL064A	0x0216	/* Same as S25FL064P, but the latter supports EDI and CFI */
-#define SPANSION_S25FL128	0x2018	/* Same ID for various S25FL128P, S25FL128S and S25FL129P (including dual-die S70FL256P) variants (EDI supported) */
+#define SPANSION_S25FL128	0x2018	/* Same ID for various S25FL127S, S25FL128P, S25FL128S and S25FL129P (including dual-die S70FL256P) variants (EDI supported) */
 #define SPANSION_S25FL256	0x0219
 #define SPANSION_S25FL512	0x0220
 #define SPANSION_S25FL204	0x4013
@@ -654,11 +672,12 @@
 #define SST_SST25WF020		0x2503
 #define SST_SST25WF040		0x2504
 #define SST_SST25WF080		0x2505
-/* There exist some successors to members of the SST25WF family with alphabetic suffixes. They have very weird
- * IDs and were not spotted in the wild yet. Their datasheets show a 4 byte long response w/o a vendor ID. */
-#define SST_SST25WF020A		/* 0x62 0x16 0x12 0x00 */
-#define SST_SST25WF040B		/* 0x62 0x16 0x13 0x00 */
-#define SST_SST25WF080B		/* 0x62 0x16 0x14 0x00 */
+/* There exist some successors to members of the SST25WF family with alphabetic suffixes. Their datasheets show
+ * a 4 byte long response w/o a vendor ID. The first byte is 0x62 that is actually Sanyo's and might be due to
+ * a collaboration in the mid 2000ies between Sanyo and SST. */
+#define SST_SST25WF020A		0x1612
+#define SST_SST25WF040B		0x1613
+#define SST_SST25WF080B		0x1614
 #define SST_SST25VF512_REMS	0x48	/* REMS or RES opcode, same as SST25VF512A */
 #define SST_SST25VF010_REMS	0x49	/* REMS or RES opcode, same as SST25VF010A */
 #define SST_SST25VF020_REMS	0x43	/* REMS or RES opcode, same as SST25LF020A */
@@ -775,6 +794,48 @@
 #define ST_M29W010B		0x23
 #define ST_M29W040B		0xE3
 #define ST_M29W512B		0x27
+#define ST_M28W160ECB		0x88CF
+#define ST_M28W160ECT		0x88CE
+#define ST_M28W320FCB		0x88BB
+#define ST_M28W320FCT		0x88BA
+#define ST_M28W640HCB		0x8849
+#define ST_M28W640HCT		0x8848
+#define ST_M29DW127G		0x7E2004
+#define ST_M29W128GH		0x7E2101
+#define ST_M29W128GL		0x7E2100
+#define ST_M29W160EB		0x2249
+#define ST_M29W160ET		0x22C4
+#define ST_M29W256GH		0x7E21xx
+#define ST_M29W256GL		0x7E21xx
+#define ST_M29W320DB		0x88CB
+#define ST_M29W320DT		0x88CA
+#define ST_M29W400FB		0x00EF
+#define ST_M29W400FT		0x00EE
+#define ST_M29W512GH		0x7E2301
+#define ST_M29W640FB		0x22FD
+#define ST_M29W640FT		0x22ED
+#define ST_M29W640GB		0x7E1000
+#define ST_M29W640GH		0x7E0C01
+#define ST_M29W640GL		0x7E0C00
+#define ST_M29W640GT		0x7E1001
+#define ST_M29W800FB		0x225B
+#define ST_M29W800FT		0x22D7
+#define ST_M58BW16FB		0x8839
+#define ST_M58BW16FT		0x883A
+#define ST_M58BW32FB		0x8837
+#define ST_M58BW32FT		0x8838
+#define ST_M58WR016KB		0x8813
+#define ST_M58WR016KT		0x8812
+#define ST_M58WR032KB		0x8815
+#define ST_M58WR032KT		0x8814
+#define ST_M58WR064KB		0x8811
+#define ST_M58WR064KT		0x8810
+#define ST_MT28GU01G___1	0x88B0
+#define ST_MT28GU01G___2	0x88B1
+#define ST_MT28GU256___1	0x8901
+#define ST_MT28GU256___2	0x8904
+#define ST_MT28GU512___1	0x887E
+#define ST_MT28GU512___2	0x8881
 #define ST_N25Q016__1E		0xBB15	/* N25Q016, 1.8V, (uniform sectors expected) */
 #define ST_N25Q032__3E		0xBA16	/* N25Q032, 3.0V, (uniform sectors expected) */
 #define ST_N25Q032__1E		0xBB16	/* N25Q032, 1.8V, (uniform sectors expected) */
@@ -787,6 +848,9 @@
 #define ST_N25Q512__3E		0xBA20	/* N25Q512, 3.0V, (uniform sectors expected) */
 #define ST_N25Q512__1E		0xBB20	/* N25Q512, 1.8V, (uniform sectors expected) */
 #define ST_N25Q00A__3E		0xBA21	/* N25Q00A, 3.0V, (uniform sectors expected) */
+#define ST_NP5Q032		0xDA16	/* Phase-change memory (PCM), 3V */
+#define ST_NP5Q064		0xDA17	/* Phase-change memory (PCM), 3V */
+#define ST_NP5Q128		0xDA18	/* Phase-change memory (PCM), 3V */
 
 #define SYNCMOS_MVC_ID		0x40	/* SyncMOS (SM) and Mosel Vitelic Corporation (MVC) */
 #define MVC_V29C51000T		0x00

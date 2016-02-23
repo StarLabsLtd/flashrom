@@ -24,11 +24,7 @@
 #ifndef __HWACCESS_H__
 #define __HWACCESS_H__ 1
 
-#if defined (__i386__) || defined (__x86_64__)
-#if defined(__GLIBC__)
-#include <sys/io.h>
-#endif
-#endif
+#include "platform.h"
 
 #if NEED_PCI == 1
 /*
@@ -38,21 +34,29 @@
  */
 #define index shadow_workaround_index
 
-#if !defined (__NetBSD__) && !defined (__DragonFly__)
+#if !defined (__NetBSD__)
 #include <pci/pci.h>
 #else
 #include <pciutils/pci.h>
 #endif
 
 #undef index
+#endif /* NEED_PCI == 1 */
+
+
+/* The next big hunk tries to guess endianess from various preprocessor macros */
+/* First some error checking in case some weird header has defined both.
+ * NB: OpenBSD always defines _BIG_ENDIAN and _LITTLE_ENDIAN. */
+#if defined (__LITTLE_ENDIAN__) && defined (__BIG_ENDIAN__)
+#error Conflicting endianness #define
 #endif
 
-#if defined (__i386__) || defined (__x86_64__)
+#if IS_X86
 
 /* All x86 is little-endian. */
 #define __FLASHROM_LITTLE_ENDIAN__ 1
 
-#elif defined (__mips) || defined (__mips__) || defined (_mips) || defined (mips)
+#elif IS_MIPS
 
 /* MIPS can be either endian. */
 #if defined (__MIPSEL) || defined (__MIPSEL__) || defined (_MIPSEL) || defined (MIPSEL)
@@ -61,30 +65,51 @@
 #define __FLASHROM_BIG_ENDIAN__ 1
 #endif
 
-#elif defined(__powerpc__) || defined(__powerpc64__) || defined(__ppc__) || defined(__ppc64__)
+#elif IS_PPC
 
 /* PowerPC can be either endian. */
 #if defined (_BIG_ENDIAN) || defined (__BIG_ENDIAN__)
 #define __FLASHROM_BIG_ENDIAN__ 1
-/* Error checking in case some weird header has #defines for LE as well. */
-#if defined (_LITTLE_ENDIAN) || defined (__LITTLE_ENDIAN__)
-#error Conflicting endianness #define
-#endif
-#else
-#error Little-endian PowerPC #defines are unknown
-#endif
-
-#elif defined (__arm__)
-#if defined (__ARMEL__)
+#elif defined (_LITTLE_ENDIAN) || defined (__LITTLE_ENDIAN__)
 #define __FLASHROM_LITTLE_ENDIAN__ 1
-#else
-#error Big-endian ARM #defines are unknown
 #endif
 
+#elif IS_ARM
+
+/* ARM can be either endian. */
+#if defined (__ARMEB__)
+#define __FLASHROM_BIG_ENDIAN__ 1
+#elif defined (__ARMEL__)
+#define __FLASHROM_LITTLE_ENDIAN__ 1
 #endif
+
+#elif IS_SPARC
+/* SPARC is big endian in general (but allows to access data in little endian too). */
+#define __FLASHROM_BIG_ENDIAN__ 1
+
+#endif /* IS_? */
 
 #if !defined (__FLASHROM_BIG_ENDIAN__) && !defined (__FLASHROM_LITTLE_ENDIAN__)
+
+/* If architecture-specific approaches fail try generic variants. First: BSD (works about everywhere). */
+#if !IS_WINDOWS
+#include <sys/param.h>
+
+#if defined (__BYTE_ORDER)
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define __FLASHROM_LITTLE_ENDIAN__
+#elif __BYTE_ORDER == __BIG_ENDIAN
+#define __FLASHROM_BIG_ENDIAN__
+#else
+#error Unknown byte order!
+#endif
+#endif /* defined __BYTE_ORDER */
+#endif /* !IS_WINDOWS */
+
+#if !defined (__FLASHROM_BIG_ENDIAN__) && !defined (__FLASHROM_LITTLE_ENDIAN__)
+
 /* Nonstandard libc-specific macros for determining endianness. */
+/* musl provides an endian.h as well... but it can not be detected from within C. */
 #if defined(__GLIBC__)
 #include <endian.h>
 #if BYTE_ORDER == LITTLE_ENDIAN
@@ -95,8 +120,10 @@
 #endif
 #endif
 
+#endif
+
 #if !defined (__FLASHROM_BIG_ENDIAN__) && !defined (__FLASHROM_LITTLE_ENDIAN__)
-#error Unable to determine endianness. Please add support for your arch or libc.
+#error Unable to determine endianness.
 #endif
 
 #define ___constant_swab8(x) ((uint8_t) (				\
@@ -158,11 +185,7 @@ cpu_to_be(64)
 #define cpu_to_le32
 #define cpu_to_le64
 
-#else
-
-#error Could not determine endianness.
-
-#endif
+#endif /* __FLASHROM_BIG_ENDIAN__ / __FLASHROM_LITTLE_ENDIAN__ */
 
 #define be_to_cpu8 cpu_to_be8
 #define be_to_cpu16 cpu_to_be16
@@ -173,13 +196,26 @@ cpu_to_be(64)
 #define le_to_cpu32 cpu_to_le32
 #define le_to_cpu64 cpu_to_le64
 
-#if NEED_PCI == 1
-#if defined (__i386__) || defined (__x86_64__)
+#if NEED_RAW_ACCESS == 1
+#if IS_X86
+
+/* sys/io.h provides iopl(2) and x86 I/O port access functions (inb, outb etc).
+ * It is included in glibc (thus available also on debian/kFreeBSD) but also in other libcs that mimic glibc,
+ * e.g. musl and uclibc. Because we cannot detect the libc or existence of the header or of the instructions
+ * themselves safely in here we use some heuristic below:
+ * On Android we don't have the header file and no way for I/O port access at all. However, sys/glibc-syscalls.h
+ * refers to an iopl implementation and we therefore include at least that one for now. On non-Android we assume
+ * that a Linux system's libc has a suitable sys/io.h or (on non-Linux) we depend on glibc to offer it. */
+#if defined(__ANDROID__)
+#include <sys/glibc-syscalls.h>
+#elif defined(__linux__) || defined(__GLIBC__)
+#include <sys/io.h>
+#endif
 
 #define __FLASHROM_HAVE_OUTB__ 1
 
 /* for iopl and outb under Solaris */
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
+#if defined (__sun)
 #include <sys/sysi86.h>
 #include <sys/psw.h>
 #include <asm/sunddi.h>
@@ -194,6 +230,7 @@ cpu_to_be(64)
    * out[bwl] definitions in machine/cpufunc.h and sys/io.h at least in some
    * versions. Use machine/cpufunc.h only for plain FreeBSD/DragonFlyBSD.
    */
+  #include <sys/types.h>
   #include <machine/cpufunc.h>
   #define OUTB(x, y) do { u_int outb_tmp = (y); outb(outb_tmp, (x)); } while (0)
   #define OUTW(x, y) do { u_int outw_tmp = (y); outw(outw_tmp, (x)); } while (0)
@@ -202,11 +239,8 @@ cpu_to_be(64)
   #define INW(x) __extension__ ({ u_int inw_tmp = (x); inw(inw_tmp); })
   #define INL(x) __extension__ ({ u_int inl_tmp = (x); inl(inl_tmp); })
 #else
-#if defined(__MACH__) && defined(__APPLE__)
-    /* Header is part of the DirectHW library. */
-    #include <DirectHW/DirectHW.h>
-#endif
-#if defined (__sun) && (defined(__i386) || defined(__amd64))
+
+#if defined (__sun)
   /* Note different order for outb */
   #define OUTB(x,y) outb(y, x)
   #define OUTW(x,y) outw(y, x)
@@ -229,6 +263,12 @@ cpu_to_be(64)
   #define INL  inportl
 
 #else
+
+#if defined(__MACH__) && defined(__APPLE__)
+    /* Header is part of the DirectHW library. */
+    #include <DirectHW/DirectHW.h>
+#endif
+
   /* This is the usual glibc interface. */
   #define OUTB outb
   #define OUTW outw
@@ -236,9 +276,7 @@ cpu_to_be(64)
   #define INB  inb
   #define INW  inw
   #define INL  inl
-
 #endif
-
 #endif
 #endif
 
@@ -324,15 +362,19 @@ int libpayload_wrmsr(int addr, msr_t msr);
 #define wrmsr libpayload_wrmsr
 #endif
 
-#elif defined(__powerpc__) || defined(__powerpc64__) || defined(__ppc__) || defined(__ppc64__)
+#elif IS_PPC
 
 /* PCI port I/O is not yet implemented on PowerPC. */
 
-#elif defined (__mips) || defined (__mips__) || defined (_mips) || defined (mips)
+#elif IS_MIPS
 
 /* PCI port I/O is not yet implemented on MIPS. */
 
-#elif defined(__arm__)
+#elif IS_SPARC
+
+/* PCI port I/O is not yet implemented on SPARC. */
+
+#elif IS_ARM
 
 /* Non memory mapped I/O is not supported on ARM. */
 
@@ -340,7 +382,7 @@ int libpayload_wrmsr(int addr, msr_t msr);
 
 #error Unknown architecture, please check if it supports PCI port IO.
 
-#endif
-#endif
+#endif /* IS_* */
+#endif /* NEED_RAW_ACCESS == 1 */
 
 #endif /* !__HWACCESS_H__ */

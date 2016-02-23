@@ -70,3 +70,34 @@ void tolower_string(char *str)
 		*str = (char)tolower((unsigned char)*str);
 }
 
+/* FIXME: Find a better solution for MinGW. Maybe wrap strtok_s (C11) if it becomes available */
+#ifdef __MINGW32__
+char* strtok_r(char *str, const char *delim, char **nextp)
+{
+	if (str == NULL)
+		str = *nextp;
+
+	str += strspn(str, delim); /* Skip leading delimiters */
+	if (*str == '\0')
+		return NULL;
+
+	char *ret = str;
+	str += strcspn(str, delim); /* Find end of token */
+	if (*str != '\0')
+		*str++ = '\0';
+
+	*nextp = str;
+	return ret;
+}
+#endif
+
+/* There is no strnlen in DJGPP */
+#if defined(__DJGPP__) || !defined(HAVE_STRNLEN)
+size_t strnlen(const char *str, size_t n)
+{
+	size_t i;
+	for (i = 0; i < n && str[i] != '\0'; i++)
+		;
+	return i;
+}
+#endif

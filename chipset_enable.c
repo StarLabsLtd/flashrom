@@ -451,7 +451,7 @@ static int enable_flash_ich_fwh_decode(struct pci_dev *dev, enum ich_chipset ich
 			fwh_idsel_old = mmio_readl(ilb + fwh_sel1);
 			rmmio_writel(fwh_idsel, ilb + fwh_sel1);
 		} else {
-			fwh_idsel_old = pci_read_long(dev, fwh_sel1) << 16;
+			fwh_idsel_old = (uint64_t)pci_read_long(dev, fwh_sel1) << 16;
 			rpci_write_long(dev, fwh_sel1, (fwh_idsel >> 16) & 0xffffffff);
 			if (fwh_sel2 > 0) {
 				fwh_idsel_old |= pci_read_word(dev, fwh_sel2);
@@ -1582,6 +1582,7 @@ const struct penable chipset_enables[] = {
 	{0x1106, 0x3147, OK,  "VIA", "VT8233A",				enable_flash_vt823x},
 	{0x1106, 0x3177, OK,  "VIA", "VT8235",				enable_flash_vt823x},
 	{0x1106, 0x3227, OK,  "VIA", "VT8237(R)",			enable_flash_vt823x},
+	{0x1106, 0x3287, OK,  "VIA", "VT8251",				enable_flash_vt823x},
 	{0x1106, 0x3337, OK,  "VIA", "VT8237A",				enable_flash_vt823x},
 	{0x1106, 0x3372, OK,  "VIA", "VT8237S",				enable_flash_vt8237s_spi},
 	{0x1106, 0x8231, NT,  "VIA", "VT8231",				enable_flash_vt823x},
@@ -1593,7 +1594,7 @@ const struct penable chipset_enables[] = {
 	{0x1166, 0x0205, OK,  "Broadcom", "HT-1000",			enable_flash_ht1000},
 	{0x17f3, 0x6030, OK,  "RDC", "R8610/R3210",			enable_flash_rdc_r8610},
 	{0x8086, 0x0c60, NT,  "Intel", "S12x0",				enable_flash_s12x0},
-	{0x8086, 0x0f1c, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
+	{0x8086, 0x0f1c, OK,  "Intel", "Bay Trail",			enable_flash_silvermont},
 	{0x8086, 0x0f1d, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
 	{0x8086, 0x0f1e, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
 	{0x8086, 0x0f1f, NT,  "Intel", "Bay Trail",			enable_flash_silvermont},
@@ -1631,10 +1632,11 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x1e5d, NT,  "Intel", "HM75",				enable_flash_pch7},
 	{0x8086, 0x1e5e, NT,  "Intel", "HM70",				enable_flash_pch7},
 	{0x8086, 0x1e5f, DEP, "Intel", "NM70",				enable_flash_pch7},
-	{0x8086, 0x1f38, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x1f38, DEP, "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
 	{0x8086, 0x1f39, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
 	{0x8086, 0x1f3a, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
 	{0x8086, 0x1f3b, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
+	{0x8086, 0x229c, NT,  "Intel", "Braswell",			enable_flash_silvermont},
 	{0x8086, 0x2310, NT,  "Intel", "DH89xxCC (Cave Creek)",		enable_flash_pch7},
 	{0x8086, 0x2390, NT,  "Intel", "Coleto Creek",			enable_flash_pch7},
 	{0x8086, 0x2410, OK,  "Intel", "ICH",				enable_flash_ich0},
@@ -1730,42 +1732,47 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x8c5d, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5e, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5f, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
+	{0x8086, 0x8cc1, NT,  "Intel", "9 Series",			enable_flash_pch9},
+	{0x8086, 0x8cc2, NT,  "Intel", "9 Series Engineering Sample",	enable_flash_pch9},
+	{0x8086, 0x8cc3, NT,  "Intel", "9 Series",			enable_flash_pch9},
+	{0x8086, 0x8cc4, NT,  "Intel", "Z97",				enable_flash_pch9},
+	{0x8086, 0x8cc6, NT,  "Intel", "H97",				enable_flash_pch9},
+	{0x8086, 0x8d40, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d41, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d42, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d43, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d44, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d45, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d46, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d47, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d48, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d49, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4a, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4b, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4c, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4d, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4e, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d4f, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d50, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d51, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d52, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d53, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d54, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d55, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d56, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d57, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d58, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d59, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5a, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5b, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5c, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5d, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5e, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
+	{0x8086, 0x8d5f, NT,  "Intel", "C610/X99 (Wellsburg)",		enable_flash_pch8_wb},
 	{0x8086, 0x9c41, NT,  "Intel", "Lynx Point LP Eng. Sample",	enable_flash_pch8_lp},
 	{0x8086, 0x9c43, NT,  "Intel", "Lynx Point LP Premium",		enable_flash_pch8_lp},
 	{0x8086, 0x9c45, NT,  "Intel", "Lynx Point LP Mainstream",	enable_flash_pch8_lp},
 	{0x8086, 0x9c47, NT,  "Intel", "Lynx Point LP Value",		enable_flash_pch8_lp},
- 	{0x8086, 0x8d40, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d41, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d42, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d43, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d44, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d45, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d46, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d47, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d48, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d49, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4a, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4b, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4c, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4d, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4e, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d4f, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d50, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d51, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d52, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d53, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d54, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d55, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d56, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d57, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d58, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d59, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5a, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5b, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5c, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5d, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5e, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
- 	{0x8086, 0x8d5f, NT,  "Intel", "Wellsburg",			enable_flash_pch8_wb},
 	{0x8086, 0x9cc1, NT,  "Intel", "Haswell U Sample",		enable_flash_pch9},
 	{0x8086, 0x9cc2, NT,  "Intel", "Broadwell U Sample",		enable_flash_pch9},
 	{0x8086, 0x9cc3, NT,  "Intel", "Broadwell U Premium",		enable_flash_pch9},
@@ -1774,6 +1781,10 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x9cc7, NT,  "Intel", "Broadwell Y Premium",		enable_flash_pch9},
 	{0x8086, 0x9cc9, NT,  "Intel", "Broadwell Y Base",		enable_flash_pch9},
 	{0x8086, 0x9ccb, NT,  "Intel", "Broadwell H",			enable_flash_pch9},
+	{0x8086, 0x9d41, BAD, "Intel", "Sunrise Point (Skylake LP Sample)",	NULL},
+	{0x8086, 0x9d43, BAD, "Intel", "Sunrise Point (Skylake-U Base)",	NULL},
+	{0x8086, 0x9d48, BAD, "Intel", "Sunrise Point (Skylake-U Premium)",	NULL},
+	{0x8086, 0x9d46, BAD, "Intel", "Sunrise Point (Skylake-Y Premium)",	NULL},
 #endif
 	{0},
 };
@@ -1807,10 +1818,14 @@ int chipset_flash_enable(void)
 		msg_pdbg(" with PCI ID %04x:%04x",
 			 chipset_enables[i].vendor_id,
 			 chipset_enables[i].device_id);
-		msg_pinfo(". ");
+		msg_pinfo(".\n");
 
+		if (chipset_enables[i].status == BAD) {
+			msg_perr("ERROR: This chipset is not supported yet.\n");
+			return ERROR_FATAL;
+		}
 		if (chipset_enables[i].status == NT) {
-			msg_pinfo("\nThis chipset is marked as untested. If "
+			msg_pinfo("This chipset is marked as untested. If "
 				  "you are using an up-to-date version\nof "
 				  "flashrom *and* were (not) able to "
 				  "successfully update your firmware with it,\n"
@@ -1819,8 +1834,7 @@ int chipset_flash_enable(void)
 				  "(-V) log.\nThank you!\n");
 		}
 		msg_pinfo("Enabling flash write... ");
-		ret = chipset_enables[i].doit(dev,
-					      chipset_enables[i].device_name);
+		ret = chipset_enables[i].doit(dev, chipset_enables[i].device_name);
 		if (ret == NOT_DONE_YET) {
 			ret = -2;
 			msg_pinfo("OK - searching further chips.\n");

@@ -57,6 +57,9 @@ enum programmer {
 #if CONFIG_ATAVIA == 1
 	PROGRAMMER_ATAVIA,
 #endif
+#if CONFIG_ATAPROMISE == 1
+	PROGRAMMER_ATAPROMISE,
+#endif
 #if CONFIG_IT8212 == 1
 	PROGRAMMER_IT8212,
 #endif
@@ -98,6 +101,15 @@ enum programmer {
 #endif
 #if CONFIG_USBBLASTER_SPI == 1
 	PROGRAMMER_USBBLASTER_SPI,
+#endif
+#if CONFIG_MSTARDDC_SPI == 1
+	PROGRAMMER_MSTARDDC_SPI,
+#endif
+#if CONFIG_PICKIT2_SPI == 1
+	PROGRAMMER_PICKIT2_SPI,
+#endif
+#if CONFIG_CH341A_SPI == 1
+	PROGRAMMER_CH341A_SPI,
 #endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
 };
@@ -318,8 +330,6 @@ extern int superio_count;
 #define SUPERIO_VENDOR_WINBOND	0x2
 #endif
 #if NEED_PCI == 1
-struct pci_filter;
-struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
 struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t devclass);
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
@@ -456,6 +466,13 @@ void *atavia_map(const char *descr, uintptr_t phys_addr, size_t len);
 extern const struct dev_entry ata_via[];
 #endif
 
+/* atapromise.c */
+#if CONFIG_ATAPROMISE == 1
+int atapromise_init(void);
+void *atapromise_map(const char *descr, uintptr_t phys_addr, size_t len);
+extern const struct dev_entry ata_promise[];
+#endif
+
 /* it8212.c */
 #if CONFIG_IT8212 == 1
 int it8212_init(void);
@@ -472,6 +489,17 @@ extern const struct dev_entry devs_ft2232spi[];
 #if CONFIG_USBBLASTER_SPI == 1
 int usbblaster_spi_init(void);
 extern const struct dev_entry devs_usbblasterspi[];
+#endif
+
+/* mstarddc_spi.c */
+#if CONFIG_MSTARDDC_SPI == 1
+int mstarddc_spi_init(void);
+#endif
+
+/* pickit2_spi.c */
+#if CONFIG_PICKIT2_SPI == 1
+int pickit2_spi_init(void);
+extern const struct dev_entry devs_pickit2_spi[];
 #endif
 
 /* rayer_spi.c */
@@ -500,6 +528,14 @@ int linux_spi_init(void);
 /* dediprog.c */
 #if CONFIG_DEDIPROG == 1
 int dediprog_init(void);
+extern const struct dev_entry devs_dediprog[];
+#endif
+
+/* ch341a_spi.c */
+#if CONFIG_CH341A_SPI == 1
+int ch341a_spi_init(void);
+void ch341a_spi_delay(unsigned int usecs);
+extern const struct dev_entry devs_ch341a_spi[];
 #endif
 
 /* flashrom.c */
@@ -555,6 +591,15 @@ enum spi_controller {
 #if CONFIG_USBBLASTER_SPI == 1
 	SPI_CONTROLLER_USBBLASTER,
 #endif
+#if CONFIG_MSTARDDC_SPI == 1
+	SPI_CONTROLLER_MSTARDDC,
+#endif
+#if CONFIG_PICKIT2_SPI == 1
+	SPI_CONTROLLER_PICKIT2,
+#endif
+#if CONFIG_CH341A_SPI == 1
+	SPI_CONTROLLER_CH341A_SPI,
+#endif
 };
 
 #define MAX_DATA_UNSPECIFIED 0
@@ -562,8 +607,8 @@ enum spi_controller {
 #define MAX_DATA_WRITE_UNLIMITED 256
 struct spi_master {
 	enum spi_controller type;
-	unsigned int max_data_read;
-	unsigned int max_data_write;
+	unsigned int max_data_read; // (Ideally,) maximum data read size in one go (excluding opcode+address).
+	unsigned int max_data_write; // (Ideally,) maximum data write size in one go (excluding opcode+address).
 	int (*command)(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
 		   const unsigned char *writearr, unsigned char *readarr);
 	int (*multicommand)(struct flashctx *flash, struct spi_command *cmds);
@@ -680,16 +725,17 @@ struct registered_master {
 };
 extern struct registered_master registered_masters[];
 extern int registered_master_count;
-int register_master(struct registered_master *mst);
+int register_master(const struct registered_master *mst);
 
 /* serprog.c */
 #if CONFIG_SERPROG == 1
 int serprog_init(void);
 void serprog_delay(unsigned int usecs);
+void *serprog_map(const char *descr, uintptr_t phys_addr, size_t len);
 #endif
 
 /* serial.c */
-#ifdef _WIN32
+#if IS_WINDOWS
 typedef HANDLE fdtype;
 #define SER_INV_FD	INVALID_HANDLE_VALUE
 #else
@@ -698,10 +744,8 @@ typedef int fdtype;
 #endif
 
 void sp_flush_incoming(void);
-fdtype sp_openserport(char *dev, unsigned int baud);
-int serialport_config(fdtype fd, unsigned int baud);
+fdtype sp_openserport(char *dev, int baud);
 extern fdtype sp_fd;
-/* expose serialport_shutdown as it's currently used by buspirate */
 int serialport_shutdown(void *data);
 int serialport_write(const unsigned char *buf, unsigned int writecnt);
 int serialport_write_nonblock(const unsigned char *buf, unsigned int writecnt, unsigned int timeout, unsigned int *really_wrote);

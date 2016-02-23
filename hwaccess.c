@@ -18,19 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#define IS_X86	(defined(__i386__) || defined(__x86_64__) || defined(__amd64__))
-#define IS_MIPS	(defined (__mips) || defined (__mips__) || defined (__MIPS__) || defined (mips))
-#define IS_PPC	(defined(__powerpc__) || defined(__powerpc64__) || defined(__ppc__) || defined(__ppc64__))
-#define IS_ARM	(defined (__arm__) || defined (_ARM))
-#if !(IS_X86 || IS_MIPS || IS_PPC || IS_ARM)
-#error Unknown architecture
-#endif
-
-#define IS_LINUX	(defined(__gnu_linux__) || defined(__linux__))
-#define IS_MACOSX	(defined(__APPLE__) && defined(__MACH__))
-#if !(IS_LINUX || IS_MACOSX || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__) || defined(__DJGPP__) || defined(__LIBPAYLOAD__) || defined(__sun))
-#error "Unknown operating system"
-#endif
+#include "platform.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -45,6 +33,10 @@
 #include "flash.h"
 #include "hwaccess.h"
 
+#if !(IS_LINUX || IS_MACOSX || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__) || defined(__DJGPP__) || defined(__LIBPAYLOAD__) || defined(__sun))
+#error "Unknown operating system"
+#endif
+
 #define USE_IOPL	(IS_LINUX || IS_MACOSX || defined(__NetBSD__) || defined(__OpenBSD__))
 #define USE_DEV_IO	(defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__))
 
@@ -57,13 +49,29 @@ int io_fd;
  */
 static inline void sync_primitive(void)
 {
-/* This is needed only on PowerPC because...
- * - x86 uses uncached accesses which have a strongly ordered memory model and
- * - MIPS uses uncached accesses in mode 2 on /dev/mem which has also a strongly ordered memory model
- * - ARM uses a strongly ordered memory model for device memories.
+/* This is not needed for...
+ * - x86: uses uncached accesses which have a strongly ordered memory model.
+ * - MIPS: uses uncached accesses in mode 2 on /dev/mem which has also a strongly ordered memory model.
+ * - ARM: uses a strongly ordered memory model for device memories.
+ *
+ * See also https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/memory-barriers.txt
  */
-#if IS_PPC
+#if IS_PPC // cf. http://lxr.free-electrons.com/source/arch/powerpc/include/asm/barrier.h
 	asm("eieio" : : : "memory");
+#elif IS_SPARC
+#if defined(__sparc_v9__) || defined(__sparcv9)
+	/* Sparc V9 CPUs support three different memory orderings that range from x86-like TSO to PowerPC-like
+	 * RMO. The modes can be switched at runtime thus to make sure we maintain the right order of access we
+	 * use the strongest hardware memory barriers that exist on Sparc V9. */
+	asm volatile ("membar #Sync" ::: "memory");
+#elif defined(__sparc_v8__) || defined(__sparcv8)
+	/* On SPARC V8 there is no RMO just PSO and that does not apply to I/O accesses... but if V8 code is run
+	 * on V9 CPUs it might apply... or not... we issue a write barrier anyway. That's the most suitable
+	 * operation in the V8 instruction set anyway. If you know better then please tell us. */
+	asm volatile ("stbar");
+#else
+	#error Unknown and/or unsupported SPARC instruction set version detected.
+#endif
 #endif
 }
 

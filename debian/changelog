@@ -1,3 +1,16 @@
+flashrom (0.9.9~rc1+r1942-1) unstable; urgency=medium
+
+  * Acknowledge NMU, thanks Anibal Monsalve Salazar! (Closes: #775428).
+  * New upstream release (Closes: #786917).
+      + Dediprog SF100 support is now enabled by default (Closes: #639957).
+      + debian/patches/20_svn_version.patch: Drop, no longer needed (if the
+        tarball is generated via 'make tarball' from svn checkout).
+      + debian/patches/mips-fix-internal.patch: Drop, fixed upstream.
+  * New build-depends: libusb-1.0-0-dev (in addition to libusb-dev).
+  * Updated build-depends: libftdi-dev -> libftdi1-dev (Closes: #810372).
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 23 Feb 2016 19:34:07 +0100
+
 flashrom (0.9.7+r1852-1.1) unstable; urgency=medium
 
   * Non-maintainer upload.
