@@ -1,3 +1,23 @@
+flashrom (0.9.9~rc1+r1946-1) unstable; urgency=medium
+
+  * New upstream release (Closes: #788426, #802342).
+      + Partial support for alpha, hppa, m68k, sh, and s390 (Closes: 774405).
+  * debian/control:
+      + On kFreeBSD only build-depend on libusb-1.0-0-dev, that
+        package also includes the old libusb 0.1 API (Closes: #815947).
+        Thanks Steven Chamberlain for the patch!
+      + Don't build-depend on libusb-1.0-0-dev on Hurd, it's not available.
+      + Add pkg-config to build-depends, since it is used by the upstream
+        Makefile. Otherwise the Makefile uses hardcoded guesses, which
+        are not always correct.
+      + Drop "Recommends: dmidecode [any-i386 any-amd64 ia64 armhf]".
+        Upstream has its own code now, no longer uses dmidecode by default.
+  * debian/rules: Add "export DEB_BUILD_MAINT_OPTIONS = hardening=+all".
+  * Standards-Version: 3.9.7 (no changes required).
+  * Package description: Update list of supported devices.
+
+ -- Uwe Hermann <uwe@debian.org>  Tue, 01 Mar 2016 00:07:45 +0100
+
 flashrom (0.9.9~rc1+r1942-1) unstable; urgency=medium
 
   * Acknowledge NMU, thanks Anibal Monsalve Salazar! (Closes: #775428).
