@@ -1,3 +1,10 @@
+flashrom (0.9.9+r1954-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Don't build-depend on libftdi1-dev on Hurd, it's not available.
+
+ -- Uwe Hermann <uwe@debian.org>  Sun, 13 Mar 2016 20:41:00 +0100
+
 flashrom (0.9.9~rc1+r1946-1) unstable; urgency=medium
 
   * New upstream release (Closes: #788426, #802342).
