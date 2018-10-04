@@ -1,3 +1,13 @@
+flashrom (1.0-1) unstable; urgency=medium
+
+  * New upstream version. (Closes: #892065)
+  * New maintainer. (Closes: #919434)
+  * debian/control: add myself to Uploaders field. (Closes: #919050)
+  * Bump debhelper version to 10.
+  * Bump standards version to 4.2.1.
+
+ -- Gürkan Myczko <gurkan@phys.ethz.ch>  Thu, 04 Oct 2018 08:57:59 +0200
+
 flashrom (0.9.9+r1954-1) unstable; urgency=medium
 
   * New upstream release.

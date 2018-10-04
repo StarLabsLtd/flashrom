@@ -195,6 +195,11 @@ uintptr_t pcidev_readbar(struct pci_dev *dev, int bar);
 struct pci_dev *pcidev_init(const struct dev_entry *devs, int bar);
 /* rpci_write_* are reversible writes. The original PCI config space register
  * contents will be restored on shutdown.
+ * To clone the pci_dev instances internally, the `pacc` global
+ * variable has to reference a pci_access method that is compatible
+ * with the given pci_dev handle. The referenced pci_access (not
+ * the variable) has to stay valid until the shutdown handlers are
+ * finished.
  */
 int rpci_write_byte(struct pci_dev *dev, int reg, uint8_t data);
 int rpci_write_word(struct pci_dev *dev, int reg, uint16_t data);
@@ -308,7 +313,7 @@ void cleanup_cpu_msr(void);
 
 /* cbtable.c */
 int cb_parse_table(const char **vendor, const char **model);
-int cb_check_image(uint8_t *bios, int size);
+int cb_check_image(const uint8_t *bios, int size);
 
 /* dmi.c */
 #if defined(__i386__) || defined(__x86_64__)
@@ -351,16 +356,16 @@ int internal_init(void);
 void mmio_writeb(uint8_t val, void *addr);
 void mmio_writew(uint16_t val, void *addr);
 void mmio_writel(uint32_t val, void *addr);
-uint8_t mmio_readb(void *addr);
-uint16_t mmio_readw(void *addr);
-uint32_t mmio_readl(void *addr);
-void mmio_readn(void *addr, uint8_t *buf, size_t len);
+uint8_t mmio_readb(const void *addr);
+uint16_t mmio_readw(const void *addr);
+uint32_t mmio_readl(const void *addr);
+void mmio_readn(const void *addr, uint8_t *buf, size_t len);
 void mmio_le_writeb(uint8_t val, void *addr);
 void mmio_le_writew(uint16_t val, void *addr);
 void mmio_le_writel(uint32_t val, void *addr);
-uint8_t mmio_le_readb(void *addr);
-uint16_t mmio_le_readw(void *addr);
-uint32_t mmio_le_readl(void *addr);
+uint8_t mmio_le_readb(const void *addr);
+uint16_t mmio_le_readw(const void *addr);
+uint32_t mmio_le_readl(const void *addr);
 #define pci_mmio_writeb mmio_le_writeb
 #define pci_mmio_writew mmio_le_writew
 #define pci_mmio_writel mmio_le_writel
@@ -649,13 +654,16 @@ enum ich_chipset {
 	CHIPSET_8_SERIES_LYNX_POINT_LP,
 	CHIPSET_8_SERIES_WELLSBURG,
 	CHIPSET_9_SERIES_WILDCAT_POINT,
+	CHIPSET_9_SERIES_WILDCAT_POINT_LP,
+	CHIPSET_100_SERIES_SUNRISE_POINT, /* also 6th/7th gen Core i/o (LP) variants */
+	CHIPSET_C620_SERIES_LEWISBURG,
 };
 
 /* ichspi.c */
 #if CONFIG_INTERNAL == 1
 extern uint32_t ichspi_bbar;
-int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_generation);
-int via_init_spi(struct pci_dev *dev, uint32_t mmio_base);
+int ich_init_spi(void *spibar, enum ich_chipset ich_generation);
+int via_init_spi(uint32_t mmio_base);
 
 /* amd_imc.c */
 int amd_imc_shutdown(struct pci_dev *dev);

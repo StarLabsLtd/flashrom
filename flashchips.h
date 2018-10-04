@@ -748,9 +748,9 @@
  */
 #define ST_ID			0x20	/* ST / SGS/Thomson / Numonyx (later acquired by Micron) */
 #define ST_M25P05A		0x2010
-#define ST_M25P05_RES		0x10	/* Same code as M25P10. */
+#define ST_M25P05_RES		0x05
 #define ST_M25P10A		0x2011
-#define ST_M25P10_RES		0x10	/* Same code as M25P05. */
+#define ST_M25P10_RES		0x10
 #define ST_M25P20		0x2012
 #define ST_M25P20_RES		0x11
 #define ST_M25P40		0x2013
@@ -906,7 +906,7 @@
 #define WINBOND_NEX_W25Q16_W	0x6015	/* W25Q16DW */
 #define WINBOND_NEX_W25Q32_W	0x6016	/* W25Q32DW; W25Q32FV in QPI mode */
 #define WINBOND_NEX_W25Q64_W	0x6017	/* W25Q64DW; W25Q64FV in QPI mode */
-#define WINBOND_NEX_W25Q128_W	0x6018	/* (No W version known) W25Q128FV in QPI mode */
+#define WINBOND_NEX_W25Q128_W	0x6018	/* W25Q128FW; W25Q128FV in QPI mode */
 
 #define WINBOND_ID		0xDA	/* Winbond */
 #define WINBOND_W19B160BB	0x49

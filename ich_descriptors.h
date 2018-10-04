@@ -19,10 +19,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#if defined(__i386__) || defined(__x86_64__)
 #ifndef __ICH_DESCRIPTORS_H__
 #define __ICH_DESCRIPTORS_H__ 1
 
+#include <sys/types.h>
 #include <stdint.h>
 #include "programmer.h" /* for enum ich_chipset */
 
@@ -34,6 +34,7 @@
 #define ICH_RET_OOB	-4
 
 #define ICH9_REG_FDOC		0xB0	/* 32 Bits Flash Descriptor Observability Control */
+#define PCH100_REG_FDOC		0xB4	/* New offset from Sunrise Point on */
 					/* 0-1: reserved */
 #define FDOC_FDSI_OFF		2	/* 2-11: Flash Descriptor Section Index */
 #define FDOC_FDSI		(0x3f << FDOC_FDSI_OFF)
@@ -42,6 +43,7 @@
 					/* 15-31: reserved */
 
 #define ICH9_REG_FDOD		0xB4	/* 32 Bits Flash Descriptor Observability Data */
+#define PCH100_REG_FDOD		0xB8	/* New offset from Sunrise Point on */
 
 /* Field locations and semantics for LVSCC, UVSCC and related words in the flash
  * descriptor are equal therefore they all share the same macros below. */
@@ -61,8 +63,8 @@
 #define VSCC_VCL			(0x1 << VSCC_VCL_OFF)
 					/* 24-31: reserved */
 
-#define ICH_FREG_BASE(flreg)  (((flreg) << 12) & 0x01fff000)
-#define ICH_FREG_LIMIT(flreg) (((flreg) >>  4) & 0x01fff000)
+#define ICH_FREG_BASE(flreg)  (((flreg) << 12) & 0x07fff000)
+#define ICH_FREG_LIMIT(flreg) ((((flreg) >> 4) & 0x07fff000) | 0x00000fff)
 
 void prettyprint_ich_reg_vscc(uint32_t reg_val, int verbosity, bool print_vcl);
 
@@ -75,7 +77,7 @@ struct ich_desc_content {
 				 NC	:2, /* Number Of Components */
 					:6,
 				 FRBA	:8, /* Flash Region Base Address */
-				 NR	:3, /* Number Of Regions */
+				 NR	:3, /* Number Of Regions (reserved from Skylake on) */
 					:5;
 		};
 	};
@@ -92,9 +94,10 @@ struct ich_desc_content {
 	union {			/* 0x0c */
 		uint32_t FLMAP2;
 		struct {
-			uint32_t FMSBA	:8, /* Flash (G)MCH Strap Base Addr. */
-				 MSL	:8, /* MCH Strap Length */
-					:16;
+			uint32_t FMSBA		:8, /* Flash (G)MCH Strap Base Addr. */
+				 MSL		:8, /* MCH Strap Length */
+				 ICCRIBA	:8, /* ICC Reg. Init Base Addr.	(new since Sandy Bridge) */
+				 RIL		:8; /* Register Init Length	(new since Hawell) */
 		};
 	};
 };
@@ -114,7 +117,8 @@ struct ich_desc_component {
 		 * Patsburg:		50		30		5	0:2, 3:5
 		 * Panther Point/7	50		30		5	0:2, 3:5
 		 * Lynx Point/8:	50		30		7	0:3, 4:7
-		 * Wildcat Point/9:	50		?? (multi I/O)	?	?:?, ?:?
+		 * Wildcat Point/9:	50		30 (multi I/O)	7	0:3, 4:7
+		 * Sunrise Point/100:	48		30		7	0:3, 4:7
 		 */
 		struct {
 			uint32_t		:17,
@@ -147,55 +151,50 @@ struct ich_desc_component {
 		};
 	};
 	union {			/* 0x08 */
-		uint32_t FLPB; /* Flash Partition Boundary Register */
+		uint32_t FLPB; /* Flash Partition Boundary Register, until Panther Point/7 */
 		struct {
 			uint32_t FPBA	:13, /* Flash Partition Boundary Addr */
 					:19;
 		};
-	};
-};
-
-struct ich_desc_region {
-	union {
-		uint32_t FLREGs[5];
+		uint32_t FLILL1; /* Flash Invalid Instructions Register, new since Sunrise Point/100 */
 		struct {
-			struct { /* FLREG0 Flash Descriptor */
-				uint32_t reg0_base	:13,
-							:3,
-					 reg0_limit	:13,
-							:3;
-			};
-			struct { /* FLREG1 BIOS */
-				uint32_t reg1_base	:13,
-							:3,
-					 reg1_limit	:13,
-							:3;
-			};
-			struct { /* FLREG2 ME */
-				uint32_t reg2_base	:13,
-							:3,
-					 reg2_limit	:13,
-							:3;
-			};
-			struct { /* FLREG3 GbE */
-				uint32_t reg3_base	:13,
-							:3,
-					 reg3_limit	:13,
-							:3;
-			};
-			struct { /* FLREG4 Platform */
-				uint32_t reg4_base	:13,
-							:3,
-					 reg4_limit	:13,
-							:3;
-			};
+			uint32_t invalid_instr4	:8,
+				 invalid_instr5	:8,
+				 invalid_instr6	:8,
+				 invalid_instr7	:8;
 		};
 	};
 };
 
+#define MAX_NUM_FLREGS 16
+struct ich_desc_region {
+	/*
+	 * Number of entries and width differ on various generations:
+	 *
+	 * Chipset/Generation				#FLREGs		width (bits)
+	 * ICH8			.. Panther Point/7	 5		13
+	 * Lynx Point/8		.. Wildcat Point/9	 7		15
+	 * Sunrise Point/100	..			10		15
+	 * Lewisburg/100	..			16		15
+	 */
+	union {
+		uint32_t FLREGs[MAX_NUM_FLREGS]; /* Flash Descriptor Regions */
+
+		/* only used for bit-field check */
+		struct {
+			uint32_t base	:13,
+					:3,
+				 limit	:13,
+					:3;
+		} old_reg[MAX_NUM_FLREGS];
+	};
+};
+
+#define MAX_NUM_MASTERS 6 /* 5 prior to C620/Lewisburg PCH */
 struct ich_desc_master {
 	union {
-		uint32_t FLMSTR1;
+		uint32_t FLMSTRs[MAX_NUM_MASTERS]; /* Flash Masters */
+		/* For pre-Skylake platforms */
 		struct {
 			uint32_t BIOS_req_ID	:16,
 				 BIOS_descr_r	:1,
@@ -210,11 +209,6 @@ struct ich_desc_master {
 				 BIOS_GbE_w	:1,
 				 BIOS_plat_w	:1,
 						:3;
-		};
-	};
-	union {
-		uint32_t FLMSTR2;
-		struct {
 			uint32_t ME_req_ID	:16,
 				 ME_descr_r	:1,
 				 ME_BIOS_r	:1,
@@ -228,11 +222,6 @@ struct ich_desc_master {
 				 ME_GbE_w	:1,
 				 ME_plat_w	:1,
 						:3;
-		};
-	};
-	union {
-		uint32_t FLMSTR3;
-		struct {
 			uint32_t GbE_req_ID	:16,
 				 GbE_descr_r	:1,
 				 GbE_BIOS_r	:1,
@@ -247,10 +236,15 @@ struct ich_desc_master {
 				 GbE_plat_w	:1,
 						:3;
 		};
+		/* From Skylake on */
+		struct {
+			uint32_t	:8,
+				 read	:12,
+				 write	:12;
+		} mstr[MAX_NUM_MASTERS];
 	};
 };
 
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
 struct ich_desc_north_strap {
 	union {
 		uint32_t STRPs[1]; /* current maximum: ich8 */
@@ -561,38 +555,40 @@ struct ich_desc_upper_map {
 		};
 	} vscc_table[128];
 };
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
 
 struct ich_descriptors {
 	struct ich_desc_content content;
 	struct ich_desc_component component;
 	struct ich_desc_region region;
 	struct ich_desc_master master;
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
 	struct ich_desc_north_strap north;
 	struct ich_desc_south_strap south;
 	struct ich_desc_upper_map upper;
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
 };
 
+struct ich_layout {
+	struct flashrom_layout base;
+	struct romentry entries[MAX_NUM_FLREGS];
+};
+
+ssize_t ich_number_of_regions(enum ich_chipset cs, const struct ich_desc_content *content);
+ssize_t ich_number_of_masters(enum ich_chipset cs, const struct ich_desc_content *content);
+
+void prettyprint_ich_chipset(enum ich_chipset cs);
 void prettyprint_ich_descriptors(enum ich_chipset cs, const struct ich_descriptors *desc);
 
-void prettyprint_ich_descriptor_content(const struct ich_desc_content *content);
+void prettyprint_ich_descriptor_content(enum ich_chipset cs, const struct ich_desc_content *content);
 void prettyprint_ich_descriptor_component(enum ich_chipset cs, const struct ich_descriptors *desc);
-void prettyprint_ich_descriptor_region(const struct ich_descriptors *desc);
-void prettyprint_ich_descriptor_master(const struct ich_desc_master *master);
-
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
+void prettyprint_ich_descriptor_region(enum ich_chipset cs, const struct ich_descriptors *desc);
+void prettyprint_ich_descriptor_master(enum ich_chipset cs, const struct ich_descriptors *desc);
 
 void prettyprint_ich_descriptor_upper_map(const struct ich_desc_upper_map *umap);
 void prettyprint_ich_descriptor_straps(enum ich_chipset cs, const struct ich_descriptors *desc);
-int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struct ich_descriptors *desc);
+int read_ich_descriptors_from_dump(const uint32_t *dump, size_t len, enum ich_chipset *cs, struct ich_descriptors *desc);
 
-#else /* ICH_DESCRIPTORS_FROM_DUMP */
-
-int read_ich_descriptors_via_fdo(void *spibar, struct ich_descriptors *desc);
+int read_ich_descriptors_via_fdo(enum ich_chipset cs, void *spibar, struct ich_descriptors *desc);
 int getFCBA_component_density(enum ich_chipset cs, const struct ich_descriptors *desc, uint8_t idx);
 
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
+int layout_from_ich_descriptors(struct ich_layout *, const void *dump, size_t len);
+
 #endif /* __ICH_DESCRIPTORS_H__ */
-#endif /* defined(__i386__) || defined(__x86_64__) */

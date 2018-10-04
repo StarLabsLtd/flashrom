@@ -30,6 +30,7 @@
 #include "flash.h"
 #include "flashchips.h"
 #include "programmer.h"
+#include "libflashrom.h"
 
 static void cli_classic_usage(const char *name)
 {
@@ -41,7 +42,7 @@ static void cli_classic_usage(const char *name)
 	       "-z|"
 #endif
 	       "-p <programmername>[:<parameters>] [-c <chipname>]\n"
-	       "[-E|(-r|-w|-v) <file>] [-l <layoutfile> [-i <imagename>]...] [-n] [-f]]\n"
+	       "[-E|(-r|-w|-v) <file>] [(-l <layoutfile>|--ifd) [-i <imagename>]...] [-n] [-N] [-f]]\n"
 	       "[-V[V[V]]] [-o <logfile>]\n\n", name);
 
 	printf(" -h | --help                        print this help text\n"
@@ -54,7 +55,9 @@ static void cli_classic_usage(const char *name)
 	       " -c | --chip <chipname>             probe only for specified flash chip\n"
 	       " -f | --force                       force specific operations (see man page)\n"
 	       " -n | --noverify                    don't auto-verify\n"
+	       " -N | --noverify-all                verify included regions only (cf. -i)\n"
 	       " -l | --layout <layoutfile>         read ROM layout from <layoutfile>\n"
+	       "      --ifd                         read layout from an Intel Firmware Descriptor\n"
 	       " -i | --image <name>                only flash image <name> from flash layout\n"
 	       " -o | --output <logfile>            log output to <logfile>\n"
 	       " -L | --list-supported              print supported devices\n"
@@ -97,26 +100,29 @@ int main(int argc, char *argv[])
 	struct flashctx *fill_flash;
 	const char *name;
 	int namelen, opt, i, j;
-	int startchip = -1, chipcount = 0, option_index = 0, force = 0;
+	int startchip = -1, chipcount = 0, option_index = 0, force = 0, ifd = 0;
 #if CONFIG_PRINT_WIKI == 1
 	int list_supported_wiki = 0;
 #endif
 	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
-	int dont_verify_it = 0, list_supported = 0, operation_specified = 0;
+	int dont_verify_it = 0, dont_verify_all = 0, list_supported = 0, operation_specified = 0;
+	struct flashrom_layout *layout = NULL;
 	enum programmer prog = PROGRAMMER_INVALID;
 	int ret = 0;
 
-	static const char optstring[] = "r:Rw:v:nVEfc:l:i:p:Lzho:";
+	static const char optstring[] = "r:Rw:v:nNVEfc:l:i:p:Lzho:";
 	static const struct option long_options[] = {
 		{"read",		1, NULL, 'r'},
 		{"write",		1, NULL, 'w'},
 		{"erase",		0, NULL, 'E'},
 		{"verify",		1, NULL, 'v'},
 		{"noverify",		0, NULL, 'n'},
+		{"noverify-all",	0, NULL, 'N'},
 		{"chip",		1, NULL, 'c'},
 		{"verbose",		0, NULL, 'V'},
 		{"force",		0, NULL, 'f'},
 		{"layout",		1, NULL, 'l'},
+		{"ifd",			0, NULL, 0x0100},
 		{"image",		1, NULL, 'i'},
 		{"list-supported",	0, NULL, 'L'},
 		{"list-supported-wiki",	0, NULL, 'z'},
@@ -134,6 +140,8 @@ int main(int argc, char *argv[])
 #endif /* !STANDALONE */
 	char *tempstr = NULL;
 	char *pparam = NULL;
+
+	flashrom_set_log_callback((flashrom_log_callback *)&flashrom_print_cb);
 
 	print_version();
 	print_banner();
@@ -187,12 +195,15 @@ int main(int argc, char *argv[])
 			}
 			dont_verify_it = 1;
 			break;
+		case 'N':
+			dont_verify_all = 1;
+			break;
 		case 'c':
 			chip_to_probe = strdup(optarg);
 			break;
 		case 'V':
 			verbose_screen++;
-			if (verbose_screen > MSG_DEBUG2)
+			if (verbose_screen > FLASHROM_MSG_DEBUG2)
 				verbose_logfile = verbose_screen;
 			break;
 		case 'E':
@@ -212,7 +223,18 @@ int main(int argc, char *argv[])
 					"more than once. Aborting.\n");
 				cli_classic_abort_usage();
 			}
+			if (ifd) {
+				fprintf(stderr, "Error: --layout and --ifd both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
 			layoutfile = strdup(optarg);
+			break;
+		case 0x0100:
+			if (layoutfile) {
+				fprintf(stderr, "Error: --layout and --ifd both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			ifd = 1;
 			break;
 		case 'i':
 			tempstr = strdup(optarg);
@@ -368,13 +390,7 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto out;
 	}
-	if (layoutfile != NULL && !write_it) {
-		msg_gerr("Layout files are currently supported for write operations only.\n");
-		ret = 1;
-		goto out;
-	}
-
-	if (process_include_args()) {
+	if (!ifd && process_include_args(get_global_layout())) {
 		ret = 1;
 		goto out;
 	}
@@ -527,24 +543,38 @@ int main(int argc, char *argv[])
 		goto out_shutdown;
 	}
 
-	/* Always verify write operations unless -n is used. */
-	if (write_it && !dont_verify_it)
-		verify_it = 1;
-
-	/* Map the selected flash chip again. */
-	if (map_flash(fill_flash) != 0) {
+	if (layoutfile) {
+		layout = get_global_layout();
+	} else if (ifd && (flashrom_layout_read_from_ifd(&layout, fill_flash, NULL, 0) ||
+			   process_include_args(layout))) {
 		ret = 1;
 		goto out_shutdown;
 	}
+
+	flashrom_layout_set(fill_flash, layout);
+	flashrom_flag_set(fill_flash, FLASHROM_FLAG_FORCE, !!force);
+#if CONFIG_INTERNAL == 1
+	flashrom_flag_set(fill_flash, FLASHROM_FLAG_FORCE_BOARDMISMATCH, !!force_boardmismatch);
+#endif
+	flashrom_flag_set(fill_flash, FLASHROM_FLAG_VERIFY_AFTER_WRITE, !dont_verify_it);
+	flashrom_flag_set(fill_flash, FLASHROM_FLAG_VERIFY_WHOLE_CHIP, !dont_verify_all);
 
 	/* FIXME: We should issue an unconditional chip reset here. This can be
 	 * done once we have a .reset function in struct flashchip.
 	 * Give the chip time to settle.
 	 */
 	programmer_delay(100000);
-	ret |= doit(fill_flash, force, filename, read_it, write_it, erase_it, verify_it);
+	if (read_it)
+		ret = do_read(fill_flash, filename);
+	else if (erase_it)
+		ret = do_erase(fill_flash);
+	else if (write_it)
+		ret = do_write(fill_flash, filename);
+	else if (verify_it)
+		ret = do_verify(fill_flash, filename);
 
-	unmap_flash(fill_flash);
+	flashrom_layout_release(layout);
+
 out_shutdown:
 	programmer_shutdown();
 out:
