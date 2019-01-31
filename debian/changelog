@@ -1,3 +1,12 @@
+flashrom (1.0.1-1) experimental; urgency=medium
+
+  * New upstream version.
+  * Apply github pr#71 to fix libusb call.
+  * Add Jeremiah C. Foster as co-maintainer.
+  * Apply patch reproducible_build, thanks Chris Lamb. (Closes: #834957)
+
+ -- Gürkan Myczko <gurkan@phys.ethz.ch>  Thu, 31 Jan 2019 09:58:20 +0100
+
 flashrom (1.0-1) unstable; urgency=medium
 
   * New upstream version. (Closes: #892065)

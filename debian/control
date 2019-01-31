@@ -2,6 +2,7 @@ Source: flashrom
 Section: electronics
 Priority: optional
 Maintainer: Gürkan Myczko <gurkan@phys.ethz.ch>
+Uploaders: Jeremiah C. Foster <jeremiah.foster@puri.sm>
 Build-Depends: cdbs, debhelper (>= 10), pkg-config, libpci-dev, libusb-dev [!kfreebsd-any], libusb-1.0-0-dev [!hurd-i386], libftdi1-dev [!hurd-i386]
 Standards-Version: 4.2.1
 Homepage: http://www.flashrom.org

@@ -20,4 +20,3 @@ clean::
 	rm -f debian/flashrom.udev
 
 common-binary-post-install-arch:: list-missing
-
