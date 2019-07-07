@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __LIBPAYLOAD__
@@ -96,10 +92,10 @@ static unsigned long measure_os_delay_resolution(void)
 	unsigned long timeusec;
 	struct timeval start, end;
 	unsigned long counter = 0;
-	
+
 	gettimeofday(&start, NULL);
 	timeusec = 0;
-	
+
 	while (!timeusec && (++counter < 1000000000)) {
 		gettimeofday(&end, NULL);
 		timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
@@ -119,7 +115,7 @@ static unsigned long measure_delay(unsigned int usecs)
 {
 	unsigned long timeusec;
 	struct timeval start, end;
-	
+
 	gettimeofday(&start, NULL);
 	myusec_delay(usecs);
 	gettimeofday(&end, NULL);
@@ -170,7 +166,7 @@ recalibrate:
 	/* Avoid division by zero, but in that case the loop is shot anyway. */
 	if (!timeusec)
 		timeusec = 1;
-	
+
 	/* Compute rounded up number of loops per microsecond. */
 	micro = (count * micro) / timeusec + 1;
 	msg_pdbg("%luM loops per second, ", micro);
@@ -183,7 +179,7 @@ recalibrate:
 		for (i = 0; i < 4; i++) {
 			if (resolution && (resolution < 10)) {
 				timeusec = measure_delay(100);
-			} else if (resolution && 
+			} else if (resolution &&
 				   (resolution < ULONG_MAX / 200)) {
 				timeusec = measure_delay(resolution * 10) *
 					   100 / (resolution * 10);
@@ -250,7 +246,7 @@ void internal_delay(unsigned int usecs)
 	}
 }
 
-#else 
+#else
 #include <libpayload.h>
 
 void myusec_calibrate_delay(void)

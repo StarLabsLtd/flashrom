@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdlib.h>
@@ -225,7 +221,7 @@ struct pci_dev *pcidev_init(const struct dev_entry *devs, int bar)
 				 dev->func);
 			if (devs[i].status == NT)
 				msg_pinfo("===\nThis PCI device is UNTESTED. Please report the 'flashrom -p "
-					  "xxxx' output \n"
+					  "xxxx' output\n"
 					  "to flashrom@flashrom.org if it works for you. Please add the name "
 					  "of your\n"
 					  "PCI device to the subject. Thank you for your help!\n===\n");
@@ -245,7 +241,7 @@ struct pci_dev *pcidev_init(const struct dev_entry *devs, int bar)
 		msg_perr("Error: No supported PCI device found.\n");
 		return NULL;
 	} else if (found > 1) {
-		msg_perr("Error: Multiple supported PCI devices found. Use 'flashrom -p xxxx:pci=bb:dd.f' \n"
+		msg_perr("Error: Multiple supported PCI devices found. Use 'flashrom -p xxxx:pci=bb:dd.f'\n"
 			 "to explicitly select the card with the given BDF (PCI bus, device, function).\n");
 		return NULL;
 	}
@@ -297,7 +293,7 @@ int undo_pci_write(void *p)
 	return 0;
 }
 
-#define register_undo_pci_write(a, b, c) 				\
+#define register_undo_pci_write(a, b, c)				\
 {									\
 	struct undo_pci_write_data *undo_pci_write_data;		\
 	undo_pci_write_data = malloc(sizeof(struct undo_pci_write_data)); \
@@ -325,13 +321,13 @@ int rpci_write_byte(struct pci_dev *dev, int reg, uint8_t data)
 	register_undo_pci_write_byte(dev, reg);
 	return pci_write_byte(dev, reg, data);
 }
- 
+
 int rpci_write_word(struct pci_dev *dev, int reg, uint16_t data)
 {
 	register_undo_pci_write_word(dev, reg);
 	return pci_write_word(dev, reg, data);
 }
- 
+
 int rpci_write_long(struct pci_dev *dev, int reg, uint32_t data)
 {
 	register_undo_pci_write_long(dev, reg);

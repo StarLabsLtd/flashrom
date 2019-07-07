@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include "platform.h"
@@ -305,6 +301,7 @@ static int serprog_spi_send_command(struct flashctx *flash,
 				    unsigned char *readarr);
 static struct spi_master spi_master_serprog = {
 	.type		= SPI_CONTROLLER_SERPROG,
+	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_READ_UNLIMITED,
 	.max_data_write	= MAX_DATA_WRITE_UNLIMITED,
 	.command	= serprog_spi_send_command,
@@ -661,7 +658,7 @@ int serprog_init(void)
 		}
 		msg_pdbg(MSGHEADER "operation buffer size is %d\n",
 			 sp_device_opbuf_size);
-  	}
+	}
 
 	if (sp_check_commandavail(S_CMD_S_PIN_STATE)) {
 		uint8_t en = 1;

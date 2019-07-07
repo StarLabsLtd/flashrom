@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __SPI_H__
@@ -23,6 +19,8 @@
 /*
  * Contains the generic SPI headers
  */
+
+#define JEDEC_MAX_ADDR_LEN	0x04
 
 /* Read Electronic ID */
 #define JEDEC_RDID		0x9f
@@ -136,6 +134,18 @@
 #define JEDEC_WRSR_OUTSIZE	0x02
 #define JEDEC_WRSR_INSIZE	0x00
 
+/* Enter 4-byte Address Mode */
+#define JEDEC_ENTER_4_BYTE_ADDR_MODE	0xB7
+
+/* Exit 4-byte Address Mode */
+#define JEDEC_EXIT_4_BYTE_ADDR_MODE	0xE9
+
+/* Write Extended Address Register */
+#define JEDEC_WRITE_EXT_ADDR_REG	0xC5
+
+/* Read Extended Address Register */
+#define JEDEC_READ_EXT_ADDR_REG		0xC8
+
 /* Read the memory */
 #define JEDEC_READ		0x03
 #define JEDEC_READ_OUTSIZE	0x04
@@ -151,6 +161,14 @@
 #define JEDEC_AAI_WORD_PROGRAM_OUTSIZE		0x06
 #define JEDEC_AAI_WORD_PROGRAM_CONT_OUTSIZE	0x03
 #define JEDEC_AAI_WORD_PROGRAM_INSIZE		0x00
+
+/* Read the memory with 4-byte address
+   From ANY mode (3-bytes or 4-bytes) it works with 4-byte address */
+#define JEDEC_READ_4BA		0x13
+
+/* Write memory byte with 4-byte address
+   From ANY mode (3-bytes or 4-bytes) it works with 4-byte address */
+#define JEDEC_BYTE_PROGRAM_4BA	0x12
 
 /* Error codes */
 #define SPI_GENERIC_ERROR	-1

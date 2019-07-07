@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -154,7 +150,7 @@ int main(int argc, char *argv[])
 	const char *fn = NULL;
 	const char *csn = NULL;
 	enum ich_chipset cs = CHIPSET_ICH_UNKNOWN;
-	struct ich_descriptors desc = {{ 0 }};
+	struct ich_descriptors desc = { 0 };
 
 	while ((opt = getopt(argc, argv, "df:c:")) != -1) {
 		switch (opt) {

@@ -16,10 +16,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <unistd.h>
@@ -35,8 +31,8 @@ static char *cb_vendor = NULL, *cb_model = NULL;
 
 /* Tries to find coreboot IDs in the supplied image and compares them to the current IDs.
  * Returns...
- * 	-1	if IDs in the image do not match the IDs embedded in the current firmware,
- * 	 0	if the IDs could not be found in the image or if they match correctly.
+ *	-1	if IDs in the image do not match the IDs embedded in the current firmware,
+ *	 0	if the IDs could not be found in the image or if they match correctly.
  */
 int cb_check_image(const uint8_t *image, int size)
 {
@@ -289,7 +285,7 @@ int cb_parse_table(const char **vendor, const char **model)
 	}
 
 	addr = ((char *)lb_table) - ((char *)table_area) + start;
-	msg_pinfo("coreboot table found at 0x%lx.\n", 
+	msg_pinfo("coreboot table found at 0x%lx.\n",
 		(unsigned long)lb_table - (unsigned long)table_area + start);
 	rec = (struct lb_record *)(((char *)lb_table) + lb_table->header_bytes);
 	last = (struct lb_record *)(((char *)rec) + lb_table->table_bytes);

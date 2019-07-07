@@ -12,10 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #if CONFIG_FT2232_SPI == 1
@@ -159,6 +155,7 @@ static int ft2232_spi_send_command(struct flashctx *flash,
 
 static const struct spi_master spi_master_ft2232 = {
 	.type		= SPI_CONTROLLER_FT2232,
+	.features	= SPI_MASTER_4BA,
 	.max_data_read	= 64 * 1024,
 	.max_data_write	= 256,
 	.command	= ft2232_spi_send_command,
@@ -326,6 +323,23 @@ int ft2232_spi_init(void)
 			return -2;
 		} else {
 			divisor = (uint32_t)temp;
+		}
+	}
+	free(arg);
+
+	arg = extract_programmer_param("csgpiol");
+	if (arg) {
+		char *endptr;
+		unsigned int temp = strtoul(arg, &endptr, 10);
+		if (*endptr || endptr == arg || temp > 3) {
+			msg_perr("Error: Invalid GPIOL specified: \"%s\".\n"
+				 "Valid values are between 0 and 3.\n", arg);
+			free(arg);
+			return -2;
+		} else {
+			unsigned int pin = temp + 4;
+			cs_bits |= 1 << pin;
+			pindir |= 1 << pin;
 		}
 	}
 	free(arg);

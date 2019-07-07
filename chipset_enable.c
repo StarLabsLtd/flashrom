@@ -18,10 +18,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -155,7 +151,7 @@ static int enable_flash_sis501(struct pci_dev *dev, const char *name)
 	tmp &= (~0x20);
 	tmp |= 0x4;
 	sio_write(0x22, 0x70, tmp);
-	
+
 	return ret;
 }
 
@@ -741,7 +737,7 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 	int ret_spi = ich_init_spi(spibar, ich_generation);
 	if (ret_spi == ERROR_FATAL)
 		return ret_spi;
-	
+
 	if (ret_fwh || ret_spi)
 		return ERROR_NONFATAL;
 
@@ -1013,10 +1009,18 @@ static int enable_flash_vt_vx(struct pci_dev *dev, const char *name)
 	switch(dev->device_id) {
 		case 0x8353: /* VX800/VX820 */
 			spi0_mm_base = pci_read_long(dev, 0xbc) << 8;
+			if (spi0_mm_base == 0x0) {
+				msg_pdbg ("MMIO not enabled!\n");
+				return ERROR_FATAL;
+			}
 			break;
 		case 0x8409: /* VX855/VX875 */
 		case 0x8410: /* VX900 */
 			mmio_base = pci_read_long(dev, 0xbc) << 8;
+			if (mmio_base == 0x0) {
+				msg_pdbg ("MMIO not enabled!\n");
+				return ERROR_FATAL;
+			}
 			mmio_base_physmapped = physmap("VIA VX MMIO register", mmio_base, SPI_CNTL_LEN);
 			if (mmio_base_physmapped == ERROR_PTR)
 				return ERROR_FATAL;
@@ -1109,7 +1113,7 @@ static int enable_flash_cs5530(struct pci_dev *dev, const char *name)
 
 /*
  * Geode systems write protect the BIOS via RCONFs (cache settings similar
- * to MTRRs). To unlock, change MSR 0x1808 top byte to 0x22. 
+ * to MTRRs). To unlock, change MSR 0x1808 top byte to 0x22.
  *
  * Geode systems also write protect the NOR flash chip itself via MSR_NORF_CTL.
  * To enable write to NOR Boot flash for the benefit of systems that have such
@@ -1164,7 +1168,7 @@ static int enable_flash_sc1100(struct pci_dev *dev, const char *name)
 /* Works for AMD-768, AMD-8111, VIA VT82C586A/B, VIA VT82C596, VIA VT82C686A/B.
  *
  * ROM decode control register matrix
- * 	AMD-768			AMD-8111	VT82C586A/B		VT82C596		VT82C686A/B
+ *	AMD-768			AMD-8111	VT82C586A/B		VT82C596		VT82C686A/B
  * 7	FFC0_0000h–FFFF_FFFFh	<-		FFFE0000h-FFFEFFFFh	<-			<-
  * 6	FFB0_0000h–FFBF_FFFFh	<-		FFF80000h-FFFDFFFFh	<-			<-
  * 5	00E8...			<-		<-			FFF00000h-FFF7FFFFh	<-
@@ -1508,7 +1512,7 @@ static int enable_flash_mcp6x_7x(struct pci_dev *dev, const char *name)
 		/* Should not happen. */
 		internal_buses_supported = BUS_NONE;
 		msg_pwarn("Flash bus type is unknown (none)\n");
-		msg_pinfo("Please send the log files created by \"flashrom -p internal -o logfile\" to \n"
+		msg_pinfo("Please send the log files created by \"flashrom -p internal -o logfile\" to\n"
 			  "flashrom@flashrom.org with \"your board name: flashrom -V\" as the subject to\n"
 			  "help us finish support for your chipset. Thanks.\n");
 		return ERROR_NONFATAL;
@@ -1614,7 +1618,7 @@ const struct penable chipset_enables[] = {
 	{0x1039, 0x0530, OK,  "SiS", "530",				enable_flash_sis530},
 	{0x1039, 0x0540, NT,  "SiS", "540",				enable_flash_sis540},
 	{0x1039, 0x0620, NT,  "SiS", "620",				enable_flash_sis530},
-	{0x1039, 0x0630, NT,  "SiS", "630",				enable_flash_sis540},
+	{0x1039, 0x0630, OK,  "SiS", "630",				enable_flash_sis540},
 	{0x1039, 0x0635, NT,  "SiS", "635",				enable_flash_sis540},
 	{0x1039, 0x0640, NT,  "SiS", "640",				enable_flash_sis540},
 	{0x1039, 0x0645, NT,  "SiS", "645",				enable_flash_sis540},
@@ -1705,8 +1709,8 @@ const struct penable chipset_enables[] = {
 	{0x1106, 0x8231, NT,  "VIA", "VT8231",				enable_flash_vt823x},
 	{0x1106, 0x8324, OK,  "VIA", "CX700",				enable_flash_vt823x},
 	{0x1106, 0x8353, NT,  "VIA", "VX800/VX820",			enable_flash_vt_vx},
-	{0x1106, 0x8409, NT,  "VIA", "VX855/VX875",			enable_flash_vt_vx},
-	{0x1106, 0x8410, NT,  "VIA", "VX900",				enable_flash_vt_vx},
+	{0x1106, 0x8409, OK,  "VIA", "VX855/VX875",			enable_flash_vt_vx},
+	{0x1106, 0x8410, OK,  "VIA", "VX900",				enable_flash_vt_vx},
 	{0x1166, 0x0200, OK,  "Broadcom", "OSB4",			enable_flash_osb4},
 	{0x1166, 0x0205, OK,  "Broadcom", "HT-1000",			enable_flash_ht1000},
 	{0x17f3, 0x6030, OK,  "RDC", "R8610/R3210",			enable_flash_rdc_r8610},
@@ -1720,7 +1724,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x1c44, DEP, "Intel", "Z68",				enable_flash_pch6},
 	{0x8086, 0x1c46, DEP, "Intel", "P67",				enable_flash_pch6},
 	{0x8086, 0x1c47, NT,  "Intel", "UM67",				enable_flash_pch6},
-	{0x8086, 0x1c49, NT,  "Intel", "HM65",				enable_flash_pch6},
+	{0x8086, 0x1c49, DEP, "Intel", "HM65",				enable_flash_pch6},
 	{0x8086, 0x1c4a, DEP, "Intel", "H67",				enable_flash_pch6},
 	{0x8086, 0x1c4b, NT,  "Intel", "HM67",				enable_flash_pch6},
 	{0x8086, 0x1c4c, NT,  "Intel", "Q65",				enable_flash_pch6},
@@ -1797,11 +1801,11 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x3b00, NT,  "Intel", "3400 Desktop",			enable_flash_pch5},
 	{0x8086, 0x3b01, NT,  "Intel", "3400 Mobile",			enable_flash_pch5},
 	{0x8086, 0x3b02, NT,  "Intel", "P55",				enable_flash_pch5},
-	{0x8086, 0x3b03, NT,  "Intel", "PM55",				enable_flash_pch5},
+	{0x8086, 0x3b03, DEP, "Intel", "PM55",				enable_flash_pch5},
 	{0x8086, 0x3b06, DEP, "Intel", "H55",				enable_flash_pch5},
 	{0x8086, 0x3b07, DEP, "Intel", "QM57",				enable_flash_pch5},
 	{0x8086, 0x3b08, NT,  "Intel", "H57",				enable_flash_pch5},
-	{0x8086, 0x3b09, NT,  "Intel", "HM55",				enable_flash_pch5},
+	{0x8086, 0x3b09, DEP, "Intel", "HM55",				enable_flash_pch5},
 	{0x8086, 0x3b0a, NT,  "Intel", "Q57",				enable_flash_pch5},
 	{0x8086, 0x3b0b, NT,  "Intel", "HM57",				enable_flash_pch5},
 	{0x8086, 0x3b0d, NT,  "Intel", "3400 Mobile SFF",		enable_flash_pch5},
@@ -1837,7 +1841,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x8c51, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c52, NT,  "Intel", "C222",				enable_flash_pch8},
 	{0x8086, 0x8c53, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
-	{0x8086, 0x8c54, NT,  "Intel", "C224",				enable_flash_pch8},
+	{0x8086, 0x8c54, DEP, "Intel", "C224",				enable_flash_pch8},
 	{0x8086, 0x8c55, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c56, NT,  "Intel", "C226",				enable_flash_pch8},
 	{0x8086, 0x8c57, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
@@ -1845,7 +1849,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x8c59, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5a, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5b, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
-	{0x8086, 0x8c5c, NT,  "Intel", "H81",				enable_flash_pch8},
+	{0x8086, 0x8c5c, DEP, "Intel", "H81",				enable_flash_pch8},
 	{0x8086, 0x8c5d, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5e, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
 	{0x8086, 0x8c5f, NT,  "Intel", "Lynx Point",			enable_flash_pch8},
@@ -1892,7 +1896,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x9c47, NT,  "Intel", "Lynx Point LP Value",		enable_flash_pch8_lp},
 	{0x8086, 0x9cc1, NT,  "Intel", "Haswell U Sample",		enable_flash_pch9_lp},
 	{0x8086, 0x9cc2, NT,  "Intel", "Broadwell U Sample",		enable_flash_pch9_lp},
-	{0x8086, 0x9cc3, NT,  "Intel", "Broadwell U Premium",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc3, DEP, "Intel", "Broadwell U Premium",		enable_flash_pch9_lp},
 	{0x8086, 0x9cc5, NT,  "Intel", "Broadwell U Base",		enable_flash_pch9_lp},
 	{0x8086, 0x9cc6, NT,  "Intel", "Broadwell Y Sample",		enable_flash_pch9_lp},
 	{0x8086, 0x9cc7, NT,  "Intel", "Broadwell Y Premium",		enable_flash_pch9_lp},
@@ -1941,6 +1945,13 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0xa245, NT,  "Intel", "C627 Series Chipset Supersku",	enable_flash_c620},
 	{0x8086, 0xa246, NT,  "Intel", "C628 Series Chipset Supersku",	enable_flash_c620},
 	{0x8086, 0xa247, NT,  "Intel", "C620 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa2c4, NT,  "Intel", "H270",				enable_flash_pch100},
+	{0x8086, 0xa2c5, NT,  "Intel", "Z270",				enable_flash_pch100},
+	{0x8086, 0xa2c6, NT,  "Intel", "Q270",				enable_flash_pch100},
+	{0x8086, 0xa2c7, NT,  "Intel", "Q250",				enable_flash_pch100},
+	{0x8086, 0xa2c8, NT,  "Intel", "B250",				enable_flash_pch100},
+	{0x8086, 0xa2c9, NT,  "Intel", "Z370",				enable_flash_pch100},
+	{0x8086, 0xa2d2, NT,  "Intel", "X299",				enable_flash_pch100},
 #endif
 	{0},
 };

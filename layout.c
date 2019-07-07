@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
@@ -38,6 +34,14 @@ static int num_include_args = 0; /* the number of valid include_args. */
 struct flashrom_layout *get_global_layout(void)
 {
 	return &layout;
+}
+
+const struct flashrom_layout *get_layout(const struct flashrom_flashctx *const flashctx)
+{
+	if (flashctx->layout && flashctx->layout->num_entries)
+		return flashctx->layout;
+	else
+		return &flashctx->fallback_layout.base;
 }
 
 #ifndef __LIBPAYLOAD__
@@ -157,7 +161,6 @@ static int find_romentry(struct flashrom_layout *const l, char *name)
 int process_include_args(struct flashrom_layout *const l)
 {
 	int i;
-	unsigned int found = 0;
 
 	if (num_include_args == 0)
 		return 0;
@@ -176,7 +179,6 @@ int process_include_args(struct flashrom_layout *const l)
 				 include_args[i]);
 			return 1;
 		}
-		found++;
 	}
 
 	msg_ginfo("Using region%s: \"%s\"", num_include_args > 1 ? "s" : "",

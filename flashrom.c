@@ -17,10 +17,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
@@ -42,6 +38,7 @@
 #include "flashchips.h"
 #include "programmer.h"
 #include "hwaccess.h"
+#include "chipdrivers.h"
 
 const char flashrom_version[] = FLASHROM_VERSION;
 const char *chip_to_probe = NULL;
@@ -258,6 +255,18 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if CONFIG_DEVELOPERBOX_SPI == 1
+	{
+		.name			= "developerbox",
+		.type			= USB,
+		.devs.dev		= devs_developerbox_spi,
+		.init			= developerbox_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
 #if CONFIG_RAYER_SPI == 1
 	{
 		.name			= "rayer_spi",
@@ -344,6 +353,18 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if CONFIG_LINUX_MTD == 1
+	{
+		.name			= "linux_mtd",
+		.type			= OTHER,
+		.devs.note		= "Device files /dev/mtd*\n",
+		.init			= linux_mtd_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
 #if CONFIG_LINUX_SPI == 1
 	{
 		.name			= "linux_spi",
@@ -404,16 +425,40 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if CONFIG_DIGILENT_SPI == 1
+	{
+		.name			= "digilent_spi",
+		.type			= USB,
+		.devs.dev		= devs_digilent_spi,
+		.init			= digilent_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_JLINK_SPI == 1
+	{
+		.name			= "jlink_spi",
+		.type			= OTHER,
+		.init			= jlink_spi_init,
+		.devs.note		= "SEGGER J-Link and compatible devices\n",
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
 	{0}, /* This entry corresponds to PROGRAMMER_INVALID. */
 };
 
 #define SHUTDOWN_MAXFN 32
 static int shutdown_fn_count = 0;
 /** @private */
-struct shutdown_func_data {
+static struct shutdown_func_data {
 	int (*func) (void *data);
 	void *data;
-} static shutdown_fn[SHUTDOWN_MAXFN];
+} shutdown_fn[SHUTDOWN_MAXFN];
 /* Initialize to 0 to make sure nobody registers a shutdown function before
  * programmer init.
  */
@@ -621,7 +666,6 @@ char *extract_param(const char *const *haystack, const char *needle, const char 
 			return NULL;
 		/* Needle followed by '='? */
 		if (param_pos[needlelen] == '=') {
-			
 			/* Beginning of the string? */
 			if (param_pos == *haystack)
 				break;
@@ -699,12 +743,13 @@ int check_erased_range(struct flashctx *flash, unsigned int start,
 {
 	int ret;
 	uint8_t *cmpbuf = malloc(len);
+	const uint8_t erased_value = ERASED_VALUE(flash);
 
 	if (!cmpbuf) {
 		msg_gerr("Could not allocate memory!\n");
 		exit(1);
 	}
-	memset(cmpbuf, 0xff, len);
+	memset(cmpbuf, erased_value, len);
 	ret = verify_range(flash, cmpbuf, start, len);
 	free(cmpbuf);
 	return ret;
@@ -757,7 +802,8 @@ out_free:
 }
 
 /* Helper function for need_erase() that focuses on granularities of gran bytes. */
-static int need_erase_gran_bytes(const uint8_t *have, const uint8_t *want, unsigned int len, unsigned int gran)
+static int need_erase_gran_bytes(const uint8_t *have, const uint8_t *want, unsigned int len,
+                                 unsigned int gran, const uint8_t erased_value)
 {
 	unsigned int i, j, limit;
 	for (j = 0; j < len / gran; j++) {
@@ -767,7 +813,7 @@ static int need_erase_gran_bytes(const uint8_t *have, const uint8_t *want, unsig
 			continue;
 		/* have needs to be in erased state. */
 		for (i = 0; i < limit; i++)
-			if (have[j * gran + i] != 0xff)
+			if (have[j * gran + i] != erased_value)
 				return 1;
 	}
 	return 0;
@@ -787,7 +833,8 @@ static int need_erase_gran_bytes(const uint8_t *have, const uint8_t *want, unsig
  * @gran	write granularity (enum, not count)
  * @return      0 if no erase is needed, 1 otherwise
  */
-int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len, enum write_granularity gran)
+int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len,
+               enum write_granularity gran, const uint8_t erased_value)
 {
 	int result = 0;
 	unsigned int i;
@@ -802,31 +849,31 @@ int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len, enum 
 		break;
 	case write_gran_1byte:
 		for (i = 0; i < len; i++)
-			if ((have[i] != want[i]) && (have[i] != 0xff)) {
+			if ((have[i] != want[i]) && (have[i] != erased_value)) {
 				result = 1;
 				break;
 			}
 		break;
 	case write_gran_128bytes:
-		result = need_erase_gran_bytes(have, want, len, 128);
+		result = need_erase_gran_bytes(have, want, len, 128, erased_value);
 		break;
 	case write_gran_256bytes:
-		result = need_erase_gran_bytes(have, want, len, 256);
+		result = need_erase_gran_bytes(have, want, len, 256, erased_value);
 		break;
 	case write_gran_264bytes:
-		result = need_erase_gran_bytes(have, want, len, 264);
+		result = need_erase_gran_bytes(have, want, len, 264, erased_value);
 		break;
 	case write_gran_512bytes:
-		result = need_erase_gran_bytes(have, want, len, 512);
+		result = need_erase_gran_bytes(have, want, len, 512, erased_value);
 		break;
 	case write_gran_528bytes:
-		result = need_erase_gran_bytes(have, want, len, 528);
+		result = need_erase_gran_bytes(have, want, len, 528, erased_value);
 		break;
 	case write_gran_1024bytes:
-		result = need_erase_gran_bytes(have, want, len, 1024);
+		result = need_erase_gran_bytes(have, want, len, 1024, erased_value);
 		break;
 	case write_gran_1056bytes:
-		result = need_erase_gran_bytes(have, want, len, 1056);
+		result = need_erase_gran_bytes(have, want, len, 1056, erased_value);
 		break;
 	case write_gran_1byte_implicit_erase:
 		/* Do not erase, handle content changes from anything->0xff by writing 0xff. */
@@ -1208,6 +1255,9 @@ int probe_flash(struct registered_master *mst, int startchip, struct flashctx *f
 		buses_common = mst->buses_supported & chip->bustype;
 		if (!buses_common)
 			continue;
+		/* Only probe for SPI25 chips by default. */
+		if (chip->bustype == BUS_SPI && !chip_to_probe && chip->spi_cmd_set != SPI25)
+			continue;
 		msg_gdbg("Probing for %s %s, %d kB: ", chip->vendor, chip->name, chip->total_size);
 		if (!chip->probe && !force) {
 			msg_gdbg("failed! flashrom has no probe function for this flash chip.\n");
@@ -1224,7 +1274,7 @@ int probe_flash(struct registered_master *mst, int startchip, struct flashctx *f
 		flash->mst = mst;
 
 		if (map_flash(flash) != 0)
-			return -1;
+			goto notfound;
 
 		/* We handle a forced match like a real match, we just avoid probing. Note that probe_flash()
 		 * is only called with force=1 after normal probing failed.
@@ -1411,7 +1461,7 @@ static int read_by_layout(struct flashctx *, uint8_t *);
 int read_flash_to_file(struct flashctx *flash, const char *filename)
 {
 	unsigned long size = flash->chip->total_size * 1024;
-	unsigned char *buf = calloc(size, sizeof(char));
+	unsigned char *buf = calloc(size, sizeof(unsigned char));
 	int ret = 0;
 
 	msg_cinfo("Reading flash... ");
@@ -1527,14 +1577,6 @@ static int check_block_eraser(const struct flashctx *flash, int k, int log)
 	}
 	// TODO: Once erase functions are annotated with allowed buses, check that as well.
 	return 0;
-}
-
-static const struct flashrom_layout *get_layout(const struct flashctx *const flashctx)
-{
-	if (flashctx->layout && flashctx->layout->num_entries)
-		return flashctx->layout;
-	else
-		return &flashctx->fallback_layout.base;
 }
 
 /**
@@ -1707,8 +1749,8 @@ static int erase_block(struct flashctx *const flashctx,
 			ret = 1;
 			goto _free_ret;
 		}
-		memset(backup_contents, 0xff, erase_len);
-		memset(erased_contents, 0xff, erase_len);
+		memset(backup_contents, ERASED_VALUE(flashctx), erase_len);
+		memset(erased_contents, ERASED_VALUE(flashctx), erase_len);
 
 		msg_cdbg("R");
 		/* Merge data preceding the current region. */
@@ -1761,10 +1803,8 @@ static int erase_block(struct flashctx *const flashctx,
 	ret = 0;
 
 _free_ret:
-	if (erased_contents != NULL)
-		free(erased_contents);
-	if (backup_contents != NULL)
-		free(backup_contents);
+	free(erased_contents);
+	free(backup_contents);
 	return ret;
 }
 
@@ -1841,11 +1881,13 @@ static int read_erase_write_block(struct flashctx *const flashctx,
 	ret = 1;
 	bool skipped = true;
 	uint8_t *const curcontents = info->curcontents + info->erase_start;
-	if (need_erase(curcontents, newcontents, erase_len, flashctx->chip->gran)) {
+	const uint8_t erased_value = ERASED_VALUE(flashctx);
+	if (!(flashctx->chip->feature_bits & FEATURE_NO_ERASE) &&
+			need_erase(curcontents, newcontents, erase_len, flashctx->chip->gran, erased_value)) {
 		if (erase_block(flashctx, info, erasefn))
 			goto _free_ret;
 		/* Erase was successful. Adjust curcontents. */
-		memset(curcontents, 0xff, erase_len);
+		memset(curcontents, erased_value, erase_len);
 		skipped = false;
 	}
 
@@ -2288,6 +2330,32 @@ int prepare_flash_access(struct flashctx *const flash,
 	if (flash->chip->unlock)
 		flash->chip->unlock(flash);
 
+	flash->address_high_byte = -1;
+	flash->in_4ba_mode = false;
+
+	/* Be careful about 4BA chips and broken masters */
+	if (flash->chip->total_size > 16 * 1024 && spi_master_no_4ba_modes(flash)) {
+		/* If we can't use native instructions, bail out */
+		if ((flash->chip->feature_bits & FEATURE_4BA_NATIVE) != FEATURE_4BA_NATIVE
+		    || !spi_master_4ba(flash)) {
+			msg_cerr("Programmer doesn't support this chip. Aborting.\n");
+			return 1;
+		}
+	}
+
+	/* Enable/disable 4-byte addressing mode if flash chip supports it */
+	if (flash->chip->feature_bits & (FEATURE_4BA_ENTER | FEATURE_4BA_ENTER_WREN | FEATURE_4BA_ENTER_EAR7)) {
+		int ret;
+		if (spi_master_4ba(flash))
+			ret = spi_enter_4ba(flash);
+		else
+			ret = spi_exit_4ba(flash);
+		if (ret) {
+			msg_cerr("Failed to set correct 4BA mode! Aborting.\n");
+			return 1;
+		}
+	}
+
 	return 0;
 }
 
@@ -2400,13 +2468,15 @@ static void combine_image_by_layout(const struct flashctx *const flashctx,
  * @param flashctx The context of the flash chip.
  * @param buffer Source buffer to read image from (may be altered for full verification).
  * @param buffer_len Size of source buffer in bytes.
+ * @param refbuffer If given, assume flash chip contains same data as `refbuffer`.
  * @return 0 on success,
  *         4 if buffer_len doesn't match the size of the flash chip,
  *         3 if write was tried but nothing has changed,
  *         2 if write failed and flash contents changed,
  *         or 1 on any other failure.
  */
-int flashrom_image_write(struct flashctx *const flashctx, void *const buffer, const size_t buffer_len)
+int flashrom_image_write(struct flashctx *const flashctx, void *const buffer, const size_t buffer_len,
+                         const void *const refbuffer)
 {
 	const size_t flash_size = flashctx->chip->total_size * 1024;
 	const bool verify_all = flashctx->flags.verify_whole_chip;
@@ -2418,6 +2488,7 @@ int flashrom_image_write(struct flashctx *const flashctx, void *const buffer, co
 	int ret = 1;
 
 	uint8_t *const newcontents = buffer;
+	const uint8_t *const refcontents = refbuffer;
 	uint8_t *const curcontents = malloc(flash_size);
 	uint8_t *oldcontents = NULL;
 	if (verify_all)
@@ -2442,27 +2513,35 @@ int flashrom_image_write(struct flashctx *const flashctx, void *const buffer, co
 	if (prepare_flash_access(flashctx, false, true, false, verify))
 		goto _free_ret;
 
-	/*
-	 * Read the whole chip to be able to check whether regions need to be
-	 * erased and to give better diagnostics in case write fails.
-	 * The alternative is to read only the regions which are to be
-	 * preserved, but in that case we might perform unneeded erase which
-	 * takes time as well.
-	 */
-	msg_cinfo("Reading old flash chip contents... ");
-	if (verify_all) {
-		if (flashctx->chip->read(flashctx, oldcontents, 0, flash_size)) {
-			msg_cinfo("FAILED.\n");
-			goto _finalize_ret;
-		}
-		memcpy(curcontents, oldcontents, flash_size);
+	/* If given, assume flash chip contains same data as `refcontents`. */
+	if (refcontents) {
+		msg_cinfo("Assuming old flash chip contents as ref-file...\n");
+		memcpy(curcontents, refcontents, flash_size);
+		if (oldcontents)
+			memcpy(oldcontents, refcontents, flash_size);
 	} else {
-		if (read_by_layout(flashctx, curcontents)) {
-			msg_cinfo("FAILED.\n");
-			goto _finalize_ret;
+		/*
+		 * Read the whole chip to be able to check whether regions need to be
+		 * erased and to give better diagnostics in case write fails.
+		 * The alternative is to read only the regions which are to be
+		 * preserved, but in that case we might perform unneeded erase which
+		 * takes time as well.
+		 */
+		msg_cinfo("Reading old flash chip contents... ");
+		if (verify_all) {
+			if (flashctx->chip->read(flashctx, oldcontents, 0, flash_size)) {
+				msg_cinfo("FAILED.\n");
+				goto _finalize_ret;
+			}
+			memcpy(curcontents, oldcontents, flash_size);
+		} else {
+			if (read_by_layout(flashctx, curcontents)) {
+				msg_cinfo("FAILED.\n");
+				goto _finalize_ret;
+			}
 		}
+		msg_cinfo("done.\n");
 	}
-	msg_cinfo("done.\n");
 
 	if (write_by_layout(flashctx, curcontents, newcontents)) {
 		msg_cerr("Uh oh. Erase/write failed. ");
@@ -2597,13 +2676,15 @@ int do_erase(struct flashctx *const flash)
 	return ret;
 }
 
-int do_write(struct flashctx *const flash, const char *const filename)
+int do_write(struct flashctx *const flash, const char *const filename, const char *const referencefile)
 {
 	const size_t flash_size = flash->chip->total_size * 1024;
 	int ret = 1;
 
 	uint8_t *const newcontents = malloc(flash_size);
-	if (!newcontents) {
+	uint8_t *const refcontents = referencefile ? malloc(flash_size) : NULL;
+
+	if (!newcontents || (referencefile && !refcontents)) {
 		msg_gerr("Out of memory!\n");
 		goto _free_ret;
 	}
@@ -2611,9 +2692,15 @@ int do_write(struct flashctx *const flash, const char *const filename)
 	if (read_buf_from_file(newcontents, flash_size, filename))
 		goto _free_ret;
 
-	ret = flashrom_image_write(flash, newcontents, flash_size);
+	if (referencefile) {
+		if (read_buf_from_file(refcontents, flash_size, referencefile))
+			goto _free_ret;
+	}
+
+	ret = flashrom_image_write(flash, newcontents, flash_size, refcontents);
 
 _free_ret:
+	free(refcontents);
 	free(newcontents);
 	return ret;
 }

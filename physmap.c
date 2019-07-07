@@ -14,10 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <unistd.h>
@@ -368,7 +364,7 @@ void *physmap_ro_unaligned(const char *descr, uintptr_t phys_addr, size_t len)
 }
 
 /* MSR abstraction implementations for Linux, OpenBSD, FreeBSD/Dragonfly, OSX, libpayload
- * and a non-working default implemenation on the bottom. See also hwaccess.h for some (re)declarations. */
+ * and a non-working default implementation on the bottom. See also hwaccess.h for some (re)declarations. */
 #if defined(__i386__) || defined(__x86_64__)
 
 #ifdef __linux__

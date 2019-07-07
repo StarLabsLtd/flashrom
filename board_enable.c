@@ -14,10 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -159,7 +155,7 @@ struct winbond_mux {
 struct winbond_port {
 	const struct winbond_mux *mux; /* NULL or pointer to mux info for the 8 bits */
 	uint8_t ldn;		/* LDN this GPIO register is located in */
-	uint8_t enable_bit;	/* bit in 0x30 of that LDN to enable 
+	uint8_t enable_bit;	/* bit in 0x30 of that LDN to enable
 	                           the GPIO port */
 	uint8_t base;		/* base register in that LDN for the port */
 };
@@ -531,10 +527,10 @@ void w83697xx_memw_enable(uint16_t port)
 
 		/* CR24 Bits 7 & 2 must be set to 0 enable the flash ROM    */
 		/* address segments 000E0000h ~ 000FFFFFh on W83697SF/UF/UG */
-		/* These bits are reserved on W83697HF/F/HG 		    */
-		/* Shouldn't be needed though.			   	    */
+		/* These bits are reserved on W83697HF/F/HG		    */
+		/* Shouldn't be needed though.				    */
 
-		/* CR28 Bit3 must be set to 1 to enable flash access to     */
+		/* CR28 Bit3 must be set to 1 to enable flash access to	    */
 		/* FFE80000h ~ FFEFFFFFh on W83697SF/UF/UG.		    */
 		/* This bit is reserved on W83697HF/F/HG which default to 0 */
 			sio_mask(port, 0x28, 0x08, 0x08);
@@ -547,8 +543,8 @@ void w83697xx_memw_enable(uint16_t port)
 		}
 	} else {
 		msg_pinfo("BIOS ROM is disabled\n");
- 	}
- 	w836xx_ext_leave(port);
+	}
+	w836xx_ext_leave(port);
 }
 
 /*
@@ -1036,7 +1032,7 @@ static int nvidia_mcp_gpio_set(int gpio, int raise)
 	case 0x0364: /* MCP55 */
 		/* find SMBus controller on *this* southbridge */
 		/* The infamous Tyan S2915-E has two south bridges; they are
-		   easily told apart from each other by the class of the 
+		   easily told apart from each other by the class of the
 		   LPC bridge, but have the same SMBus bridge IDs */
 		if (dev->func != 0) {
 			msg_perr("MCP LPC bridge at unexpected function"
@@ -1692,6 +1688,7 @@ static int intel_ich_gpio19_raise(void)
 /*
  * Suited for:
  *  - ASUS P5BV-R: LGA775 + 3200 + ICH7
+ *  - AOpen i965GMt-LA: Intel Socket479 + 965GM + ICH8M
  */
 static int intel_ich_gpio20_raise(void)
 {
@@ -2324,6 +2321,7 @@ const struct board_match board_matches[] = {
 	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, NULL,        "artecgroup", "dbe61", P3, "Artec Group", "DBE61",                 0,   OK, board_artecgroup_dbe6x},
 	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, NULL,        "artecgroup", "dbe62", P3, "Artec Group", "DBE62",                 0,   OK, board_artecgroup_dbe6x},
 	{0x8086, 0x27b9, 0xa0a0, 0x0632,  0x8086, 0x27da, 0xa0a0, 0x0632, NULL,         NULL, NULL,           P3, "AOpen",       "i945GMx-VFX",           0,   OK, intel_ich_gpio38_raise},
+	{0x8086, 0x2a00, 0xa0a0, 0x063e,  0x8086, 0x2815, 0xa0a0, 0x063e, NULL,         NULL, NULL,           P3, "AOpen",       "i965GMt-LA",            0,   OK, intel_ich_gpio20_raise},
 	{0x8086, 0x277c, 0xa0a0, 0x060b,  0x8086, 0x27da, 0xa0a0, 0x060b, NULL,         NULL, NULL,           P3, "AOpen",       "i975Xa-YDG",            0,   OK, board_aopen_i975xa_ydg},
 	{0x8086, 0x27A0, 0x8086, 0x7270,  0x8086, 0x27B9, 0x8086, 0x7270, "^iMac5,2$",  NULL, NULL,           P2, "Apple",       "iMac5,2",               0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x27A0, 0x8086, 0x7270,  0x8086, 0x27B9, 0x8086, 0x7270, "^MacBook2,1$", NULL, NULL,         P2, "Apple",       "MacBook2,1",            0,   OK, p2_whitelist_laptop},
@@ -2428,14 +2426,19 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^SE440BX-2$", NULL, NULL,          P3, "Intel",       "SE440BX-2",             0,   NT, intel_piix4_gpo27_lower},
 	{0x1022, 0x7468,      0,      0,  0x1022, 0x7460,      0,      0, NULL,         "iwill", "dk8_htx",   P3, "IWILL",       "DK8-HTX",               0,   OK, w83627hf_gpio24_raise_2e},
 	{0x8086, 0x27A0, 0x8086, 0x27a0,  0x8086, 0x27b8, 0x8086, 0x27b8, NULL,        "kontron", "986lcd-m", P3, "Kontron",     "986LCD-M",              0,   OK, board_kontron_986lcd_m},
+	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^ThinkPad R400", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad R400",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^ThinkPad T400", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad T400",         0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^ThinkPad T500", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad T500",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x1E22, 0x17AA, 0x21F6,  0x8086, 0x1E55, 0x17AA, 0x21F6, "^ThinkPad T530", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad T530",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x27a0, 0x17aa, 0x2015,  0x8086, 0x27b9, 0x17aa, 0x2009, "^ThinkPad T60", NULL, NULL,        P2, "IBM/Lenovo",  "ThinkPad T60",          0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x27a0, 0x17aa, 0x2017,  0x8086, 0x27b9, 0x17aa, 0x2009, "^ThinkPad T60", NULL, NULL,        P2, "IBM/Lenovo",  "ThinkPad T60(s)",       0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^ThinkPad W500", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad W500",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^ThinkPad X200", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad X200",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x3B07, 0x17AA, 0x2166,  0x8086, 0x3B30, 0x17AA, 0x2167, "^ThinkPad X201", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad X201",         0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x1C22, 0x17AA, 0x21DB,  0x8086, 0x1C4F, 0x17AA, 0x21DB, NULL, "lenovo", "x220",             P2, "IBM/Lenovo",  "ThinkPad X220",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x1E22, 0x17AA, 0x21FA,  0x8086, 0x1E55, 0x17AA, 0x21FA, "^ThinkPad X230", NULL, NULL,       P2, "IBM/Lenovo",  "ThinkPad X230",         0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x27A0, 0x17AA, 0x2017,  0x8086, 0x27B9, 0x17AA, 0x2009, "^ThinkPad X60", NULL, NULL,        P2, "IBM/Lenovo",  "ThinkPad X60(s)",       0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x2917, 0x17AA, 0x20F5,  0x8086, 0x2930, 0x17AA, 0x20F9, "^Taurinus X200", "Libiquity", "Taurinus X200", P2, "Libiquity", "ThinkPad X200", 0, OK, p2_whitelist_laptop},
 	{0x8086, 0x2411, 0x8086, 0x2411,  0x8086, 0x7125, 0x0e11, 0xb165, NULL,         NULL, NULL,           P3, "Mitac",       "6513WU",                0,   OK, board_mitac_6513wu},
 	{0x8086, 0x8186, 0x8086, 0x8186,  0x8086, 0x8800,      0,      0, "^MSC Vertriebs GmbH$", NULL, NULL, P2, "MSC",         "Q7-TCTC",               0,   OK, p2_not_a_laptop},
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^MS-6163 (i440BX)$", NULL, NULL,   P3, "MSI",         "MS-6163 (MS-6163 Pro)", 0,   OK, intel_piix4_gpo14_raise},
@@ -2582,7 +2585,7 @@ static const struct board_match *board_match_name(const char *vendor, const char
  * Match boards on PCI IDs and subsystem IDs.
  * Second set of IDs can be either main+subsystem IDs, main IDs or no IDs.
  */
-const static struct board_match *board_match_pci_ids(enum board_match_phase phase)
+static const struct board_match *board_match_pci_ids(enum board_match_phase phase)
 {
 	const struct board_match *board = board_matches;
 

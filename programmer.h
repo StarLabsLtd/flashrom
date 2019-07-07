@@ -15,14 +15,12 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __PROGRAMMER_H__
 #define __PROGRAMMER_H__ 1
+
+#include <stdint.h>
 
 #include "flash.h"	/* for chipaddr and flashctx */
 
@@ -75,6 +73,9 @@ enum programmer {
 #if CONFIG_DEDIPROG == 1
 	PROGRAMMER_DEDIPROG,
 #endif
+#if CONFIG_DEVELOPERBOX_SPI == 1
+	PROGRAMMER_DEVELOPERBOX_SPI,
+#endif
 #if CONFIG_RAYER_SPI == 1
 	PROGRAMMER_RAYER_SPI,
 #endif
@@ -96,6 +97,9 @@ enum programmer {
 #if CONFIG_SATAMV == 1
 	PROGRAMMER_SATAMV,
 #endif
+#if CONFIG_LINUX_MTD == 1
+	PROGRAMMER_LINUX_MTD,
+#endif
 #if CONFIG_LINUX_SPI == 1
 	PROGRAMMER_LINUX_SPI,
 #endif
@@ -110,6 +114,12 @@ enum programmer {
 #endif
 #if CONFIG_CH341A_SPI == 1
 	PROGRAMMER_CH341A_SPI,
+#endif
+#if CONFIG_DIGILENT_SPI == 1
+	PROGRAMMER_DIGILENT_SPI,
+#endif
+#if CONFIG_JLINK_SPI == 1
+	PROGRAMMER_JLINK_SPI,
 #endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
 };
@@ -168,6 +178,9 @@ enum bitbang_spi_master_type {
 #if CONFIG_OGP_SPI == 1
 	BITBANG_SPI_MASTER_OGP,
 #endif
+#if CONFIG_DEVELOPERBOX_SPI == 1
+	BITBANG_SPI_MASTER_DEVELOPERBOX,
+#endif
 };
 
 struct bitbang_spi_master {
@@ -180,6 +193,9 @@ struct bitbang_spi_master {
 	int (*get_miso) (void);
 	void (*request_bus) (void);
 	void (*release_bus) (void);
+	/* optional functions to optimize xfers */
+	void (*set_sck_set_mosi) (int sck, int mosi);
+	int (*set_sck_get_miso) (int sck);
 	/* Length of half a clock period in usecs. */
 	unsigned int half_period;
 };
@@ -525,6 +541,11 @@ int register_spi_bitbang_master(const struct bitbang_spi_master *master);
 int buspirate_spi_init(void);
 #endif
 
+/* linux_mtd.c */
+#if CONFIG_LINUX_MTD == 1
+int linux_mtd_init(void);
+#endif
+
 /* linux_spi.c */
 #if CONFIG_LINUX_SPI == 1
 int linux_spi_init(void);
@@ -536,11 +557,28 @@ int dediprog_init(void);
 extern const struct dev_entry devs_dediprog[];
 #endif
 
+/* developerbox_spi.c */
+#if CONFIG_DEVELOPERBOX_SPI == 1
+int developerbox_spi_init(void);
+extern const struct dev_entry devs_developerbox_spi[];
+#endif
+
 /* ch341a_spi.c */
 #if CONFIG_CH341A_SPI == 1
 int ch341a_spi_init(void);
 void ch341a_spi_delay(unsigned int usecs);
 extern const struct dev_entry devs_ch341a_spi[];
+#endif
+
+/* digilent_spi.c */
+#if CONFIG_DIGILENT_SPI == 1
+int digilent_spi_init(void);
+extern const struct dev_entry devs_digilent_spi[];
+#endif
+
+/* jlink_spi.c */
+#if CONFIG_JLINK_SPI == 1
+int jlink_spi_init(void);
 #endif
 
 /* flashrom.c */
@@ -587,6 +625,9 @@ enum spi_controller {
 #if CONFIG_OGP_SPI == 1 || CONFIG_NICINTEL_SPI == 1 || CONFIG_RAYER_SPI == 1 || CONFIG_PONY_SPI == 1 || (CONFIG_INTERNAL == 1 && (defined(__i386__) || defined(__x86_64__)))
 	SPI_CONTROLLER_BITBANG,
 #endif
+#if CONFIG_LINUX_MTD == 1
+	SPI_CONTROLLER_LINUX_MTD,
+#endif
 #if CONFIG_LINUX_SPI == 1
 	SPI_CONTROLLER_LINUX,
 #endif
@@ -605,13 +646,25 @@ enum spi_controller {
 #if CONFIG_CH341A_SPI == 1
 	SPI_CONTROLLER_CH341A_SPI,
 #endif
+#if CONFIG_DIGILENT_SPI == 1
+	SPI_CONTROLLER_DIGILENT_SPI,
+#endif
+#if CONFIG_JLINK_SPI == 1
+	SPI_CONTROLLER_JLINK_SPI,
+#endif
 };
 
 #define MAX_DATA_UNSPECIFIED 0
 #define MAX_DATA_READ_UNLIMITED 64 * 1024
 #define MAX_DATA_WRITE_UNLIMITED 256
+
+#define SPI_MASTER_4BA			(1U << 0)  /**< Can handle 4-byte addresses */
+#define SPI_MASTER_NO_4BA_MODES		(1U << 1)  /**< Compatibility modes (i.e. extended address
+						        register, 4BA mode switch) don't work */
+
 struct spi_master {
 	enum spi_controller type;
+	uint32_t features;
 	unsigned int max_data_read; // (Ideally,) maximum data read size in one go (excluding opcode+address).
 	unsigned int max_data_write; // (Ideally,) maximum data write size in one go (excluding opcode+address).
 	int (*command)(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
@@ -661,7 +714,6 @@ enum ich_chipset {
 
 /* ichspi.c */
 #if CONFIG_INTERNAL == 1
-extern uint32_t ichspi_bbar;
 int ich_init_spi(void *spibar, enum ich_chipset ich_generation);
 int via_init_spi(uint32_t mmio_base);
 
@@ -676,6 +728,13 @@ void enter_conf_mode_ite(uint16_t port);
 void exit_conf_mode_ite(uint16_t port);
 void probe_superio_ite(void);
 int init_superio_ite(void);
+
+#if CONFIG_LINUX_MTD == 1
+/* trivial wrapper to avoid cluttering internal_init() with #if */
+static inline int try_mtd(void) { return linux_mtd_init(); };
+#else
+static inline int try_mtd(void) { return 1; };
+#endif
 
 /* mcp6x_spi.c */
 int mcp6x_spi_init(int want_spi);
@@ -754,6 +813,7 @@ typedef int fdtype;
 void sp_flush_incoming(void);
 fdtype sp_openserport(char *dev, int baud);
 extern fdtype sp_fd;
+int serialport_config(fdtype fd, int baud);
 int serialport_shutdown(void *data);
 int serialport_write(const unsigned char *buf, unsigned int writecnt);
 int serialport_write_nonblock(const unsigned char *buf, unsigned int writecnt, unsigned int timeout, unsigned int *really_wrote);
@@ -786,5 +846,25 @@ enum SP_PIN {
 
 void sp_set_pin(enum SP_PIN pin, int val);
 int sp_get_pin(enum SP_PIN pin);
+
+/* spi_master feature checks */
+static inline bool spi_master_4ba(const struct flashctx *const flash)
+{
+	return flash->mst->buses_supported & BUS_SPI &&
+		flash->mst->spi.features & SPI_MASTER_4BA;
+}
+static inline bool spi_master_no_4ba_modes(const struct flashctx *const flash)
+{
+	return flash->mst->buses_supported & BUS_SPI &&
+		flash->mst->spi.features & SPI_MASTER_NO_4BA_MODES;
+}
+
+/* usbdev.c */
+struct libusb_device_handle;
+struct libusb_context;
+struct libusb_device_handle *usb_dev_get_by_vid_pid_serial(
+		struct libusb_context *usb_ctx, uint16_t vid, uint16_t pid, const char *serialno);
+struct libusb_device_handle *usb_dev_get_by_vid_pid_number(
+		struct libusb_context *usb_ctx, uint16_t vid, uint16_t pid, unsigned int num);
 
 #endif				/* !__PROGRAMMER_H__ */

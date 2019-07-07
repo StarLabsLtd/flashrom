@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -128,7 +124,7 @@ static uint16_t it87spi_probe(uint16_t port)
 	uint16_t flashport = 0;
 
 	enter_conf_mode_ite(port);
-	
+
 	char *param = extract_programmer_param("dualbiosindex");
 	if (param != NULL) {
 		sio_write(port, 0x07, 0x07); /* Select GPIO LDN */

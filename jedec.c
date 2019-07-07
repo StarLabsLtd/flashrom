@@ -17,10 +17,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include "flash.h"
@@ -68,7 +64,7 @@ void toggle_ready_jedec(const struct flashctx *flash, chipaddr dst)
  * The Winbond W39V040C wants 50 ms between reads on sector erase toggle,
  * but experiments show that 2 ms are already enough. Pick a safety factor
  * of 4 and use an 8 ms delay.
- * Given that erase is slow on all chips, it is recommended to use 
+ * Given that erase is slow on all chips, it is recommended to use
  * toggle_ready_jedec_slow in erase functions.
  */
 static void toggle_ready_jedec_slow(const struct flashctx *flash, chipaddr dst)
@@ -755,4 +751,3 @@ int unlock_regspace2_block_eraser_1(struct flashctx *flash)
 		(const struct unlockblock *)flash->chip->block_erasers[1].eraseblocks;
 	return regspace2_walk_unlockblocks(flash, unlockblocks, &unlock_regspace2_block_generic);
 }
-

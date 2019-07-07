@@ -1,3 +1,11 @@
+flashrom (1.1-1) unstable; urgency=medium
+
+  * New upstream version.
+  * debian/watch: activated.
+  * debian/patches: fixed upstream.
+
+ -- Gürkan Myczko <gurkan@phys.ethz.ch>  Sun, 07 Jul 2019 11:21:58 +0200
+
 flashrom (1.0.1-1) experimental; urgency=medium
 
   * New upstream version.

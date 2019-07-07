@@ -12,10 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #if defined(__i386__) || defined(__x86_64__)
@@ -148,7 +144,7 @@ int atapromise_init(void)
 
 	msg_pwarn("Do not use this device as a generic programmer. It will leave anything outside\n"
 		  "the first %zu kB of the flash chip in an undefined state. It works fine for the\n"
-		  "purpose of updating the firmware of this device (padding may neccessary).\n",
+		  "purpose of updating the firmware of this device (padding may necessary).\n",
 		  rom_size / 1024);
 
 	return 0;

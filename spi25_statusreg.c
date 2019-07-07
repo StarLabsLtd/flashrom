@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include "flash.h"
@@ -199,6 +195,19 @@ int spi_disable_blockprotect(struct flashctx *flash)
 	return spi_disable_blockprotect_generic(flash, 0x3C, 0, 0, 0xFF);
 }
 
+int spi_disable_blockprotect_sst26_global_unprotect(struct flashctx *flash)
+{
+	int result = spi_write_enable(flash);
+	if (result)
+		return result;
+
+	static const unsigned char cmd[] = { 0x98 }; /* ULBPR */
+	result = spi_send_command(flash, sizeof(cmd), 0, cmd, NULL);
+	if (result)
+		msg_cerr("ULBPR failed\n");
+	return result;
+}
+
 /* A common block protection disable that tries to unset the status register bits masked by 0x0C (BP0-1) and
  * protected/locked by bit #7. Useful when bits 4-5 may be non-0). */
 int spi_disable_blockprotect_bp1_srwd(struct flashctx *flash)
@@ -260,19 +269,22 @@ static void spi_prettyprint_status_register_welwip(uint8_t status)
 static void spi_prettyprint_status_register_bp(uint8_t status, int bp)
 {
 	switch (bp) {
-	/* Fall through. */
 	case 4:
 		msg_cdbg("Chip status register: Block Protect 4 (BP4) is %sset\n",
 			 (status & (1 << 6)) ? "" : "not ");
+		/* Fall through. */
 	case 3:
 		msg_cdbg("Chip status register: Block Protect 3 (BP3) is %sset\n",
 			 (status & (1 << 5)) ? "" : "not ");
+		/* Fall through. */
 	case 2:
 		msg_cdbg("Chip status register: Block Protect 2 (BP2) is %sset\n",
 			 (status & (1 << 4)) ? "" : "not ");
+		/* Fall through. */
 	case 1:
 		msg_cdbg("Chip status register: Block Protect 1 (BP1) is %sset\n",
 			 (status & (1 << 3)) ? "" : "not ");
+		/* Fall through. */
 	case 0:
 		msg_cdbg("Chip status register: Block Protect 0 (BP0) is %sset\n",
 			 (status & (1 << 2)) ? "" : "not ");

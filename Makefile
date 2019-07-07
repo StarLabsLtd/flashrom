@@ -13,10 +13,6 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
-#
 
 PROGRAM = flashrom
 
@@ -63,7 +59,7 @@ CONFIG_DEFAULT_PROGRAMMER_ARGS ?= ''
 WARNERROR ?= yes
 
 ifeq ($(WARNERROR), yes)
-CFLAGS += -Werror -Wno-error=deprecated-declarations
+CFLAGS += -Werror
 endif
 
 ifdef LIBS_BASE
@@ -97,10 +93,11 @@ debug_shell = $(shell export LC_ALL=C ; { echo 'exec: export LC_ALL=C ; { $(1) ;
 
 # HOST_OS is only used to work around local toolchain issues.
 HOST_OS ?= $(shell uname)
-ifeq ($(HOST_OS), MINGW32_NT-5.1)
+ifeq ($(findstring MINGW, $(HOST_OS)), MINGW)
 # Explicitly set CC = gcc on MinGW, otherwise: "cc: command not found".
 CC = gcc
 endif
+
 ifneq ($(HOST_OS), SunOS)
 STRIP_ARGS = -s
 endif
@@ -157,11 +154,21 @@ UNSUPPORTED_FEATURES += CONFIG_PONY_SPI=yes
 else
 override CONFIG_PONY_SPI = no
 endif
-# Dediprog, USB-Blaster, PICkit2, CH341A and FT2232 are not supported under DOS (missing USB support).
+# Digilent SPI, Dediprog, Developerbox, USB-Blaster, PICkit2, CH341A and FT2232 are not supported under DOS (missing USB support).
+ifeq ($(CONFIG_DIGILENT_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_DIGILENT_SPI=yes
+else
+override CONFIG_DIGILENT_SPI = no
+endif
 ifeq ($(CONFIG_DEDIPROG), yes)
 UNSUPPORTED_FEATURES += CONFIG_DEDIPROG=yes
 else
 override CONFIG_DEDIPROG = no
+endif
+ifeq ($(CONFIG_DEVELOPERBOX_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_DEVELOPERBOX_SPI=yes
+else
+override CONFIG_DEVELOPERBOX_SPI = no
 endif
 ifeq ($(CONFIG_FT2232_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_FT2232_SPI=yes
@@ -182,6 +189,12 @@ ifeq ($(CONFIG_CH341A_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_CH341A_SPI=yes
 else
 override CONFIG_CH341A_SPI = no
+endif
+# libjaylink is also not available for DOS
+ifeq ($(CONFIG_JLINK_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_JLINK_SPI=yes
+else
+override CONFIG_JLINK_SPI = no
 endif
 endif
 
@@ -314,11 +327,16 @@ UNSUPPORTED_FEATURES += CONFIG_PONY_SPI=yes
 else
 override CONFIG_PONY_SPI = no
 endif
-# Dediprog, USB-Blaster, PICkit2, CH341A and FT2232 are not supported with libpayload (missing libusb support).
+# Dediprog, Developerbox, USB-Blaster, PICkit2, CH341A and FT2232 are not supported with libpayload (missing libusb support).
 ifeq ($(CONFIG_DEDIPROG), yes)
 UNSUPPORTED_FEATURES += CONFIG_DEDIPROG=yes
 else
 override CONFIG_DEDIPROG = no
+endif
+ifeq ($(CONFIG_DEVELOPERBOX_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_DEVELOPERBOX_SPI=yes
+else
+override CONFIG_DEVELOPERBOX_SPI = no
 endif
 ifeq ($(CONFIG_FT2232_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_FT2232_SPI=yes
@@ -345,6 +363,11 @@ endif
 ifneq ($(TARGET_OS), Linux)
 # Android is handled internally as separate OS, but it supports CONFIG_LINUX_SPI and CONFIG_MSTARDDC_SPI
 ifneq ($(TARGET_OS), Android)
+ifeq ($(CONFIG_LINUX_MTD), yes)
+UNSUPPORTED_FEATURES += CONFIG_LINUX_MTD=yes
+else
+override CONFIG_LINUX_MTD = no
+endif
 ifeq ($(CONFIG_LINUX_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_LINUX_SPI=yes
 else
@@ -376,6 +399,16 @@ endif
 # (of course), but should come after any lines setting CC because the line
 # below uses CC itself.
 override ARCH := $(strip $(call debug_shell,$(CC) $(CPPFLAGS) -E archtest.c 2>/dev/null | grep -v '^\#' | grep '"' | cut -f 2 -d'"'))
+override ENDIAN := $(strip $(call debug_shell,$(CC) $(CPPFLAGS) -E endiantest.c 2>/dev/null | grep -v '^\#'))
+
+# Disable the internal programmer on unsupported architectures (everything but x86 and mipsel)
+ifneq ($(ARCH)-little, $(filter $(ARCH),x86 mips)-$(ENDIAN))
+ifeq ($(CONFIG_INTERNAL), yes)
+UNSUPPORTED_FEATURES += CONFIG_INTERNAL=yes
+else
+override CONFIG_INTERNAL = no
+endif
+endif
 
 # PCI port I/O support is unimplemented on PPC/MIPS/SPARC and unavailable on ARM.
 # Right now this means the drivers below only work on x86.
@@ -421,11 +454,6 @@ endif
 # architectures with unknown raw access properties.
 # Right now those architectures are alpha hppa m68k sh s390
 ifneq ($(ARCH),$(filter $(ARCH),x86 mips ppc arm sparc))
-ifeq ($(CONFIG_INTERNAL), yes)
-UNSUPPORTED_FEATURES += CONFIG_INTERNAL=yes
-else
-override CONFIG_INTERNAL = no
-endif
 ifeq ($(CONFIG_RAYER_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_RAYER_SPI=yes
 else
@@ -513,13 +541,13 @@ endif
 
 CHIP_OBJS = jedec.o stm50.o w39.o w29ee011.o \
 	sst28sf040.o 82802ab.o \
-	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o spi25_statusreg.o \
+	sst49lfxxxc.o sst_fwhub.o edi.o flashchips.o spi.o spi25.o spi25_statusreg.o \
 	opaque.o sfdp.o en29lv640b.o at45db.o
 
 ###############################################################################
 # Library code.
 
-LIB_OBJS = libflashrom.o layout.o flashrom.o udelay.o programmer.o helpers.o ich_descriptors.o
+LIB_OBJS = libflashrom.o layout.o flashrom.o udelay.o programmer.o helpers.o ich_descriptors.o fmap.o
 
 ###############################################################################
 # Frontend related stuff.
@@ -620,10 +648,14 @@ CONFIG_BUSPIRATE_SPI ?= yes
 # Always enable Dediprog SF100 for now.
 CONFIG_DEDIPROG ?= yes
 
+# Always enable Developerbox emergency recovery for now.
+CONFIG_DEVELOPERBOX_SPI ?= yes
+
 # Always enable Marvell SATA controllers for now.
 CONFIG_SATAMV ?= yes
 
-# Enable Linux spidev interface by default. We disable it on non-Linux targets.
+# Enable Linux spidev and MTD interfaces by default. We disable them on non-Linux targets.
+CONFIG_LINUX_MTD ?= yes
 CONFIG_LINUX_SPI ?= yes
 
 # Always enable ITE IT8212F PATA controllers for now.
@@ -631,6 +663,12 @@ CONFIG_IT8212 ?= yes
 
 # Winchiphead CH341A
 CONFIG_CH341A_SPI ?= yes
+
+# Digilent Development board JTAG
+CONFIG_DIGILENT_SPI ?= yes
+
+# Disable J-Link for now.
+CONFIG_JLINK_SPI ?= no
 
 # Disable wiki printing by default. It is only useful if you have wiki access.
 CONFIG_PRINT_WIKI ?= no
@@ -659,6 +697,8 @@ endif
 ifeq ($(CONFIG_ENABLE_LIBUSB1_PROGRAMMERS), no)
 override CONFIG_CH341A_SPI = no
 override CONFIG_DEDIPROG = no
+override CONFIG_DIGILENT_SPI = no
+override CONFIG_DEVELOPERBOX_SPI = no
 endif
 ifeq ($(CONFIG_ENABLE_LIBPCI_PROGRAMMERS), no)
 override CONFIG_INTERNAL = no
@@ -895,10 +935,22 @@ PROGRAMMER_OBJS += dediprog.o
 NEED_LIBUSB1 += CONFIG_DEDIPROG
 endif
 
+ifeq ($(CONFIG_DEVELOPERBOX_SPI), yes)
+FEATURE_CFLAGS += -D'CONFIG_DEVELOPERBOX_SPI=1'
+PROGRAMMER_OBJS += developerbox_spi.o
+NEED_LIBUSB1 += CONFIG_DEVELOPERBOX_SPI
+endif
+
 ifeq ($(CONFIG_SATAMV), yes)
 FEATURE_CFLAGS += -D'CONFIG_SATAMV=1'
 PROGRAMMER_OBJS += satamv.o
 NEED_LIBPCI += CONFIG_SATAMV
+endif
+
+ifeq ($(CONFIG_LINUX_MTD), yes)
+# This is a totally ugly hack.
+FEATURE_CFLAGS += $(call debug_shell,grep -q "LINUX_MTD_SUPPORT := yes" .features && printf "%s" "-D'CONFIG_LINUX_MTD=1'")
+PROGRAMMER_OBJS += linux_mtd.o
 endif
 
 ifeq ($(CONFIG_LINUX_SPI), yes)
@@ -920,8 +972,20 @@ PROGRAMMER_OBJS += ch341a_spi.o
 NEED_LIBUSB1 += CONFIG_CH341A_SPI
 endif
 
+ifeq ($(CONFIG_DIGILENT_SPI), yes)
+FEATURE_CFLAGS += -D'CONFIG_DIGILENT_SPI=1'
+PROGRAMMER_OBJS += digilent_spi.o
+NEED_LIBUSB1 += CONFIG_DIGILENT_SPI
+endif
+
+ifeq ($(CONFIG_JLINK_SPI), yes)
+NEED_LIBJAYLINK += CONFIG_JLINK_SPI
+FEATURE_CFLAGS += -D'CONFIG_JLINK_SPI=1'
+PROGRAMMER_OBJS += jlink_spi.o
+endif
+
 ifneq ($(NEED_SERIAL), )
-LIB_OBJS += serial.o
+LIB_OBJS += serial.o custom_baud.o
 endif
 
 ifneq ($(NEED_POSIX_SOCKETS), )
@@ -979,6 +1043,7 @@ endif
 ifneq ($(NEED_LIBUSB1), )
 CHECK_LIBUSB1 = yes
 FEATURE_CFLAGS += -D'NEED_LIBUSB1=1'
+PROGRAMMER_OBJS += usbdev.o
 # FreeBSD and DragonflyBSD use a reimplementation of libusb-1.0 that is simply called libusb
 ifeq ($(TARGET_OS),$(filter $(TARGET_OS),FreeBSD DragonFlyBSD))
 USB1LIBS += -lusb
@@ -991,6 +1056,12 @@ USB1LIBS += $(call debug_shell,[ -n "$(PKG_CONFIG_LIBDIR)" ] && export PKG_CONFI
 override CPPFLAGS += $(call debug_shell,[ -n "$(PKG_CONFIG_LIBDIR)" ] && export PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)"; $(PKG_CONFIG) --cflags-only-I libusb-1.0  || printf "%s" "-I/usr/include/libusb-1.0")
 endif
 endif
+endif
+
+ifneq ($(NEED_LIBJAYLINK), )
+CHECK_LIBJAYLINK = yes
+JAYLINKLIBS += $(call debug_shell,[ -n "$(PKG_CONFIG_LIBDIR)" ] && export PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)"; $(PKG_CONFIG) --libs libjaylink)
+override CPPFLAGS += $(call debug_shell,[ -n "$(PKG_CONFIG_LIBDIR)" ] && export PKG_CONFIG_LIBDIR="$(PKG_CONFIG_LIBDIR)"; $(PKG_CONFIG) --cflags-only-I libjaylink)
 endif
 
 ifeq ($(CONFIG_PRINT_WIKI), yes)
@@ -1015,7 +1086,7 @@ ifeq ($(ARCH), x86)
 endif
 
 $(PROGRAM)$(EXEC_SUFFIX): $(OBJS)
-	$(CC) $(LDFLAGS) -o $(PROGRAM)$(EXEC_SUFFIX) $(OBJS) $(LIBS) $(PCILIBS) $(FEATURE_LIBS) $(USBLIBS) $(USB1LIBS)
+	$(CC) $(LDFLAGS) -o $(PROGRAM)$(EXEC_SUFFIX) $(OBJS) $(LIBS) $(PCILIBS) $(FEATURE_LIBS) $(USBLIBS) $(USB1LIBS) $(JAYLINKLIBS)
 
 libflashrom.a: $(LIBFLASHROM_OBJS)
 	$(AR) rcs $@ $^
@@ -1149,6 +1220,24 @@ int main(int argc, char **argv)
 endef
 export LIBUSB1_TEST
 
+define LIBJAYLINK_TEST
+#include <stddef.h>
+#include <libjaylink/libjaylink.h>
+int main(int argc, char **argv)
+{
+	struct jaylink_context *ctx;
+
+	(void)argc;
+	(void)argv;
+
+	jaylink_init(&ctx);
+	jaylink_exit(ctx);
+
+	return 0;
+}
+endef
+export LIBJAYLINK_TEST
+
 hwlibs: compiler
 	@printf "" > .libdeps
 ifeq ($(CHECK_LIBPCI), yes)
@@ -1227,6 +1316,28 @@ ifeq ($(CHECK_LIBUSB1), yes)
 		rm -f .test.c .test.o .test$(EXEC_SUFFIX); exit 1; }; } 2>>$(BUILD_DETAILS_FILE); echo $? >&3 ; } | tee -a $(BUILD_DETAILS_FILE) >&4; } 3>&1;} | { read rc ; exit ${rc}; } } 4>&1
 	@rm -f .test.c .test.o .test$(EXEC_SUFFIX)
 endif
+ifeq ($(CHECK_LIBJAYLINK), yes)
+	@printf "Checking for libjaylink headers... " | tee -a $(BUILD_DETAILS_FILE)
+	@echo "$$LIBJAYLINK_TEST" > .test.c
+	@printf "\nexec: %s\n" "$(CC) -c $(CPPFLAGS) $(CFLAGS) .test.c -o .test.o" >>$(BUILD_DETAILS_FILE)
+	@{ { { { { $(CC) -c $(CPPFLAGS) $(CFLAGS) .test.c -o .test.o >&2 && \
+		echo "found." || { echo "not found."; echo;				\
+		echo "The following feature requires libjaylink: $(NEED_LIBJAYLINK).";	\
+		echo "Please install libjaylink headers or disable the feature"; \
+		echo "mentioned above by specifying make CONFIG_JLINK_SPI=no"; \
+		echo "See README for more information."; echo;				\
+		rm -f .test.c .test.o; exit 1; }; } 2>>$(BUILD_DETAILS_FILE); echo $? >&3 ; } | tee -a $(BUILD_DETAILS_FILE) >&4; } 3>&1;} | { read rc ; exit ${rc}; } } 4>&1
+	@printf "Checking if libjaylink is usable... " | tee -a $(BUILD_DETAILS_FILE)
+	@printf "\nexec: %s\n" "$(CC) $(LDFLAGS) .test.o -o .test$(EXEC_SUFFIX) $(LIBS) $(JAYLINKLIBS)" >>$(BUILD_DETAILS_FILE)
+	@{ { { { { $(CC) $(LDFLAGS) .test.o -o .test$(EXEC_SUFFIX) $(LIBS) $(JAYLINKLIBS) >&2 && \
+		echo "yes." || { echo "no.";						\
+		echo "The following feature requires libjaylink: $(NEED_LIBJAYLINK).";	\
+		echo "Please install libjaylink or disable the feature"; \
+		echo "mentioned above by specifying make CONFIG_JLINK_SPI=no"; \
+		echo "See README for more information."; echo;				\
+		rm -f .test.c .test.o .test$(EXEC_SUFFIX); exit 1; }; } 2>>$(BUILD_DETAILS_FILE); echo $? >&3 ; } | tee -a $(BUILD_DETAILS_FILE) >&4; } 3>&1;} | { read rc ; exit ${rc}; } } 4>&1
+	@rm -f .test.c .test.o .test$(EXEC_SUFFIX)
+endif
 
 .features: features
 
@@ -1275,6 +1386,18 @@ int main(int argc, char **argv)
 }
 endef
 export UTSNAME_TEST
+
+define LINUX_MTD_TEST
+#include <mtd/mtd-user.h>
+
+int main(int argc, char **argv)
+{
+	(void) argc;
+	(void) argv;
+	return 0;
+}
+endef
+export LINUX_MTD_TEST
 
 define LINUX_SPI_TEST
 #include <linux/types.h>
@@ -1331,6 +1454,15 @@ ifneq ($(NEED_LIBFTDI), )
 	) || \
 	( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp ) } \
 	2>>$(BUILD_DETAILS_FILE) | tee -a $(BUILD_DETAILS_FILE)
+endif
+ifeq ($(CONFIG_LINUX_MTD), yes)
+	@printf "Checking if Linux MTD headers are present... " | tee -a $(BUILD_DETAILS_FILE)
+	@echo "$$LINUX_MTD_TEST" > .featuretest.c
+	@printf "\nexec: %s\n" "$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX)" >>$(BUILD_DETAILS_FILE)
+	@ { $(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) >&2 && \
+		( echo "yes."; echo "LINUX_MTD_SUPPORT := yes" >> .features.tmp ) ||	\
+		( echo "no."; echo "LINUX_MTD_SUPPORT := no" >> .features.tmp ) } \
+		2>>$(BUILD_DETAILS_FILE) | tee -a $(BUILD_DETAILS_FILE)
 endif
 ifeq ($(CONFIG_LINUX_SPI), yes)
 	@printf "Checking if Linux SPI headers are present... " | tee -a $(BUILD_DETAILS_FILE)

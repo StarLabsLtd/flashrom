@@ -13,10 +13,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA, 02110-1301 USA
  */
 
 #ifndef COREBOOT_TABLES_H
@@ -29,7 +25,7 @@
  * is expected to be information that cannot be discovered by
  * other means, such as querying the hardware directly.
  *
- * All of the information should be Position Independent Data.  
+ * All of the information should be Position Independent Data.
  * That is it should be safe to relocated any of the information
  * without it's meaning/correctness changing.   For table that
  * can reasonably be used on multiple architectures the data
@@ -52,9 +48,9 @@
  * table entries and be backwards compatible, but it is not required.
  */
 
-/* Since coreboot is usually compiled 32bit, gcc will align 64bit 
- * types to 32bit boundaries. If the coreboot table is dumped on a 
- * 64bit system, a uint64_t would be aligned to 64bit boundaries, 
+/* Since coreboot is usually compiled 32bit, gcc will align 64bit
+ * types to 32bit boundaries. If the coreboot table is dumped on a
+ * 64bit system, a uint64_t would be aligned to 64bit boundaries,
  * breaking the table format.
  *
  * lb_uint64 will keep 64bit coreboot table values aligned to 32bit

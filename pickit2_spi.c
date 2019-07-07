@@ -12,10 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -124,7 +120,7 @@ static int pickit2_get_firmware_version(void)
 
 	ret = usb_interrupt_write(pickit2_handle, ENDPOINT_OUT, (char *)command, CMD_LENGTH, DFLT_TIMEOUT);
 	ret = usb_interrupt_read(pickit2_handle, ENDPOINT_IN, (char *)command, CMD_LENGTH, DFLT_TIMEOUT);
-	
+
 	msg_pdbg("PICkit2 Firmware Version: %d.%d\n", (int)command[0], (int)command[1]);
 	if (ret != CMD_LENGTH) {
 		msg_perr("Command Get Firmware Version failed (%s)!\n", usb_strerror());
@@ -244,7 +240,7 @@ static int pickit2_spi_send_command(struct flashctx *flash, unsigned int writecn
 		buf[i++] = 10;
 	else
 		buf[i++] = 13;
-		
+
 	/* Assert CS# */
 	buf[i++] = SCR_VPP_OFF;
 	buf[i++] = SCR_MCLR_GND_ON;
@@ -295,7 +291,7 @@ static int pickit2_spi_send_command(struct flashctx *flash, unsigned int writecn
 				 readcnt, ret);
 			return 1;
 		}
-		
+
 		/* Actual data starts at byte number two */
 		memcpy(readarr, &buf[1], readcnt);
 	}
@@ -453,7 +449,7 @@ int pickit2_spi_init(void)
 	(void)usb_find_devices();
 	const uint16_t vid = devs_pickit2_spi[0].vendor_id;
 	const uint16_t pid = devs_pickit2_spi[0].device_id;
- 	struct usb_device *dev = get_device_by_vid_pid(vid, pid, usedevice);
+	struct usb_device *dev = get_device_by_vid_pid(vid, pid, usedevice);
 	if (dev == NULL) {
 		msg_perr("Could not find a PICkit2 on USB!\n");
 		return 1;

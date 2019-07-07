@@ -12,11 +12,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
- *
- *
  * Header file for flash chip drivers. Included from flash.h.
  * As a general rule, every function listed here should take a pointer to
  * struct flashctx as first parameter.
@@ -43,8 +38,10 @@ int probe_spi_at25f(struct flashctx *flash);
 int spi_write_enable(struct flashctx *flash);
 int spi_write_disable(struct flashctx *flash);
 int spi_block_erase_20(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
+int spi_block_erase_21(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_50(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_52(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
+int spi_block_erase_5c(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_60(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_62(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_81(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
@@ -53,13 +50,15 @@ int spi_block_erase_c7(struct flashctx *flash, unsigned int addr, unsigned int b
 int spi_block_erase_d7(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_d8(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 int spi_block_erase_db(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
+int spi_block_erase_dc(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 erasefunc_t *spi_get_erasefn_from_opcode(uint8_t opcode);
 int spi_chip_write_1(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
-int spi_byte_program(struct flashctx *flash, unsigned int addr, uint8_t databyte);
-int spi_nbyte_program(struct flashctx *flash, unsigned int addr, const uint8_t *bytes, unsigned int len);
 int spi_nbyte_read(struct flashctx *flash, unsigned int addr, uint8_t *bytes, unsigned int len);
 int spi_read_chunked(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len, unsigned int chunksize);
 int spi_write_chunked(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len, unsigned int chunksize);
+int spi_enter_4ba(struct flashctx *flash);
+int spi_exit_4ba(struct flashctx *flash);
+
 
 /* spi25_statusreg.c */
 uint8_t spi_read_status_register(struct flashctx *flash);
@@ -103,6 +102,7 @@ int spi_disable_blockprotect_bp2_ep_srwd(struct flashctx *flash);
 int spi_prettyprint_status_register_sst25(struct flashctx *flash);
 int spi_prettyprint_status_register_sst25vf016(struct flashctx *flash);
 int spi_prettyprint_status_register_sst25vf040b(struct flashctx *flash);
+int spi_disable_blockprotect_sst26_global_unprotect(struct flashctx *flash);
 
 /* sfdp.c */
 int probe_spi_sfdp(struct flashctx *flash);
@@ -194,5 +194,11 @@ int erase_sector_stm50(struct flashctx *flash, unsigned int block, unsigned int 
 /* en29lv640b.c */
 int probe_en29lv640b(struct flashctx *flash);
 int write_en29lv640b(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
+
+/* edi.c */
+int edi_chip_block_erase(struct flashctx *flash, unsigned int page, unsigned int size);
+int edi_chip_write(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
+int edi_chip_read(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+int edi_probe_kb9012(struct flashctx *flash);
 
 #endif /* !__CHIPDRIVERS_H__ */

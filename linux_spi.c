@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #if CONFIG_LINUX_SPI == 1
@@ -44,6 +40,8 @@
  */
 
 static int fd = -1;
+#define BUF_SIZE_FROM_SYSFS	"/sys/module/spidev/parameters/bufsiz"
+static size_t max_kernel_buf_size;
 
 static int linux_spi_shutdown(void *data);
 static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
@@ -57,6 +55,7 @@ static int linux_spi_write_256(struct flashctx *flash, const uint8_t *buf,
 
 static const struct spi_master spi_master_linux = {
 	.type		= SPI_CONTROLLER_LINUX,
+	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_UNSPECIFIED, /* TODO? */
 	.max_data_write	= MAX_DATA_UNSPECIFIED, /* TODO? */
 	.command	= linux_spi_send_command,
@@ -130,8 +129,45 @@ int linux_spi_init(void)
 		return 1;
 	}
 
-	register_spi_master(&spi_master_linux);
+	/* Read max buffer size from sysfs, or use page size as fallback. */
+	FILE *fp;
+	fp = fopen(BUF_SIZE_FROM_SYSFS, "r");
+	if (!fp) {
+		msg_pwarn("Cannot open %s: %s.\n", BUF_SIZE_FROM_SYSFS, strerror(errno));
+		goto out;
+	}
 
+	char buf[10];
+	memset(buf, 0, sizeof(buf));
+	if (!fread(buf, 1, sizeof(buf) - 1, fp)) {
+		if (feof(fp))
+			msg_pwarn("Cannot read %s: file is empty.\n", BUF_SIZE_FROM_SYSFS);
+		else
+			msg_pwarn("Cannot read %s: %s.\n", BUF_SIZE_FROM_SYSFS, strerror(errno));
+		goto out;
+	}
+
+	long int tmp;
+	errno = 0;
+	tmp = strtol(buf, NULL, 0);
+	if ((tmp < 0) || errno) {
+		msg_pwarn("Buffer size %ld from %s seems wrong.\n", tmp, BUF_SIZE_FROM_SYSFS);
+	} else {
+		msg_pdbg("%s: Using value from %s as max buffer size.\n", __func__, BUF_SIZE_FROM_SYSFS);
+		max_kernel_buf_size = (size_t)tmp;
+	}
+
+out:
+	if (fp)
+		fclose(fp);
+
+	if (!max_kernel_buf_size) {
+		msg_pdbg("%s: Using page size as max buffer size.\n", __func__);
+		max_kernel_buf_size = (size_t)getpagesize();
+	}
+
+	msg_pdbg("%s: max_kernel_buf_size: %zu\n", __func__, max_kernel_buf_size);
+	register_spi_master(&spi_master_linux);
 	return 0;
 }
 
@@ -182,17 +218,17 @@ static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 	return 0;
 }
 
-static int linux_spi_read(struct flashctx *flash, uint8_t *buf,
-			  unsigned int start, unsigned int len)
+static int linux_spi_read(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len)
 {
-	return spi_read_chunked(flash, buf, start, len,
-				(unsigned int)getpagesize() - 4);
+	/* Older kernels use a single buffer for combined input and output
+	   data. So account for longest possible command + address, too. */
+	return spi_read_chunked(flash, buf, start, len, max_kernel_buf_size - 5);
 }
 
 static int linux_spi_write_256(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len)
 {
-	return spi_write_chunked(flash, buf, start, len,
-				((unsigned int)getpagesize()) - 4);
+	/* 5 bytes must be reserved for longest possible command + address. */
+	return spi_write_chunked(flash, buf, start, len, max_kernel_buf_size - 5);
 }
 
 #endif // CONFIG_LINUX_SPI == 1

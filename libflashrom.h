@@ -13,15 +13,13 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __LIBFLASHROM_H__
 #define __LIBFLASHROM_H__ 1
 
+#include <sys/types.h>
+#include <stddef.h>
 #include <stdarg.h>
 
 int flashrom_init(int perform_selfcheck);
@@ -60,11 +58,15 @@ void flashrom_flag_set(struct flashrom_flashctx *, enum flashrom_flag, bool valu
 bool flashrom_flag_get(const struct flashrom_flashctx *, enum flashrom_flag);
 
 int flashrom_image_read(struct flashrom_flashctx *, void *buffer, size_t buffer_len);
-int flashrom_image_write(struct flashrom_flashctx *, void *buffer, size_t buffer_len);
+int flashrom_image_write(struct flashrom_flashctx *, void *buffer, size_t buffer_len, const void *refbuffer);
 int flashrom_image_verify(struct flashrom_flashctx *, const void *buffer, size_t buffer_len);
 
 struct flashrom_layout;
 int flashrom_layout_read_from_ifd(struct flashrom_layout **, struct flashrom_flashctx *, const void *dump, size_t len);
+int flashrom_layout_read_fmap_from_rom(struct flashrom_layout **,
+		struct flashrom_flashctx *, off_t offset, size_t length);
+int flashrom_layout_read_fmap_from_buffer(struct flashrom_layout **layout,
+		struct flashrom_flashctx *, const uint8_t *buf, size_t len);
 int flashrom_layout_include_region(struct flashrom_layout *, const char *name);
 void flashrom_layout_release(struct flashrom_layout *);
 void flashrom_layout_set(struct flashrom_flashctx *, const struct flashrom_layout *);

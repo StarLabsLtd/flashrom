@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdint.h>
@@ -140,7 +136,7 @@ static int sfdp_fill_flash(struct flashchip *chip, uint8_t *buf, uint16_t len)
 		return 1;
 	}
 	msg_cdbg2("\n");
-	
+
 	/* 1. double word */
 	tmp32 =  ((unsigned int)buf[(4 * 0) + 0]);
 	tmp32 |= ((unsigned int)buf[(4 * 0) + 1]) << 8;
