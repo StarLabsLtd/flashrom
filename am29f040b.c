@@ -25,12 +25,12 @@
 static __inline__ int erase_sector_29f040b(volatile uint8_t *bios,
 					   unsigned long address)
 {
-	*(bios + 0x555) = 0xAA;
-	*(bios + 0x2AA) = 0x55;
-	*(bios + 0x555) = 0x80;
-	*(bios + 0x555) = 0xAA;
-	*(bios + 0x2AA) = 0x55;
-	*(bios + address) = 0x30;
+	chip_writeb(0xAA, bios + 0x555);
+	chip_writeb(0x55, bios + 0x2AA);
+	chip_writeb(0x80, bios + 0x555);
+	chip_writeb(0xAA, bios + 0x555);
+	chip_writeb(0x55, bios + 0x2AA);
+	chip_writeb(0x30, bios + address);
 
 	sleep(2);
 
@@ -52,10 +52,10 @@ static __inline__ int write_sector_29f040b(volatile uint8_t *bios,
 			printf("0x%08lx", (unsigned long)dst -
 			       (unsigned long)bios);
 
-		*(bios + 0x555) = 0xAA;
-		*(bios + 0x2AA) = 0x55;
-		*(bios + 0x555) = 0xA0;
-		*dst++ = *src++;
+		chip_writeb(0xAA, bios + 0x555);
+		chip_writeb(0x55, bios + 0x2AA);
+		chip_writeb(0xA0, bios + 0x555);
+		chip_writeb(*src++, dst++);
 
 		/* wait for Toggle bit ready */
 		toggle_ready_jedec(bios);
@@ -72,18 +72,18 @@ int probe_29f040b(struct flashchip *flash)
 	volatile uint8_t *bios = flash->virtual_memory;
 	uint8_t id1, id2;
 
-	*(bios + 0x555) = 0xAA;
-	*(bios + 0x2AA) = 0x55;
-	*(bios + 0x555) = 0x90;
+	chip_writeb(0xAA, bios + 0x555);
+	chip_writeb(0x55, bios + 0x2AA);
+	chip_writeb(0x90, bios + 0x555);
 
-	id1 = *bios;
-	id2 = *(bios + 0x01);
+	id1 = chip_readb(bios);
+	id2 = chip_readb(bios + 0x01);
 
-	*bios = 0xF0;
+	chip_writeb(0xF0, bios);
 
 	myusec_delay(10);
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
 		return 1;
 
@@ -94,12 +94,12 @@ int erase_29f040b(struct flashchip *flash)
 {
 	volatile uint8_t *bios = flash->virtual_memory;
 
-	*(bios + 0x555) = 0xAA;
-	*(bios + 0x2AA) = 0x55;
-	*(bios + 0x555) = 0x80;
-	*(bios + 0x555) = 0xAA;
-	*(bios + 0x2AA) = 0x55;
-	*(bios + 0x555) = 0x10;
+	chip_writeb(0xAA, bios + 0x555);
+	chip_writeb(0x55, bios + 0x2AA);
+	chip_writeb(0x80, bios + 0x555);
+	chip_writeb(0xAA, bios + 0x555);
+	chip_writeb(0x55, bios + 0x2AA);
+	chip_writeb(0x10, bios + 0x555);
 
 	myusec_delay(10);
 	toggle_ready_jedec(bios);

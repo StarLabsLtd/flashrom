@@ -22,7 +22,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -44,7 +43,6 @@ char *chip_to_probe = NULL;
 struct pci_access *pacc;	/* For board and chipset_enable */
 int exclude_start_page, exclude_end_page;
 int verbose = 0;
-int fd_mem;
 
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device)
 {
@@ -84,21 +82,10 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 	return NULL;
 }
 
-int map_flash_registers(struct flashchip *flash)
+void map_flash_registers(struct flashchip *flash)
 {
-	volatile uint8_t *registers;
 	size_t size = flash->total_size * 1024;
-
-	registers = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			 fd_mem, (off_t) (0xFFFFFFFF - 0x400000 - size + 1));
-
-	if (registers == MAP_FAILED) {
-		perror("Can't mmap registers using " MEM_DEV);
-		exit(1);
-	}
-	flash->virtual_registers = registers;
-
-	return 0;
+	flash->virtual_registers = physmap("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
 }
 
 struct flashchip *probe_flash(struct flashchip *first_flash, int force)
@@ -134,14 +121,8 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			size = getpagesize();
 		}
 
-		base = flashbase ? flashbase : (0xffffffff - size + 1);
-		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    fd_mem, (off_t) base);
-		if (bios == MAP_FAILED) {
-			perror("Can't mmap memory using " MEM_DEV);
-			exit(1);
-		}
-		flash->virtual_memory = bios;
+		base = flashbase && flashchips == first_flash ? flashbase : (0xffffffff - size + 1);
+		flash->virtual_memory = bios = physmap("flash chip", base, size);
 
 		if (force)
 			break;
@@ -154,7 +135,7 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			break;
 
 notfound:
-		munmap((void *)bios, size);
+		physunmap((void *)bios, size);
 	}
 
 	if (!flash || !flash->name)
@@ -186,10 +167,11 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 			printf("0x%08x", idx);
 
 		if (*(buf2 + idx) != *(buf + idx)) {
-			if (verbose) {
-				printf("0x%08x ", idx);
-			}
-			printf("FAILED!  Expected=0x%02x, Read=0x%02x\n",
+			if (verbose)
+				printf("0x%08x FAILED!", idx);
+			else
+				printf("FAILED at 0x%08x!", idx);
+			printf("  Expected=0x%02x, Read=0x%02x\n",
 			       *(buf + idx), *(buf2 + idx));
 			return 1;
 		}
@@ -202,6 +184,61 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 
 	printf("VERIFIED.          \n");
 
+	return 0;
+}
+
+int read_flash(struct flashchip *flash, char *filename, unsigned int exclude_start_position, unsigned int exclude_end_position)
+{
+	unsigned long numbytes;
+	FILE *image;
+	unsigned long size = flash->total_size * 1024;
+	unsigned char *buf = calloc(size, sizeof(char));
+	if ((image = fopen(filename, "w")) == NULL) {
+		perror(filename);
+		exit(1);
+	}
+	printf("Reading flash... ");
+	if (flash->read == NULL)
+		memcpy(buf, (const char *)flash->virtual_memory, size);
+	else
+		flash->read(flash, buf);
+
+	if (exclude_end_position - exclude_start_position > 0)
+		memset(buf + exclude_start_position, 0,
+		       exclude_end_position - exclude_start_position);
+
+	numbytes = fwrite(buf, 1, size, image);
+	fclose(image);
+	printf("%s.\n", numbytes == size ? "done" : "FAILED");
+	if (numbytes != size)
+		return 1;
+	return 0;
+}
+
+int erase_flash(struct flashchip *flash)
+{
+	uint32_t erasedbytes;
+	unsigned long size = flash->total_size * 1024;
+	unsigned char *buf = calloc(size, sizeof(char));
+	printf("Erasing flash chip... ");
+	if (NULL == flash->erase) {
+		printf("FAILED!\n");
+		fprintf(stderr, "ERROR: flashrom has no erase function for this flash chip.\n");
+		return 1;
+	}
+	flash->erase(flash);
+	if (NULL == flash->read)
+		memcpy(buf, (const char *)flash->virtual_memory, size);
+	else
+		flash->read(flash, buf);
+	for (erasedbytes = 0; erasedbytes < size; erasedbytes++)
+		if (0xff != buf[erasedbytes]) {
+			printf("FAILED!\n");
+			fprintf(stderr, "ERROR at 0x%08x: Expected=0xff, Read=0x%02x\n",
+				erasedbytes, buf[erasedbytes]);
+			return 1;
+		}
+	printf("SUCCESS.\n");
 	return 0;
 }
 
@@ -296,8 +333,7 @@ void print_version(void)
 int main(int argc, char *argv[])
 {
 	uint8_t *buf;
-	unsigned long size;
-	uint32_t erasedbytes;
+	unsigned long size, numbytes;
 	FILE *image;
 	/* Probe for up to three flash chips. */
 	struct flashchip *flash, *flashes[3];
@@ -439,13 +475,6 @@ int main(int argc, char *argv[])
 	pci_init(pacc);		/* Initialize the PCI library */
 	pci_scan_bus(pacc);	/* We want to get the list of devices */
 
-	/* Open the memory device UNCACHED. That's important for MMIO. */
-	if ((fd_mem = open(MEM_DEV, O_RDWR | O_SYNC)) < 0) {
-		perror("Error: Can not access memory using " MEM_DEV
-		       ". You need to be root.");
-		exit(1);
-	}
-
 	myusec_calibrate_delay();
 
 	/* We look at the lbtable first to see if we need a
@@ -517,11 +546,11 @@ int main(int argc, char *argv[])
 				       exclude_end_position -
 				       exclude_start_position);
 
-			fwrite(buf, sizeof(char), size, image);
+			numbytes = fwrite(buf, 1, size, image);
 			fclose(image);
-			printf("done.\n");
+			printf("%s.\n", numbytes == size ? "done" : "FAILED");
 			free(buf);
-			exit(0);
+			return numbytes != size;
 		}
 		// FIXME: flash writes stay enabled!
 		exit(1);
@@ -580,44 +609,11 @@ int main(int argc, char *argv[])
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
-		printf("Erasing flash chip... ");
-		if (NULL == flash->erase) {
-			printf("FAILED!\n");
-			fprintf(stderr, "ERROR: flashrom has no erase function for this flash chip.\n");
+		if (erase_flash(flash))
 			return 1;
-		}
-		flash->erase(flash);
-		if (NULL == flash->read)
-			memcpy(buf, (const char *)flash->virtual_memory, size);
-		else
-			flash->read(flash, buf);
-		for (erasedbytes = 0; erasedbytes <= size; erasedbytes++)
-			if (0xff != buf[erasedbytes]) {
-				printf("FAILED!\n");
-				fprintf(stderr, "ERROR at 0x%08x: Expected=0xff, Read=0x%02x\n",
-					erasedbytes, buf[erasedbytes]);
-				return 1;
-			}
-		printf("SUCCESS.\n");
-		return 0;
 	} else if (read_it) {
-		if ((image = fopen(filename, "w")) == NULL) {
-			perror(filename);
-			exit(1);
-		}
-		printf("Reading flash... ");
-		if (flash->read == NULL)
-			memcpy(buf, (const char *)flash->virtual_memory, size);
-		else
-			flash->read(flash, buf);
-
-		if (exclude_end_position - exclude_start_position > 0)
-			memset(buf + exclude_start_position, 0,
-			       exclude_end_position - exclude_start_position);
-
-		fwrite(buf, sizeof(char), size, image);
-		fclose(image);
-		printf("done.\n");
+		if (read_flash(flash, filename, exclude_start_position, exclude_end_position))
+			return 1;
 	} else {
 		struct stat image_stat;
 
@@ -634,9 +630,13 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 
-		fread(buf, sizeof(char), size, image);
+		numbytes = fread(buf, 1, size, image);
 		show_id(buf, size, force);
 		fclose(image);
+		if (numbytes != size) {
+			fprintf(stderr, "Error: Failed to read file. Got %ld bytes, wanted %ld!\n", numbytes, size);
+			return 1;
+		}
 	}
 
 	/* exclude range stuff. Nice idea, but at the moment it is only

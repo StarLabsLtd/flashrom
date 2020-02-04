@@ -215,18 +215,13 @@ static int enable_flash_vt8237s_spi(struct pci_dev *dev, const char *name)
 
 	mmio_base = (pci_read_long(dev, 0xbc)) << 8;
 	printf_debug("MMIO base at = 0x%x\n", mmio_base);
-	spibar = mmap(NULL, 0x70, PROT_READ | PROT_WRITE, MAP_SHARED,
-		      fd_mem, mmio_base);
-
-	if (spibar == MAP_FAILED) {
-		perror("Can't mmap memory using " MEM_DEV);
-		exit(1);
-	}
+	spibar = physmap("VT8237S MMIO registers", mmio_base, 0x70);
 
 	printf_debug("0x6c: 0x%04x     (CLOCK/DEBUG)\n",
 		     *(uint16_t *) (spibar + 0x6c));
 
 	flashbus = BUS_TYPE_VIA_SPI;
+	ich_init_opcodes();
 
 	return 0;
 }
@@ -251,12 +246,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	printf_debug("\nRoot Complex Register Block address = 0x%x\n", tmp);
 
 	/* Map RCBA to virtual memory */
-	rcrb = mmap(0, 0x4000, PROT_READ | PROT_WRITE, MAP_SHARED, fd_mem,
-		    (off_t) tmp);
-	if (rcrb == MAP_FAILED) {
-		perror("Can't mmap memory using " MEM_DEV);
-		exit(1);
-	}
+	rcrb = physmap("ICH RCRB", tmp, 0x4000);
 
 	gcs = *(volatile uint32_t *)(rcrb + 0x3410);
 	printf_debug("GCS = 0x%x: ", gcs);
@@ -342,16 +332,16 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		ich_init_opcodes();
 		break;
 	case BUS_TYPE_ICH9_SPI:
-		tmp2 = *(uint16_t *) (spibar + 0);
-		printf_debug("0x00: 0x%04x (HSFS)\n", tmp2);
-		printf_debug("FLOCKDN %i, ", (tmp >> 15 & 1));
-		printf_debug("FDV %i, ", (tmp >> 14) & 1);
-		printf_debug("FDOPSS %i, ", (tmp >> 13) & 1);
-		printf_debug("SCIP %i, ", (tmp >> 5) & 1);
-		printf_debug("BERASE %i, ", (tmp >> 3) & 3);
-		printf_debug("AEL %i, ", (tmp >> 2) & 1);
-		printf_debug("FCERR %i, ", (tmp >> 1) & 1);
-		printf_debug("FDONE %i\n", (tmp >> 0) & 1);
+		tmp2 = *(uint16_t *) (spibar + 4);
+		printf_debug("0x04: 0x%04x (HSFS)\n", tmp2);
+		printf_debug("FLOCKDN %i, ", (tmp2 >> 15 & 1));
+		printf_debug("FDV %i, ", (tmp2 >> 14) & 1);
+		printf_debug("FDOPSS %i, ", (tmp2 >> 13) & 1);
+		printf_debug("SCIP %i, ", (tmp2 >> 5) & 1);
+		printf_debug("BERASE %i, ", (tmp2 >> 3) & 3);
+		printf_debug("AEL %i, ", (tmp2 >> 2) & 1);
+		printf_debug("FCERR %i, ", (tmp2 >> 1) & 1);
+		printf_debug("FDONE %i\n", (tmp2 >> 0) & 1);
 
 		tmp = *(uint32_t *) (spibar + 0x50);
 		printf_debug("0x50: 0x%08x (FRAP)\n", tmp);
@@ -380,10 +370,24 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 			     *(uint32_t *) (spibar + 0x80));
 		printf_debug("0x84: 0x%08x (PR4)\n",
 			     *(uint32_t *) (spibar + 0x84));
-		/* printf_debug("0xA0: 0x%08x (BBAR)\n",
-			     *(uint32_t *) (spibar + 0xA0)); ICH10 only? */
+		printf_debug("0x90: 0x%08x (SSFS, SSFC)\n",
+			     *(uint32_t *) (spibar + 0x90));
+		printf_debug("0x94: 0x%04x     (PREOP)\n",
+			     *(uint16_t *) (spibar + 0x94));
+		printf_debug("0x96: 0x%04x     (OPTYPE)\n",
+			     *(uint16_t *) (spibar + 0x96));
+		printf_debug("0x98: 0x%08x (OPMENU)\n",
+			     *(uint32_t *) (spibar + 0x98));
+		printf_debug("0x9C: 0x%08x (OPMENU+4)\n",
+			     *(uint32_t *) (spibar + 0x9C));
+		printf_debug("0xA0: 0x%08x (BBAR)\n",
+			     *(uint32_t *) (spibar + 0xA0));
 		printf_debug("0xB0: 0x%08x (FDOC)\n",
 			     *(uint32_t *) (spibar + 0xB0));
+		if (tmp2 & (1 << 15)) {
+			printf("WARNING: SPI Configuration Lockdown activated.\n");
+			ichspi_lock = 1;
+		}
 		ich_init_opcodes();
 		break;
 	default:
@@ -663,12 +667,7 @@ static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 	tmp &= 0xffffc000;
 	printf_debug("SPI base address is at 0x%x\n", tmp + low_bits);
 
-	sb600_spibar = mmap(0, 0x4000, PROT_READ | PROT_WRITE, MAP_SHARED,
-			    fd_mem, (off_t)tmp);
-	if (sb600_spibar == MAP_FAILED) {
-		perror("Can't mmap memory using " MEM_DEV);
-		exit(1);
-	}
+	sb600_spibar = physmap("SB600 SPI registers", tmp, 0x4000);
 	sb600_spibar += low_bits;
 
 	/* Clear ROM protect 0-3. */
@@ -818,13 +817,7 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 	void *mmcr;
 
 	/* 1. Map MMCR */
-	mmcr = mmap(0, getpagesize(), PROT_WRITE | PROT_READ,
-			MAP_SHARED, fd_mem, (off_t)0xFFFEF000);
-
-	if (mmcr == MAP_FAILED) {
-		perror("Can't mmap Elan SC520 specific registers using " MEM_DEV);
-		exit(1);
-	}
+	mmcr = physmap("Elan SC520 MMCR", 0xfffef000, getpagesize());
 
 	/* 2. Scan PAR0 (0x88) - PAR15 (0xc4) for
 	 *    BOOTCS region (PARx[31:29] = 100b)e
@@ -880,6 +873,7 @@ static const FLASH_ENABLE enables[] = {
 	{0x8086, 0x24cc, "Intel ICH4-M",	enable_flash_ich_4e},
 	{0x8086, 0x24d0, "Intel ICH5/ICH5R",	enable_flash_ich_4e},
 	{0x8086, 0x25a1, "Intel 6300ESB",	enable_flash_ich_4e},
+	{0x8086, 0x2670, "Intel 631xESB/632xESB/3100",    enable_flash_ich_dc},
 	{0x8086, 0x2640, "Intel ICH6/ICH6R",	enable_flash_ich_dc},
 	{0x8086, 0x2641, "Intel ICH6-M",	enable_flash_ich_dc},
 	{0x8086, 0x5031, "Intel EP80579",	enable_flash_ich7},
@@ -905,6 +899,7 @@ static const FLASH_ENABLE enables[] = {
 	{0x1106, 0x8231, "VIA VT8231",		enable_flash_vt823x},
 	{0x1106, 0x3177, "VIA VT8235",		enable_flash_vt823x},
 	{0x1106, 0x3227, "VIA VT8237",		enable_flash_vt823x},
+	{0x1106, 0x3337, "VIA VT8237A",		enable_flash_vt823x},
 	{0x1106, 0x3372, "VIA VT8237S",		enable_flash_vt8237s_spi},
 	{0x1106, 0x8324, "VIA CX700",		enable_flash_vt823x},
 	{0x1106, 0x0586, "VIA VT82C586A/B",	enable_flash_amd8111},
@@ -937,6 +932,7 @@ static const FLASH_ENABLE enables[] = {
 	{0x1002, 0x4377, "ATI SB400",		enable_flash_sb400},
 	{0x1166, 0x0205, "Broadcom HT-1000",	enable_flash_ht1000},
 	{0x1022, 0x3000, "AMD Elan SC520",	get_flashbase_sc520},
+	{0x1022, 0x7440, "AMD AMD-768",         enable_flash_amd8111},
 };
 
 void print_supported_chipsets(void)
