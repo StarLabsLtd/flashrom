@@ -260,7 +260,7 @@ static void spi_prettyprint_status_register_bp(uint8_t status, int bp)
 	/* Fall through. */
 	case 4:
 		msg_cdbg("Chip status register: Block Protect 4 (BP4) is %sset\n",
-			 (status & (1 << 5)) ? "" : "not ");
+			 (status & (1 << 6)) ? "" : "not ");
 	case 3:
 		msg_cdbg("Chip status register: Block Protect 3 (BP3) is %sset\n",
 			 (status & (1 << 5)) ? "" : "not ");
@@ -369,6 +369,19 @@ int spi_prettyprint_status_register_bp2_bpl(struct flashctx *flash)
 	spi_prettyprint_status_register_bpl(status);
 	spi_prettyprint_status_register_bit(status, 6);
 	spi_prettyprint_status_register_bit(status, 5);
+	spi_prettyprint_status_register_bp(status, 2);
+	spi_prettyprint_status_register_welwip(status);
+	return 0;
+}
+
+int spi_prettyprint_status_register_bp2_tb_bpl(struct flashctx *flash)
+{
+	uint8_t status = spi_read_status_register(flash);
+	spi_prettyprint_status_register_hex(status);
+
+	spi_prettyprint_status_register_bpl(status);
+	spi_prettyprint_status_register_bit(status, 6);
+	msg_cdbg("Chip status register: Top/Bottom (TB) is %s\n", (status & (1 << 5)) ? "bottom" : "top");
 	spi_prettyprint_status_register_bp(status, 2);
 	spi_prettyprint_status_register_welwip(status);
 	return 0;

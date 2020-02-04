@@ -19,8 +19,10 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#include "platform.h"
+
 #include <stdio.h>
-#ifndef _WIN32 /* stuff (presumably) needed for sockets only */
+#if ! IS_WINDOWS /* stuff (presumably) needed for sockets only */
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -30,7 +32,7 @@
 #include <netinet/tcp.h>
 #include <netdb.h>
 #endif
-#ifdef _WIN32
+#if IS_WINDOWS
 #include <conio.h>
 #else
 #include <termios.h>
@@ -83,7 +85,7 @@ static int sp_opbuf_usage = 0;
 	whether the command is supported before doing it */
 static int sp_check_avail_automatic = 0;
 
-#ifndef WIN32
+#if ! IS_WINDOWS
 static int sp_opensocket(char *ip, unsigned int port)
 {
 	int flag = 1;
@@ -230,7 +232,7 @@ static int sp_docommand(uint8_t command, uint32_t parmlen,
 	if (c == S_NAK)
 		return 1;
 	if (c != S_ACK) {
-		msg_perr("Error: invalid response 0x%02X from device\n", c);
+		msg_perr("Error: invalid response 0x%02X from device (to command 0x%02X)\n", c, command);
 		return 1;
 	}
 	if (retlen) {
@@ -340,26 +342,28 @@ int serprog_init(void)
 	unsigned char rbuf[3];
 	unsigned char c;
 	char *device;
-	char *baudport;
 	int have_device = 0;
 
-	/* the parameter is either of format "dev=/dev/device:baud" or "ip=ip:port" */
+	/* the parameter is either of format "dev=/dev/device[:baud]" or "ip=ip:port" */
 	device = extract_programmer_param("dev");
 	if (device && strlen(device)) {
-		baudport = strstr(device, ":");
-		if (baudport) {
+		char *baud_str = strstr(device, ":");
+		if (baud_str != NULL) {
 			/* Split device from baudrate. */
-			*baudport = '\0';
-			baudport++;
+			*baud_str = '\0';
+			baud_str++;
 		}
-		if (!baudport || !strlen(baudport)) {
-			msg_perr("Error: No baudrate specified.\n"
-				 "Use flashrom -p serprog:dev=/dev/device:baud\n");
-			free(device);
-			return 1;
-		}
-		if (strlen(device)) {
-			sp_fd = sp_openserport(device, atoi(baudport));
+		int baud;
+		/* Convert baud string to value.
+		 * baud_str is either NULL (if strstr can't find the colon), points to the \0 after the colon
+		 * if no characters where given after the colon, or a string to convert... */
+		if (baud_str == NULL || *baud_str == '\0') {
+			baud = -1;
+			msg_pdbg("No baudrate specified, using the hardware's defaults.\n");
+		} else
+			baud = atoi(baud_str); // FIXME: replace atoi with strtoul
+		if (strlen(device) > 0) {
+			sp_fd = sp_openserport(device, baud);
 			if (sp_fd == SER_INV_FD) {
 				free(device);
 				return 1;
@@ -367,15 +371,16 @@ int serprog_init(void)
 			have_device++;
 		}
 	}
+
+#if !IS_WINDOWS
 	if (device && !strlen(device)) {
 		msg_perr("Error: No device specified.\n"
-			 "Use flashrom -p serprog:dev=/dev/device:baud\n");
+			 "Use flashrom -p serprog:dev=/dev/device[:baud]\n");
 		free(device);
 		return 1;
 	}
 	free(device);
 
-#ifndef _WIN32
 	device = extract_programmer_param("ip");
 	if (have_device && device) {
 		msg_perr("Error: Both host and device specified.\n"
@@ -384,20 +389,20 @@ int serprog_init(void)
 		return 1;
 	}
 	if (device && strlen(device)) {
-		baudport = strstr(device, ":");
-		if (baudport) {
+		char *port = strstr(device, ":");
+		if (port != NULL) {
 			/* Split host from port. */
-			*baudport = '\0';
-			baudport++;
+			*port = '\0';
+			port++;
 		}
-		if (!baudport || !strlen(baudport)) {
+		if (!port || !strlen(port)) {
 			msg_perr("Error: No port specified.\n"
 				 "Use flashrom -p serprog:ip=ipaddr:port\n");
 			free(device);
 			return 1;
 		}
 		if (strlen(device)) {
-			sp_fd = sp_opensocket(device, atoi(baudport));
+			sp_fd = sp_opensocket(device, atoi(port)); // FIXME: replace atoi with strtoul
 			if (sp_fd < 0) {
 				free(device);
 				return 1;
@@ -411,15 +416,20 @@ int serprog_init(void)
 		free(device);
 		return 1;
 	}
+#endif
 	free(device);
 
 	if (!have_device) {
+#if IS_WINDOWS
+		msg_perr("Error: No device specified.\n"
+			 "Use flashrom -p serprog:dev=comN[:baud]\n");
+#else
 		msg_perr("Error: Neither host nor device specified.\n"
 			 "Use flashrom -p serprog:dev=/dev/device:baud or "
 			 "flashrom -p serprog:ip=ipaddr:port\n");
+#endif
 		return 1;
 	}
-#endif
 
 	if (register_shutdown(serprog_shutdown, NULL))
 		return 1;
@@ -940,4 +950,20 @@ static int serprog_spi_read(struct flashctx *flash, uint8_t *buf,
 			return ret;
 	}
 	return 0;
+}
+
+void *serprog_map(const char *descr, uintptr_t phys_addr, size_t len)
+{
+	/* Serprog transmits 24 bits only and assumes the underlying implementation handles any remaining bits
+	 * correctly (usually setting them to one either in software (for FWH/LPC) or relying on the fact that
+	 * the hardware observes a subset of the address bits only). Combined with the standard mapping of
+	 * flashrom this creates a 16 MB-wide window just below the 4 GB boundary where serprog can operate (as
+	 * needed for non-SPI chips). Below we make sure that the requested range is within this window. */
+	if ((phys_addr & 0xFF000000) == 0xFF000000) {
+		return (void*)phys_addr;
+	} else {
+		msg_pwarn(MSGHEADER "requested mapping %s is incompatible: 0x%zx bytes at 0x%0*" PRIxPTR ".\n",
+			  descr, len, PRIxPTR_WIDTH, phys_addr);
+		return NULL;
+	}
 }

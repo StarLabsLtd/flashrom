@@ -8,12 +8,13 @@ in-system using a supported mainboard, but it also supports flashing of network
 cards (NICs), SATA controller cards, and other external devices which can
 program flash chips.
 
-It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, and TSOP40
-chips, which use various protocols such as LPC, FWH, parallel flash, or SPI.
+It supports a wide range of flash chips (most commonly found in SOIC8, DIP8,
+SOIC16, WSON8, PLCC32, DIP32, TSOP32, and TSOP40 packages), which use various
+protocols such as LPC, FWH, parallel flash, or SPI.
 
-Do not use flashrom on laptops! The embedded controller (EC) present in many
-laptops interacts badly with any flash attempts and can brick your laptop
-permanently.
+Do not use flashrom on laptops (yet)! The embedded controller (EC) present in
+many laptops might interact badly with any attempts to communicate with the
+flash chip and may brick your laptop.
 
 Please make a backup of your flash chip before writing to it.
 
@@ -68,7 +69,7 @@ To compile on Linux, use:
 
  make
 
-To compile on FreeBSD, use:
+To compile on FreeBSD, OpenBSD or DragonFly BSD, use:
 
  gmake
 
@@ -80,11 +81,7 @@ To compile on Solaris, use:
 
  gmake LDFLAGS="-L$pathtolibpci" CC="gcc -I$pathtopciheaders" CFLAGS=-O2
 
-To compile on NetBSD or DragonFly BSD (with pciutils, libftdi, libusb installed in /usr/pkg/), use:
-
- gmake
-
-To compile on OpenBSD, use:
+To compile on NetBSD (with pciutils, libftdi, libusb installed in /usr/pkg/), use:
 
  gmake
 
@@ -106,9 +103,9 @@ To cross-compile on Linux for DOS:
 
  You will need the following library source trees containing their compiled
  static libraries either in the parent directory of the flashrom source or
- specify the base folder on compile time with the DOSLIBS_BASE parameter.
+ specify the base folder on compile time with the LIBS_BASE parameter.
  The default as described above is equal to calling
-   'make djgpp-dos DOSLIBS_BASE=..'
+   'make djgpp-dos LIBS_BASE=..'
 
  To get and build said libraries...
  Download pciutils 3.1.5 and apply http://flashrom.org/File:Pciutils.patch.gz

@@ -21,6 +21,8 @@
  * Header file for OS checking.
  */
 
+#include "platform.h"
+
 // Solaris
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
 #define __FLASHROM_OS__ "SunOS"
@@ -56,6 +58,11 @@
 #define __FLASHROM_OS__ "libpayload"
 // Linux
 #elif defined(__linux__)
-#define __FLASHROM_OS__ "Linux"
+	// There are various flags in use on Android apparently. __ANDROID__ seems to be the most trustworthy.
+	#if defined(__ANDROID__)
+		#define __FLASHROM_OS__ "Android"
+	#else
+		#define __FLASHROM_OS__ "Linux"
+	#endif
 #endif
 __FLASHROM_OS__

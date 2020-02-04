@@ -22,6 +22,7 @@
 #ifndef __LIBPAYLOAD__
 
 #include <unistd.h>
+#include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -172,11 +173,13 @@ recalibrate:
 /* Not very precise sleep. */
 void internal_sleep(unsigned int usecs)
 {
-#ifdef _WIN32
+#if IS_WINDOWS
 	Sleep((usecs + 999) / 1000);
-#else
+#elif defined(__DJGPP__)
 	sleep(usecs / 1000000);
 	usleep(usecs % 1000000);
+#else
+	nanosleep(&(struct timespec){usecs / 1000000, (usecs * 1000) % 1000000000UL}, NULL);
 #endif
 }
 

@@ -24,12 +24,14 @@
 #ifndef __FLASH_H__
 #define __FLASH_H__ 1
 
+#include "platform.h"
+
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#ifdef _WIN32
+#if IS_WINDOWS
 #include <windows.h>
 #undef min
 #undef max
@@ -83,6 +85,7 @@ enum write_granularity {
 	write_gran_1bit,	/* Each bit can be cleared individually. */
 	write_gran_1byte,	/* A byte can be written once. Further writes to an already written byte cause
 				 * its contents to be either undefined or to stay unchanged. */
+	write_gran_128bytes,	/* If less than 128 bytes are written, the unwritten bytes are undefined. */
 	write_gran_264bytes,	/* If less than 264 bytes are written, the unwritten bytes are undefined. */
 	write_gran_512bytes,	/* If less than 512 bytes are written, the unwritten bytes are undefined. */
 	write_gran_528bytes,	/* If less than 528 bytes are written, the unwritten bytes are undefined. */
@@ -105,7 +108,6 @@ enum write_granularity {
 
 /* Feature bits used for non-SPI only */
 #define FEATURE_REGISTERMAP	(1 << 0)
-#define FEATURE_BYTEWRITES	(1 << 1)
 #define FEATURE_LONG_RESET	(0 << 4)
 #define FEATURE_SHORT_RESET	(1 << 4)
 #define FEATURE_EITHER_RESET	FEATURE_LONG_RESET
@@ -255,6 +257,12 @@ int max(int a, int b);
 int min(int a, int b);
 char *strcat_realloc(char *dest, const char *src);
 void tolower_string(char *str);
+#ifdef __MINGW32__
+char* strtok_r(char *str, const char *delim, char **nextp);
+#endif
+#if defined(__DJGPP__) || !defined(HAVE_STRNLEN)
+size_t strnlen(const char *str, size_t n);
+#endif
 
 /* flashrom.c */
 extern const char flashrom_version[];

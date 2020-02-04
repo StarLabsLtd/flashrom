@@ -1,3 +1,43 @@
+.\" Load the www device when using groff; provide a fallback for groff's MTO macro that formats email addresses.
+.ie \n[.g] \
+.  mso www.tmac
+.el \
+.  de MTO \\$2 \(la\\$1 \(ra\\$3
+.  .
+.\" Create wrappers for .MTO and .URL that print only text on systems w/o groff or if not outputting to a HTML
+.\" device. To that end we need to distinguish HTML output on groff from other configurations first.
+.nr groffhtml 0
+.if \n[.g] \
+.  if "\*[.T]"html" \
+.    nr groffhtml 1
+.\" For code reuse it would be nice to have a single wrapper that gets its target macro as parameter.
+.\" However, this did not work out with NetBSD's and OpenBSD's groff...
+.de URLB
+.  ie (\n[groffhtml]==1) \{\
+.    URL \\$@
+.  \}
+.  el \{\
+.    ie "\\$2"" \{\
+.      BR "\\$1" "\\$3"
+.    \}
+.    el \{\
+.      RB "\\$2 \(la" "\\$1" "\(ra\\$3"
+.    \}
+.  \}
+..
+.de MTOB
+.  ie (\n[groffhtml]==1) \{\
+.    MTO \\$@
+.  \}
+.  el \{\
+.    ie "\\$2"" \{\
+.      BR "\\$1" "\\$3"
+.    \}
+.    el \{\
+.      RB "\\$2 \(la" "\\$1" "\(ra\\$3"
+.    \}
+.  \}
+..
 .TH FLASHROM 8 "" ""
 .SH NAME
 flashrom \- detect, read, write, verify and erase flash chips
@@ -160,9 +200,8 @@ if you have proper means to recover from failure!
 Same as
 .BR \-\-list\-supported ,
 but outputs the supported hardware in MediaWiki syntax, so that it can be
-easily pasted into the wiki page at
-.nh
-.BR http://www.flashrom.org/ .
+easily pasted into the
+.URLB https://flashrom.org/Supported_hardware "supported hardware wiki page" .
 Please note that MediaWiki output is not compiled in by default.
 .TP
 .B "\-p, \-\-programmer <name>[:parameter[,parameter[,parameter]]]"
@@ -194,6 +233,8 @@ cards)"
 .sp
 .BR "* atavia" " (for flash ROMs on VIA VT6421A SATA controllers)"
 .sp
+.BR "* atapromise" " (for flash ROMs on Promise PDC2026x ATA/RAID controllers)"
+.sp
 .BR "* it8212" " (for flash ROMs on ITE IT8212F ATA/RAID controller)"
 .sp
 .BR "* ft2232_spi" " (for SPI flash ROMs attached to an FT2232/FT4232H/FT232H family \
@@ -201,12 +242,11 @@ based USB SPI programmer), including the DLP Design DLP-USB1232H, \
 FTDI FT2232H Mini-Module, FTDI FT4232H Mini-Module, openbiosprog-spi, Amontec \
 JTAGkey/JTAGkey-tiny/JTAGkey-2, Dangerous Prototypes Bus Blaster, \
 Olimex ARM-USB-TINY/-H, Olimex ARM-USB-OCD/-H, TIAO/DIYGADGET USB
-Multi-Protocol Adapter (TUMPA), TUMPA Lite, and GOEPEL PicoTAP.
+Multi-Protocol Adapter (TUMPA), TUMPA Lite, GOEPEL PicoTAP and Google Servo v1/v2.
 .sp
-.BR "* serprog" " (for flash ROMs attached to a programmer speaking serprog), \
-including AVR flasher by Urja Rannikko, AVR flasher by eightdot, \
-Arduino Mega flasher by fritz, InSystemFlasher by Juhana Helovuo, and \
-atmegaXXu2-flasher by Stefan Tauner."
+.BR "* serprog" " (for flash ROMs attached to a programmer speaking serprog, \
+including Arduino-based devices as well as various programmers by Urja Rannikko, \
+Juhana Helovuo, Stefan Tauner and others)."
 .sp
 .BR "* buspirate_spi" " (for SPI flash ROMs attached to a Bus Pirate)"
 .sp
@@ -226,6 +266,12 @@ bitbanging adapter)
 .BR "* usbblaster_spi" " (for SPI flash ROMs attached to an Altera USB-Blaster compatible cable)"
 .sp
 .BR "* nicintel_eeprom" " (for SPI EEPROMs on Intel Gigabit network cards)"
+.sp
+.BR "* mstarddc_spi" " (for SPI flash ROMs accessible through DDC in MSTAR-equipped displays)"
+.sp
+.BR "* pickit2_spi" " (for SPI flash ROMs accessible via Microchip PICkit2)"
+.sp
+.BR "* ch341a_spi" " (for SPI flash ROMs attached to WCH CH341A)"
 .sp
 Some programmers have optional or mandatory parameters which are described
 in detail in the
@@ -449,9 +495,9 @@ unusable (see also the
 .B BUGS
 section). The embedded controller (EC) in these
 machines often interacts badly with flashing.
-.nh
-.B http://www.flashrom.org/Laptops
-has more information. For example the EC firmware sometimes resides on the same
+More information is
+.URLB https://flashrom.org/Laptops "in the wiki" .
+For example the EC firmware sometimes resides on the same
 flash chip as the host firmware. While flashrom tries to change the contents of
 that memory the EC might need to fetch new instructions or data from it and
 could stop working correctly. Probing for and reading from the chip may also
@@ -477,10 +523,9 @@ like above. In this case you can use
 to tell flashrom (at your own risk) that it is not running on a laptop.
 .SS
 .BR "dummy " programmer
-The dummy programmer operates on a buffer in memory only. It provides a safe
-and fast way to test various aspects of flashrom and is mainly used in
-development and while debugging.
-.sp
+.IP
+The dummy programmer operates on a buffer in memory only. It provides a safe and fast way to test various
+aspects of flashrom and is mainly used in development and while debugging.
 It is able to emulate some chips to a certain degree (basic
 identify/read/erase/write operations work).
 .sp
@@ -509,13 +554,13 @@ syntax where
 is one of the following chips (please specify only the chip name, not the
 vendor):
 .sp
-.RB "* ST " M25P10.RES " SPI flash chip (RES, page write)"
+.RB "* ST " M25P10.RES " SPI flash chip (128 kB, RES, page write)"
 .sp
-.RB "* SST " SST25VF040.REMS " SPI flash chip (REMS, byte write)"
+.RB "* SST " SST25VF040.REMS " SPI flash chip (512 kB, REMS, byte write)"
 .sp
-.RB "* SST " SST25VF032B " SPI flash chip (RDID, AAI write)"
+.RB "* SST " SST25VF032B " SPI flash chip (4096 kB, RDID, AAI write)"
 .sp
-.RB "* Macronix " MX25L6436 " SPI flash chip (RDID, SFDP)"
+.RB "* Macronix " MX25L6436 " SPI flash chip (8192 kB, RDID, SFDP)"
 .sp
 Example:
 .B "flashrom -p dummy:emulate=SST25VF040.REMS"
@@ -595,7 +640,8 @@ is an 8-bit hexadecimal value.
 .SS
 .BR "nic3com" , " nicrealtek" , " nicnatsemi" , " nicintel", " nicintel_eeprom"\
 , " nicintel_spi" , " gfxnvidia" , " ogp_spi" , " drkaiser" , " satasii"\
-, " satamv" , " atahpt", " atavia " and " it8212 " programmers
+, " satamv" , " atahpt", " atavia ", " atapromise " and " it8212 " programmers
+.IP
 These programmers have an option to specify the PCI address of the card
 your want to use, which must be specified if more than one card supported
 by the selected programmer is installed in your system. The syntax is
@@ -616,6 +662,7 @@ Example:
 .B "flashrom \-p nic3com:pci=05:04.0"
 .SS
 .BR "atavia " programmer
+.IP
 Due to the mysterious address handling of the VIA VT6421A controller the user can specify an offset with the
 .sp
 .B "  flashrom \-p atavia:offset=addr"
@@ -624,10 +671,17 @@ syntax where
 .B addr
 will be interpreted as usual (leading 0x (0) for hexadecimal (octal) values, or else decimal).
 For more information please see
-.nh
-.B http://flashrom.org/VT6421A
+.URLB https://flashrom.org/VT6421A "its wiki page" .
+.SS
+.BR "atapromise " programmer
+.IP
+This programmer is currently limited to 32 kB, regardless of the actual size of the flash chip. This stems
+from the fact that, on the tested device (a Promise Ultra100), not all of the chip's address lines were
+actually connected. You may use this programmer to flash firmware updates, since these are only 16 kB in
+size (padding to 32 kB is required).
 .SS
 .BR "nicintel_eeprom " programmer
+.IP
 This is the first programmer module in flashrom that does not provide access to NOR flash chips but EEPROMs
 mounted on gigabit Ethernet cards based on Intel's 82580 NIC. Because EEPROMs normally do not announce their
 size nor allow to be identified, the controller relies on correct size values written to predefined addresses
@@ -636,6 +690,7 @@ EEPROM/card is detected. Intel specifies following EEPROMs to be compatible: Atm
 M95128, M95256 and OnSemi (Catalyst) CAT25CS128.
 .SS
 .BR "ft2232_spi " programmer
+.IP
 An optional parameter specifies the controller
 type and channel/interface/port it should support. For that you have to use the
 .sp
@@ -646,7 +701,8 @@ syntax where
 can be
 .BR 2232H ", " 4232H ", " 232H ", " jtagkey ", " busblaster ", " openmoko ", " \
 arm-usb-tiny ", " arm-usb-tiny-h ", " arm-usb-ocd ", " arm-usb-ocd-h \
-", " tumpa ", " tumpalite ", or " picotap
+", " tumpa ", " tumpalite ", " picotap ", " google-servo ", " google-servo-v2 \
+" or " google-servo-v2-legacy
 and
 .B interface
 can be
@@ -679,19 +735,23 @@ parameter with the
 syntax.
 .SS
 .BR "serprog " programmer
-A mandatory parameter specifies either a serial
-device/baud combination or an IP/port combination for communication with the
-programmer. In the device/baud combination, the device has to start with a
-slash. For serial, you have to use the
+.IP
+A mandatory parameter specifies either a serial device (and baud rate) or an IP/port combination for
+communicating with the programmer.
+The device/baud combination has to start with
+.B dev=
+and separate the optional baud rate with a colon.
+For example
 .sp
-.B "  flashrom \-p serprog:dev=/dev/device:baud"
+.B "  flashrom \-p serprog:dev=/dev/ttyS0:115200"
 .sp
-syntax and for IP, you have to use
+If no baud rate is given the default values by the operating system/hardware will be used.
+For IP connections you have to use the
 .sp
 .B "  flashrom \-p serprog:ip=ipaddr:port"
 .sp
-instead. In case the device supports it, you can set the SPI clock frequency
-with the optional
+syntax.
+In case the device supports it, you can set the SPI clock frequency with the optional
 .B spispeed
 parameter. The frequency is parsed as hertz, unless an
 .BR M ", or " k
@@ -705,6 +765,7 @@ More information about serprog is available in
 in the source distribution.
 .SS
 .BR "buspirate_spi " programmer
+.IP
 A required
 .B dev
 parameter specifies the Bus Pirate device node and an optional
@@ -729,12 +790,42 @@ where
 .B state
 can be
 .BR on " or " off .
-More information about the Bus Pirate pull-up resistors and their purpose is available at
-.nh
-.BR "http://dangerousprototypes.com/docs/Practical_guide_to_Bus_Pirate_pull-up_resistors " .
+More information about the Bus Pirate pull-up resistors and their purpose is available
+.URLB "http://dangerousprototypes.com/docs/Practical_guide_to_Bus_Pirate_pull-up_resistors" \
+"in a guide by dangerousprototypes" .
 Only the external supply voltage (Vpu) is supported as of this writing.
 .SS
+.BR "pickit2_spi " programmer
+.IP
+An optional
+.B voltage
+parameter specifies the voltage the PICkit2 should use. The default unit is Volt if no unit is specified.
+You can use
+.BR mV ", " millivolt ", " V " or " Volt
+as unit specifier. Syntax is
+.sp
+.B "  flashrom \-p pickit2_spi:voltage=value"
+.sp
+where
+.B value
+can be
+.BR 0V ", " 1.8V ", " 2.5V ", " 3.5V
+or the equivalent in mV.
+.sp
+An optional
+.B spispeed
+parameter specifies the frequency of the SPI bus. Syntax is
+.sp
+.B "  flashrom \-p pickit2_spi:spispeed=frequency"
+.sp
+where
+.B frequency
+can be
+.BR 250k ", " 333k ", " 500k " or " 1M "
+(in Hz). The default is a frequency of 1 MHz.
+.SS
 .BR "dediprog " programmer
+.IP
 An optional
 .B voltage
 parameter specifies the voltage the Dediprog should use. The default unit is
@@ -785,6 +876,7 @@ can be
 to select target chip 1 or 2 respectively. The default is target chip 1.
 .SS
 .BR "rayer_spi " programmer
+.IP
 The default I/O base address used for the parallel port is 0x378 and you can use
 the optional
 .B iobase
@@ -811,18 +903,16 @@ STK200/300, " wiggler " for the Macraigor Wiggler, or " xilinx " for the Xilinx 
 .sp
 More information about the RayeR hardware is available at
 .nh
-.BR "http://rayer.ic.cz/elektro/spipgm.htm " .
+.URLB "http://rayer.g6.cz/elektro/spipgm.htm" "RayeR's website" .
 The Altera ByteBlasterMV datasheet can be obtained from
-.nh
-.BR "http://www.altera.co.jp/literature/ds/dsbytemv.pdf " .
+.URLB "http://www.altera.co.jp/literature/ds/dsbytemv.pdf" Altera .
 For more information about the Macraigor Wiggler see
-.nh
-.BR "http://www.macraigor.com/wiggler.htm " .
+.URLB "http://www.macraigor.com/wiggler.htm" "their company homepage" .
 The schematic of the Xilinx DLC 5 was published in
-.nh
-.BR "http://www.xilinx.com/support/documentation/user_guides/xtp029.pdf " .
+.URLB "http://www.xilinx.com/support/documentation/user_guides/xtp029.pdf" "a Xilinx user guide" .
 .SS
 .BR "pony_spi " programmer
+.IP
 The serial port (like /dev/ttyS0, /dev/ttyUSB0 on Linux or COM3 on windows) is
 specified using the mandatory
 .B dev
@@ -833,8 +923,7 @@ named "serbang". The optional
 parameter accepts the values "si_prog" (default) or "serbang".
 .sp
 Information about the SI-Prog adapter can be found at
-.nh
-.BR "http://www.lancos.com/siprogsch.html " .
+.URLB "http://www.lancos.com/siprogsch.html" "its website" .
 .sp
 An example call to flashrom is
 .sp
@@ -844,6 +933,7 @@ Please note that while USB-to-serial adapters work under certain circumstances,
 this slows down operation considerably.
 .SS
 .BR "ogp_spi " programmer
+.IP
 The flash ROM chip to access must be specified with the
 .B rom
 parameter.
@@ -867,12 +957,9 @@ you want to use with the
 parameter as explained in the
 .B nic3com et al.\&
 section above.
-.sp
-More information about the hardware is available at
-.nh
-.BR http://wiki.opengraphics.org .
 .SS
 .BR "linux_spi " programmer
+.IP
 You have to specify the SPI controller to use with the
 .sp
 .B "  flashrom \-p linux_spi:dev=/dev/spidevX.Y"
@@ -889,6 +976,56 @@ Example that sets the frequency to 8 MHz:
 .B "  flashrom \-p linux_spi:dev=/dev/spidevX.Y,spispeed=8000"
 .sp
 Please note that the linux_spi driver only works on Linux.
+.SS
+.BR "mstarddc_spi " programmer
+.IP
+The Display Data Channel (DDC) is an I2C bus present on VGA and DVI connectors, that allows exchanging
+informations between a computer and attached displays. Its most common uses are getting display capabilities
+through EDID (at I2C address 0x50) and sending commands to the display using the DDC/CI protocol (at address
+0x37). On displays driven by MSTAR SoCs, it is also possible to access the SoC firmware flash (connected to
+the Soc through another SPI bus) using an In-System Programming (ISP) port, usually at address 0x49.
+This flashrom module allows the latter via Linux's I2C driver.
+.sp
+.B IMPORTANT:
+Before using this programmer, the display
+.B MUST
+be in standby mode, and only connected to the computer that will run flashrom using a VGA cable, to an
+inactive VGA output. It absolutely
+.B MUST NOT
+be used as a display during the procedure!
+.sp
+You have to specify the DDC/I2C controller and I2C address to use with the
+.sp
+.B "  flashrom \-p mstarddc_spi:dev=/dev/i2c-X:YY"
+.sp
+syntax where
+.B /dev/i2c-X
+is the Linux device node for your I2C controller connected to the display's DDC channel, and
+.B YY
+is the (hexadecimal) address of the MSTAR ISP port (address 0x49 is usually used).
+Example that uses I2C controller /dev/i2c-1 and address 0x49:
+.sp
+.B "  flashrom \-p mstarddc_spi:dev=/dev/i2c-1:49
+.sp
+It is also possible to inhibit the reset command that is normally sent to the display once the flashrom
+operation is completed using the optional
+.B noreset
+parameter. A value of 1 prevents flashrom from sending the reset command.
+Example that does not reset the display at the end of the operation:
+.sp
+.B "  flashrom \-p mstarddc_spi:dev=/dev/i2c-1:49,noreset=1
+.sp
+Please note that sending the reset command is also inhibited in the event an error occured during the operation.
+To send the reset command afterwards, you can simply run flashrom once more, in chip probe mode (not specifying
+an operation), without the
+.B noreset
+parameter, once the flash read/write operation you intended to perform has completed successfully.
+.sp
+Please also note that the mstarddc_spi driver only works on Linux.
+.SS
+.BR "ch341a_spi " programmer
+The WCH CH341A programmer does not support any parameters currently. SPI frequency is fixed at 2 MHz, and CS0 is
+used as per the device.
 .SH EXAMPLES
 To back up and update your BIOS, run
 .sp
@@ -935,8 +1072,8 @@ needs raw I/O port access.
 .BR satasii ", " nicintel ", " nicintel_eeprom " and " nicintel_spi
 need PCI configuration space read access and raw memory access.
 .sp
-.B satamv
-needs PCI configuration space read access, raw I/O port access and raw memory
+.BR satamv " and " atapromise
+need PCI configuration space read access, raw I/O port access and raw memory
 access.
 .sp
 .B serprog
@@ -945,17 +1082,21 @@ needs TCP access to the network or userspace access to a serial port.
 .B buspirate_spi
 needs userspace access to a serial port.
 .sp
-.BR dediprog ", " ft2232_spi " and " usbblaster_spi
-need access to the USB device via libusb.
+.BR  ft2232_spi ", " usbblaster_spi " and " pickit2_spi
+need access to the respective USB device via libusb API version 0.1.
+.sp
+.BR ch341a_spi " and " dediprog
+need access to the respective USB device via libusb API version 1.0.
 .sp
 .B dummy
 needs no access permissions at all.
 .sp
 .BR internal ", " nic3com ", " nicrealtek ", " nicnatsemi ", "
-.BR gfxnvidia ", " drkaiser ", " satasii ", " satamv ", " atahpt" and " atavia
+.BR gfxnvidia ", " drkaiser ", " satasii ", " satamv ", " atahpt ", " atavia " and " atapromise
 have to be run as superuser/root, and need additional raw access permission.
 .sp
-.BR serprog ", " buspirate_spi ", " dediprog ", " usbblaster_spi " and " ft2232_spi
+.BR serprog ", " buspirate_spi ", " dediprog ", " usbblaster_spi ", " ft2232_spi ", " pickit2_spi " and " \
+ch341a_spi
 can be run as normal user on most operating systems if appropriate device
 permissions are set.
 .sp
@@ -968,23 +1109,22 @@ in
 .B "/etc/rc.securelevel"
 and rebooting, or rebooting into single user mode.
 .SH BUGS
-Please report any bugs to the flashrom mailing list at
-.B "<flashrom@flashrom.org>"
+Please report any bugs to the
+.MTOB "flashrom@flashrom.org" "flashrom mailing list" .
 .sp
 We recommend to subscribe first at
-.sp
-.B "  http://www.flashrom.org/mailman/listinfo/flashrom"
+.URLB "https://flashrom.org/mailman/listinfo/flashrom" "" .
 .sp
 Many of the developers communicate via the
 .B "#flashrom"
 IRC channel on
 .BR chat.freenode.net .
+If you don't have an IRC client, you can use the
+.URLB http://webchat.freenode.net/?channels=flashrom "freenode webchat" .
 You are welcome to join and ask questions, send us bug and success reports there
 too. Please provide a way to contact you later (e.g.\& a mail address) and be
-patient if there is no immediate reaction. Also, we provide a pastebin service
-at
-.nh
-.B http://paste.flashrom.org
+patient if there is no immediate reaction. Also, we provide a
+.URLB https://paste.flashrom.org "pastebin service"
 that is very useful when you want to share logs etc.\& without spamming the
 channel.
 .SS
@@ -999,8 +1139,8 @@ paragraph in the
 .B internal programmer
 subsection of the
 .B PROGRAMMER-SPECIFIC INFORMATION
-section and the information in our wiki at
-.BR "http://www.flashrom.org/Laptops " .
+section and the information
+.URLB "https://flashrom.org/Laptops" "in our wiki" .
 .SS
 One-time programmable (OTP) memory and unique IDs
 .sp
@@ -1016,7 +1156,7 @@ They are not modifiable by the user at all.
 .SH LICENSE
 .B flashrom
 is covered by the GNU General Public License (GPL), version 2. Some files are
-additionally available under the GPL (version 2, or any later version).
+additionally available under any later version of the GPL.
 .SH COPYRIGHT
 .br
 Please see the individual files.
@@ -1046,6 +1186,8 @@ Joe Bao
 Joerg Fischer
 .br
 Joshua Roys
+.br
+Ky\[:o]sti M\[:a]lkki
 .br
 Luc Verhaegen
 .br
@@ -1085,6 +1227,8 @@ Stephan Guilloux
 .br
 Steven James
 .br
+Urja Rannikko
+.br
 Uwe Hermann
 .br
 Wang Qingpei
@@ -1093,8 +1237,10 @@ Yinghai Lu
 .br
 some others, please see the flashrom svn changelog for details.
 .br
-All authors can be reached via email at <flashrom@flashrom.org>.
+All still active authors can be reached via
+.MTOB "flashrom@flashrom.org" "the mailing list" .
 .PP
-This manual page was written by Uwe Hermann <uwe@hermann-uwe.de>,
-Carl-Daniel Hailfinger and others.
+This manual page was written by
+.MTOB "uwe@hermann-uwe.de" "Uwe Hermann" ,
+Carl-Daniel Hailfinger, Stefan Tauner and others.
 It is licensed under the terms of the GNU GPL (version 2 or later).

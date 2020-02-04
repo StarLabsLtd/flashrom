@@ -28,6 +28,7 @@
 #include <sys/stat.h>
 #endif
 #include <string.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <ctype.h>
@@ -181,6 +182,18 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if CONFIG_ATAPROMISE == 1
+	{
+		.name			= "atapromise",
+		.type			= PCI,
+		.devs.dev		= ata_promise,
+		.init			= atapromise_init,
+		.map_flash_region	= atapromise_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
 #if CONFIG_IT8212 == 1
 	{
 		.name			= "it8212",
@@ -212,7 +225,7 @@ const struct programmer_entry programmer_table[] = {
 					/* FIXME */
 		.devs.note		= "All programmer devices speaking the serprog protocol\n",
 		.init			= serprog_init,
-		.map_flash_region	= fallback_map,
+		.map_flash_region	= serprog_map,
 		.unmap_flash_region	= fallback_unmap,
 		.delay			= serprog_delay,
 	},
@@ -234,9 +247,8 @@ const struct programmer_entry programmer_table[] = {
 #if CONFIG_DEDIPROG == 1
 	{
 		.name			= "dediprog",
-		.type			= OTHER,
-					/* FIXME */
-		.devs.note		= "Dediprog SF100\n",
+		.type			= USB,
+		.devs.dev		= devs_dediprog,
 		.init			= dediprog_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
@@ -351,6 +363,42 @@ const struct programmer_entry programmer_table[] = {
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_MSTARDDC_SPI == 1
+	{
+		.name			= "mstarddc_spi",
+		.type			= OTHER,
+		.devs.note		= "MSTAR DDC devices addressable via /dev/i2c-* on Linux.\n",
+		.init			= mstarddc_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_PICKIT2_SPI == 1
+	{
+		.name			= "pickit2_spi",
+		.type			= USB,
+		.devs.dev		= devs_pickit2_spi,
+		.init			= pickit2_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_CH341A_SPI == 1
+	{
+		.name			= "ch341a_spi",
+		.type			= USB,
+		.devs.dev		= devs_ch341a_spi,
+		.init			= ch341a_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= ch341a_spi_delay,
 	},
 #endif
 
@@ -756,6 +804,9 @@ int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len, enum 
 				break;
 			}
 		break;
+	case write_gran_128bytes:
+		result = need_erase_gran_bytes(have, want, len, 128);
+		break;
 	case write_gran_256bytes:
 		result = need_erase_gran_bytes(have, want, len, 256);
 		break;
@@ -821,6 +872,9 @@ static unsigned int get_next_write(const uint8_t *have, const uint8_t *want, uns
 	case write_gran_1byte:
 	case write_gran_1byte_implicit_erase:
 		stride = 1;
+		break;
+	case write_gran_128bytes:
+		stride = 128;
 		break;
 	case write_gran_256bytes:
 		stride = 256;
@@ -1224,36 +1278,36 @@ int read_buf_from_file(unsigned char *buf, unsigned long size,
 	msg_gerr("Error: No file I/O support in libpayload\n");
 	return 1;
 #else
-	unsigned long numbytes;
-	FILE *image;
-	struct stat image_stat;
+	int ret = 0;
 
+	FILE *image;
 	if ((image = fopen(filename, "rb")) == NULL) {
 		msg_gerr("Error: opening file \"%s\" failed: %s\n", filename, strerror(errno));
 		return 1;
 	}
+
+	struct stat image_stat;
 	if (fstat(fileno(image), &image_stat) != 0) {
 		msg_gerr("Error: getting metadata of file \"%s\" failed: %s\n", filename, strerror(errno));
-		fclose(image);
-		return 1;
+		ret = 1;
+		goto out;
 	}
 	if (image_stat.st_size != size) {
 		msg_gerr("Error: Image size (%jd B) doesn't match the flash chip's size (%lu B)!\n",
 			 (intmax_t)image_stat.st_size, size);
-		fclose(image);
-		return 1;
+		ret = 1;
+		goto out;
 	}
-	numbytes = fread(buf, 1, size, image);
-	if (fclose(image)) {
-		msg_gerr("Error: closing file \"%s\" failed: %s\n", filename, strerror(errno));
-		return 1;
-	}
+
+	unsigned long numbytes = fread(buf, 1, size, image);
 	if (numbytes != size) {
 		msg_gerr("Error: Failed to read complete file. Got %ld bytes, "
 			 "wanted %ld!\n", numbytes, size);
-		return 1;
+		ret = 1;
 	}
-	return 0;
+out:
+	(void)fclose(image);
+	return ret;
 #endif
 }
 
@@ -1263,8 +1317,8 @@ int write_buf_to_file(const unsigned char *buf, unsigned long size, const char *
 	msg_gerr("Error: No file I/O support in libpayload\n");
 	return 1;
 #else
-	unsigned long numbytes;
 	FILE *image;
+	int ret = 0;
 
 	if (!filename) {
 		msg_gerr("No filename specified.\n");
@@ -1275,14 +1329,37 @@ int write_buf_to_file(const unsigned char *buf, unsigned long size, const char *
 		return 1;
 	}
 
-	numbytes = fwrite(buf, 1, size, image);
-	fclose(image);
+	unsigned long numbytes = fwrite(buf, 1, size, image);
 	if (numbytes != size) {
-		msg_gerr("File %s could not be written completely.\n",
-			 filename);
-		return 1;
+		msg_gerr("Error: file %s could not be written completely.\n", filename);
+		ret = 1;
+		goto out;
 	}
-	return 0;
+	if (fflush(image)) {
+		msg_gerr("Error: flushing file \"%s\" failed: %s\n", filename, strerror(errno));
+		ret = 1;
+	}
+	// Try to fsync() only regular files and if that function is available at all (e.g. not on MinGW).
+#if defined(_POSIX_FSYNC) && (_POSIX_FSYNC != -1)
+	struct stat image_stat;
+	if (fstat(fileno(image), &image_stat) != 0) {
+		msg_gerr("Error: getting metadata of file \"%s\" failed: %s\n", filename, strerror(errno));
+		ret = 1;
+		goto out;
+	}
+	if (S_ISREG(image_stat.st_mode)) {
+		if (fsync(fileno(image))) {
+			msg_gerr("Error: fsyncing file \"%s\" failed: %s\n", filename, strerror(errno));
+			ret = 1;
+		}
+	}
+#endif
+out:
+	if (fclose(image)) {
+		msg_gerr("Error: closing file \"%s\" failed: %s\n", filename, strerror(errno));
+		ret = 1;
+	}
+	return ret;
 #endif
 }
 
@@ -1605,7 +1682,7 @@ void list_programmers(const char *delim)
 		if (p < PROGRAMMER_INVALID - 1)
 			msg_ginfo("%s", delim);
 	}
-	msg_ginfo("\n");	
+	msg_ginfo("\n");
 }
 
 void list_programmers_linebreak(int startcol, int cols, int paren)
@@ -1649,7 +1726,7 @@ void list_programmers_linebreak(int startcol, int cols, int paren)
 
 void print_sysinfo(void)
 {
-#ifdef _WIN32
+#if IS_WINDOWS
 	SYSTEM_INFO si;
 	OSVERSIONINFOEX osvi;
 
@@ -1732,7 +1809,7 @@ void print_version(void)
 void print_banner(void)
 {
 	msg_ginfo("flashrom is free software, get the source code at "
-		  "http://www.flashrom.org\n");
+		  "https://flashrom.org\n");
 	msg_ginfo("\n");
 }
 
@@ -2008,7 +2085,7 @@ int doit(struct flashctx *flash, int force, const char *filename, int read_it,
 	// ////////////////////////////////////////////////////////////
 
 	if (write_it && erase_and_write_flash(flash, oldcontents, newcontents)) {
-		msg_cerr("Uh oh. Erase/write failed.");
+		msg_cerr("Uh oh. Erase/write failed. ");
 		if (read_all_first) {
 			msg_cerr("Checking if anything has changed.\n");
 			msg_cinfo("Reading current flash chip contents... ");
