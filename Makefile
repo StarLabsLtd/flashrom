@@ -275,9 +275,9 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 1503
+SVNVERSION := 1508
 
-RELEASE := 0.9.5
+RELEASE := 0.9.5.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 

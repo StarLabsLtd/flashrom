@@ -1,4 +1,58 @@
 ------------------------------------------------------------------------
+r1508 | hailfinger | 2012-02-26 00:39:29 +0100 (Sun, 26 Feb 2012) | 5 lines
+
+Increase flashrom release number to 0.9.5.1
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1507 | hailfinger | 2012-02-25 23:50:21 +0100 (Sat, 25 Feb 2012) | 7 lines
+
+Support Debian/kFreeBSD
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested-by: Robert Millan <rmh@debian.org>
+Tested-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1506 | hailfinger | 2012-02-25 00:49:30 +0100 (Sat, 25 Feb 2012) | 11 lines
+
+SFDP: Fetch parameter table in a more portable way
+
+SFDP parameter table reads expect a dummy byte between written data
+(opcode+address) and read data on the SPI bus. Read that dummy byte
+instead of writing it to be compatible with all programmer drivers.
+Reduce SFDP parameter table read chunk size from 8 to 2 to handle
+programmers with small readcount limits.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1505 | stefanct | 2012-02-22 01:14:14 +0100 (Wed, 22 Feb 2012) | 19 lines
+
+Fix SFDP probing.
+
+sfdp_add_uniform_eraser checks for existing erasers. Due to a bug it
+looked for eraser slots that have no erase functions set instead of
+those that have one set.
+
+Postpone adding an erase function for the special 4k block erase
+opcode until we know the flash chip size and add an additional check
+to sfdp_add_uniform_eraser.
+
+Fix the output of the parameter table contents.
+
+This patch fixes the index used to retrieve the eraser types, which
+was off one double word.
+
+Refine some messages and add a few further debugging prints.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
 r1503 | hailfinger | 2012-02-18 03:34:58 +0100 (Sat, 18 Feb 2012) | 5 lines
 
 Increase flashrom release number to 0.9.5
