@@ -1,28 +1,22 @@
 /*
- * 49lfxxxc.c: driver for SST49LFXXXC flash models.
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2005-2007 coresystems GmbH
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2005-2007 coresystems GmbH
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *
- * Reference:
- *	SST49LFxxxC data sheets
- *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <errno.h>
@@ -32,10 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-
 #include "flash.h"
-#include "jedec.h"
-#include "debug.h"
 
 #define SECTOR_ERASE		0x30
 #define BLOCK_ERASE		0x20
@@ -74,7 +65,7 @@ static __inline__ int write_lockbits_49lfxxxc(volatile uint8_t *bios, int size,
 	//printf("lockbits at address=0x%08lx is 0x%01x\n", (unsigned long)0xFFc00000 - size + address + 2, *(bios + address + 2) );
 	*(bios + address + 2) = bits;
 
-	return (0);
+	return 0;
 }
 
 static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
@@ -94,7 +85,7 @@ static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
 		}
 	} while (!(status & STATUS_WSMS));
 
-	return (0);
+	return 0;
 }
 
 static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
@@ -127,7 +118,7 @@ static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
 		} while (!(status & STATUS_WSMS));
 	}
 
-	return (0);
+	return 0;
 }
 
 int probe_49lfxxxc(struct flashchip *flash)
@@ -167,7 +158,8 @@ int erase_49lfxxxc(struct flashchip *flash)
 			return (-1);
 
 	*bios = RESET;
-	return (0);
+
+	return 0;
 }
 
 int write_49lfxxxc(struct flashchip *flash, uint8_t *buf)
@@ -192,5 +184,6 @@ int write_49lfxxxc(struct flashchip *flash, uint8_t *buf)
 	printf("\n");
 
 	*bios = RESET;
-	return (0);
+
+	return 0;
 }

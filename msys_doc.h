@@ -1,22 +1,21 @@
 /*
- * msys_doc.h: header file of msys_doc.c
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2003 Niki W. Waibel <niki.waibel@gmx.net>
  *
- * Copyright 2003   Niki W. Waibel <niki.waibel@gmx.net>
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __MSYS_DOC_H__
@@ -92,9 +91,9 @@
 #define doc_toggle(base)   /* 0, 1, 0, 1, 0, 1, ... if a doc is present */ \
 	( (doc_read(base, ECCConfiguration) & 0x04) >> 2 )
 
-extern int probe_md2802(struct flashchip *flash);
-extern int read_md2802(struct flashchip *flash, uint8_t *buf);
-extern int erase_md2802(struct flashchip *flash);
-extern int write_md2802(struct flashchip *flash, uint8_t *buf);
+int probe_md2802(struct flashchip *flash);
+int read_md2802(struct flashchip *flash, uint8_t *buf);
+int erase_md2802(struct flashchip *flash);
+int write_md2802(struct flashchip *flash, uint8_t *buf);
 
 #endif				/* !__MSYS_DOC_H__ */

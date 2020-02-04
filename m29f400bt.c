@@ -1,31 +1,56 @@
 /*
- * m29f400bt.c: driver for programming JEDEC standard flash parts
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2000 Silicon Integrated System Corporation
  *
- * Copyright 2000 Silicon Integrated System Corporation
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *
- * Reference:
- *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include "flash.h"
-#include "m29f400bt.h"
-#include "debug.h"
+
+void protect_m29f400bt(volatile uint8_t *bios)
+{
+	*(volatile uint8_t *)(bios + 0xAAA) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x555) = 0x55;
+	*(volatile uint8_t *)(bios + 0xAAA) = 0xA0;
+
+	usleep(200);
+}
+
+void write_page_m29f400bt(volatile uint8_t *bios, uint8_t *src,
+			  volatile uint8_t *dst, int page_size)
+{
+	int i;
+
+	for (i = 0; i < page_size; i++) {
+		*(volatile uint8_t *)(bios + 0xAAA) = 0xAA;
+		*(volatile uint8_t *)(bios + 0x555) = 0x55;
+		*(volatile uint8_t *)(bios + 0xAAA) = 0xA0;
+
+		/* transfer data from source to destination */
+		*dst = *src;
+		//*(volatile char *) (bios) = 0xF0;
+		//usleep(5);
+		toggle_ready_jedec(dst);
+		printf
+		    ("Value in the flash at address %p = %#x, want %#x\n",
+		     (uint8_t *) (dst - bios), *dst, *src);
+		dst++;
+		src++;
+	}
+}
 
 int probe_m29f400bt(struct flashchip *flash)
 {
@@ -68,9 +93,9 @@ int erase_m29f400bt(struct flashchip *flash)
 	*(volatile uint8_t *)(bios + 0xAAA) = 0x10;
 
 	myusec_delay(10);
-	toggle_ready_m29f400bt(bios);
+	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int block_erase_m29f400bt(volatile uint8_t *bios, volatile uint8_t *dst)
@@ -86,9 +111,9 @@ int block_erase_m29f400bt(volatile uint8_t *bios, volatile uint8_t *dst)
 	*dst = 0x30;
 
 	myusec_delay(10);
-	toggle_ready_m29f400bt(bios);
+	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int write_m29f400bt(struct flashchip *flash, uint8_t *buf)
@@ -143,7 +168,7 @@ int write_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	printf("\n");
 	//protect_m29f400bt (bios);
 
-	return (0);
+	return 0;
 }
 
 int write_linuxbios_m29f400bt(struct flashchip *flash, uint8_t *buf)
@@ -185,5 +210,5 @@ int write_linuxbios_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	printf("\n");
 	//protect_m29f400bt (bios);
 
-	return (0);
+	return 0;
 }

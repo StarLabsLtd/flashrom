@@ -1,33 +1,26 @@
 /*
- * lhf00l04.c: driver for programming JEDEC standard flash parts
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2000 Silicon Integrated System Corporation
  *
- * Copyright 2000 Silicon Integrated System Corporation
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *
- * Reference: http://www.intel.com/design/chipsets/datashts/290658.htm
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include "flash.h"
-#include "sharplhf00l04.h"
-#include "debug.h"
 
 // I need that Berkeley bit-map printer
 void print_lhf00l04_status(uint8_t status)
@@ -80,7 +73,6 @@ int probe_lhf00l04(struct flashchip *flash)
 
 uint8_t wait_lhf00l04(volatile uint8_t *bios)
 {
-
 	uint8_t status;
 	uint8_t id1, id2;
 
@@ -103,9 +95,10 @@ uint8_t wait_lhf00l04(volatile uint8_t *bios)
 	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
 	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
 	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
-	return status;
 
+	return status;
 }
+
 int erase_lhf00l04_block(struct flashchip *flash, int offset)
 {
 	volatile uint8_t *bios = flash->virtual_memory + offset;
@@ -131,8 +124,10 @@ int erase_lhf00l04_block(struct flashchip *flash, int offset)
 	status = wait_lhf00l04(flash->virtual_memory);
 	print_lhf00l04_status(status);
 	printf("DONE BLOCK 0x%x\n", offset);
-	return (0);
+
+	return 0;
 }
+
 int erase_lhf00l04(struct flashchip *flash)
 {
 	int i;
@@ -143,7 +138,8 @@ int erase_lhf00l04(struct flashchip *flash)
 	for (i = 0; i < total_size; i += flash->page_size)
 		erase_lhf00l04_block(flash, i);
 	printf("DONE ERASE\n");
-	return (0);
+
+	return 0;
 }
 
 void write_page_lhf00l04(volatile uint8_t *bios, uint8_t *src,
@@ -157,7 +153,6 @@ void write_page_lhf00l04(volatile uint8_t *bios, uint8_t *src,
 		*dst++ = *src++;
 		wait_lhf00l04(bios);
 	}
-
 }
 
 int write_lhf00l04(struct flashchip *flash, uint8_t *buf)
@@ -180,6 +175,7 @@ int write_lhf00l04(struct flashchip *flash, uint8_t *buf)
 		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	}
 	printf("\n");
-	protect_lhf00l04(bios);
-	return (0);
+	protect_jedec(bios);
+
+	return 0;
 }

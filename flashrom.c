@@ -1,28 +1,23 @@
 /*
- * flashrom.c: Flash programming utility
+ * This file is part of the flashrom project.
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2004 Tyan Corp
- *	yhlu yhlu@tyan.com add exclude start and end option
- * Copyright 2005-2007 coresystems GmbH 
- *      Stefan Reinauer <stepan@coresystems.de> added rom layout
- *      support, and checking for suitable rom image, various fixes
- *      support for flashing the Technologic Systems 5300.
- * 
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2004 Tyan Corp <yhlu@tyan.com>
+ * Copyright (C) 2005-2007 coresystems GmbH 
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <errno.h>
@@ -36,7 +31,6 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <pci/pci.h>
-
 /* for iopl */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
 #include <strings.h>
@@ -44,22 +38,14 @@
 #include <sys/psw.h>
 #include <asm/sunddi.h>
 #endif
-
 #include "flash.h"
-#include "lbtable.h"
-#include "layout.h"
-#include "debug.h"
 
 char *chip_to_probe = NULL;
 struct pci_access *pacc;	/* For board and chipset_enable */
 int exclude_start_page, exclude_end_page;
 int force = 0, verbose = 0;
-
 int fd_mem;
 
-/*
- *
- */
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device)
 {
 	struct pci_dev *temp;
@@ -76,9 +62,6 @@ struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device)
 	return NULL;
 }
 
-/*
- *
- */
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device)
 {
@@ -168,6 +151,7 @@ struct flashchip *probe_flash(struct flashchip *flash)
 
 		flash++;
 	}
+
 	return NULL;
 }
 
@@ -201,6 +185,7 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 		printf("\b\b\b\b\b\b\b\b\b\b ");
 
 	printf("- VERIFIED         \n");
+
 	return 0;
 }
 

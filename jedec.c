@@ -1,37 +1,82 @@
 /*
- * jedec.c: driver for programming JEDEC standard flash parts
+ * This file is part of the flashrom project.
  *
+ * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2006 Giampiero Giancipoli <gianci@email.it>
+ * Copyright (C) 2006 coresystems GmbH <info@coresystems.de>
  *
- * Copyright 2000 Silicon Integrated System Corporation
- * Copyright 2006 Giampiero Giancipoli <gianci@email.it>
- * Copyright 2006 coresystems GmbH <info@coresystems.de>
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
  *
- *	This program is free software; you can redistribute it and/or modify
- *	it under the terms of the GNU General Public License as published by
- *	the Free Software Foundation; either version 2 of the License, or
- *	(at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- *	This program is distributed in the hope that it will be useful,
- *	but WITHOUT ANY WARRANTY; without even the implied warranty of
- *	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *	GNU General Public License for more details.
- *
- *	You should have received a copy of the GNU General Public License
- *	along with this program; if not, write to the Free Software
- *	Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- *
- * Reference:
- *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
 #include <stdint.h>
 #include "flash.h"
-#include "jedec.h"
-#include "debug.h"
 
 #define MAX_REFLASH_TRIES 0x10
+
+void toggle_ready_jedec(volatile uint8_t *dst)
+{
+	unsigned int i = 0;
+	uint8_t tmp1, tmp2;
+
+	tmp1 = *dst & 0x40;
+
+	while (i++ < 0xFFFFFFF) {
+		tmp2 = *dst & 0x40;
+		if (tmp1 == tmp2) {
+			break;
+		}
+		tmp1 = tmp2;
+	}
+}
+
+void data_polling_jedec(volatile uint8_t *dst, uint8_t data)
+{
+	unsigned int i = 0;
+	uint8_t tmp;
+
+	data &= 0x80;
+
+	while (i++ < 0xFFFFFFF) {
+		tmp = *dst & 0x80;
+		if (tmp == data) {
+			break;
+		}
+	}
+}
+
+void unprotect_jedec(volatile uint8_t *bios)
+{
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0x80;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0x20;
+
+	usleep(200);
+}
+
+void protect_jedec(volatile uint8_t *bios)
+{
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xA0;
+
+	usleep(200);
+}
 
 int probe_jedec(struct flashchip *flash)
 {
@@ -85,7 +130,7 @@ int erase_sector_jedec(volatile uint8_t *bios, unsigned int page)
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int erase_block_jedec(volatile uint8_t *bios, unsigned int block)
@@ -108,7 +153,7 @@ int erase_block_jedec(volatile uint8_t *bios, unsigned int block)
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int erase_chip_jedec(struct flashchip *flash)
@@ -132,7 +177,7 @@ int erase_chip_jedec(struct flashchip *flash)
 
 	toggle_ready_jedec(bios);
 
-	return (0);
+	return 0;
 }
 
 int write_page_write_jedec(volatile uint8_t *bios, uint8_t *src,
@@ -179,7 +224,7 @@ retry:
 		fprintf(stderr, " page %d failed!\n",
 			(unsigned int)(d - bios) / page_size);
 	}
-	return (!ok);
+	return !ok;
 }
 
 int write_byte_program_jedec(volatile uint8_t *bios, uint8_t *src,
@@ -209,7 +254,7 @@ retry:
 	if (tried >= MAX_REFLASH_TRIES)
 		ok = 0;
 
-	return (!ok);
+	return !ok;
 }
 
 int write_sector_jedec(volatile uint8_t *bios, uint8_t *src,
@@ -222,7 +267,7 @@ int write_sector_jedec(volatile uint8_t *bios, uint8_t *src,
 		dst++, src++;
 	}
 
-	return (0);
+	return 0;
 }
 
 int write_jedec(struct flashchip *flash, uint8_t *buf)
@@ -251,5 +296,5 @@ int write_jedec(struct flashchip *flash, uint8_t *buf)
 	printf("\n");
 	protect_jedec(bios);
 
-	return (0);
+	return 0;
 }
