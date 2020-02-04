@@ -2,6 +2,7 @@
  * This file is part of the flashrom project.
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
+ * Copyright (C) 2009,2010 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,50 +19,152 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#include <unistd.h>
 #include <sys/time.h>
+#include <stdlib.h>
+#include <limits.h>
 #include "flash.h"
 
-// count to a billion. Time it. If it's < 1 sec, count to 10B, etc.
+/* loops per microsecond */
 unsigned long micro = 1;
 
-void myusec_delay(int usecs)
+__attribute__ ((noinline)) void myusec_delay(int usecs)
 {
-	volatile unsigned long i;
-	for (i = 0; i < usecs * micro; i++) ;
+	unsigned long i;
+	for (i = 0; i < usecs * micro; i++) {
+		/* Make sure the compiler doesn't optimize the loop away. */
+		asm volatile ("" : : "rm" (i) );
+	}
+}
+
+unsigned long measure_os_delay_resolution(void)
+{
+	unsigned long timeusec;
+	struct timeval start, end;
+	unsigned long counter = 0;
+	
+	gettimeofday(&start, 0);
+	timeusec = 0;
+	
+	while (!timeusec && (++counter < 1000000000)) {
+		gettimeofday(&end, 0);
+		timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
+			   (end.tv_usec - start.tv_usec);
+		/* Protect against time going forward too much. */
+		if ((end.tv_sec > start.tv_sec) &&
+		    ((end.tv_sec - start.tv_sec) >= LONG_MAX / 1000000 - 1))
+			timeusec = 0;
+		/* Protect against time going backwards during leap seconds. */
+		if ((end.tv_sec < start.tv_sec) || (timeusec > LONG_MAX))
+			timeusec = 0;
+	}
+	return timeusec;
+}
+
+unsigned long measure_delay(int usecs)
+{
+	unsigned long timeusec;
+	struct timeval start, end;
+	
+	gettimeofday(&start, 0);
+	myusec_delay(usecs);
+	gettimeofday(&end, 0);
+	timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
+		   (end.tv_usec - start.tv_usec);
+	/* Protect against time going forward too much. */
+	if ((end.tv_sec > start.tv_sec) &&
+	    ((end.tv_sec - start.tv_sec) >= LONG_MAX / 1000000 - 1))
+		timeusec = LONG_MAX;
+	/* Protect against time going backwards during leap seconds. */
+	if ((end.tv_sec < start.tv_sec) || (timeusec > LONG_MAX))
+		timeusec = 1;
+
+	return timeusec;
 }
 
 void myusec_calibrate_delay(void)
 {
-	int count = 1000;
-	unsigned long timeusec;
-	struct timeval start, end;
-	int ok = 0;
+	unsigned long count = 1000;
+	unsigned long timeusec, resolution;
+	int i, tries = 0;
 
-	printf("Calibrating delay loop... ");
-
-	while (!ok) {
-		gettimeofday(&start, 0);
-		myusec_delay(count);
-		gettimeofday(&end, 0);
-		timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
-		    (end.tv_usec - start.tv_usec);
-		count *= 2;
-		if (timeusec < 1000000 / 4)
-			continue;
-		ok = 1;
+	msg_pinfo("Calibrating delay loop... ");
+	resolution = measure_os_delay_resolution();
+	if (resolution) {
+		msg_pdbg("OS timer resolution is %u usecs, ", resolution);
+	} else {
+		msg_pinfo("OS timer resolution is unusable. ");
 	}
 
-	// compute one microsecond. That will be count / time
-	micro = count / timeusec;
+recalibrate:
+	count = 1000;
+	while (1) {
+		timeusec = measure_delay(count);
+		if (timeusec > 1000000 / 4)
+			break;
+		if (count >= ULONG_MAX / 2) {
+			msg_pinfo("timer loop overflow, reduced precision. ");
+			break;
+		}
+		count *= 2;
+	}
+	tries ++;
 
-	gettimeofday(&start, 0);
-	myusec_delay(100);
-	gettimeofday(&end, 0);
-	timeusec = 1000000 * (end.tv_sec - start.tv_sec) +
-	    (end.tv_usec - start.tv_usec);
-	printf_debug("%ldM loops per second, 100 myus = %ld us. ",
-		     (unsigned long)micro, timeusec);
-	printf("OK.\n");
+	/* Avoid division by zero, but in that case the loop is shot anyway. */
+	if (!timeusec)
+		timeusec = 1;
+	
+	/* Compute rounded up number of loops per microsecond. */
+	micro = (count * micro) / timeusec + 1;
+	msg_pdbg("%luM loops per second, ", micro);
+
+	/* Did we try to recalibrate less than 5 times? */
+	if (tries < 5) {
+		/* Recheck our timing to make sure we weren't just hitting
+		 * a scheduler delay or something similar.
+		 */
+		for (i = 0; i < 4; i++) {
+			if (resolution && (resolution < 10)) {
+				timeusec = measure_delay(100);
+			} else if (resolution && 
+				   (resolution < ULONG_MAX / 200)) {
+				timeusec = measure_delay(resolution * 10) *
+					   100 / (resolution * 10);
+			} else {
+				/* This workaround should be active for broken
+				 * OS and maybe libpayload. The criterion
+				 * here is horrible or non-measurable OS timer
+				 * resolution which will result in
+				 * measure_delay(100)=0 whereas a longer delay
+				 * (1000 ms) may be sufficient
+				 * to get a nonzero time measurement.
+				 */
+				timeusec = measure_delay(1000000) / 10000;
+			}
+			if (timeusec < 90) {
+				msg_pdbg("delay more than 10%% too short (got "
+					 "%lu%% of expected delay), "
+					 "recalculating... ", timeusec);
+				goto recalibrate;
+			}
+		}
+	} else {
+		msg_perr("delay loop is unreliable, trying to continue ");
+	}
+
+	/* We're interested in the actual precision. */
+	timeusec = measure_delay(10);
+	msg_pdbg("10 myus = %ld us, ", timeusec);
+	timeusec = measure_delay(100);
+	msg_pdbg("100 myus = %ld us, ", timeusec);
+	timeusec = measure_delay(1000);
+	msg_pdbg("1000 myus = %ld us, ", timeusec);
+	timeusec = measure_delay(10000);
+	msg_pdbg("10000 myus = %ld us, ", timeusec);
+	timeusec = measure_delay(resolution * 4);
+	msg_pdbg("%ld myus = %ld us, ", resolution * 4, timeusec);
+
+	msg_pinfo("OK.\n");
 }
 
 void internal_delay(int usecs)

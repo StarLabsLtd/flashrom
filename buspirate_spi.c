@@ -1,7 +1,7 @@
 /*
  * This file is part of the flashrom project.
  *
- * Copyright (C) 2009 Carl-Daniel Hailfinger
+ * Copyright (C) 2009, 2010 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -116,7 +116,7 @@ int buspirate_spi_init(void)
 	}
 	if (!dev) {
 		msg_perr("No serial device given. Use flashrom -p "
-			"buspiratespi:dev=/dev/ttyUSB0\n");
+			"buspirate_spi:dev=/dev/ttyUSB0\n");
 		return 1;
 	}
 	if (speed) {
@@ -316,4 +316,18 @@ int buspirate_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len
 	return spi_read_chunked(flash, buf, start, len, 12);
 }
 
-/* We could do 12-byte writes, but for now we use the generic 1-byte code. */
+int buspirate_spi_write_256(struct flashchip *flash, uint8_t *buf)
+{
+	int total_size = 1024 * flash->total_size;
+
+	spi_disable_blockprotect();
+	/* Erase first. */
+	msg_pinfo("Erasing flash before programming... ");
+	if (erase_flash(flash)) {
+		msg_perr("ERASE FAILED!\n");
+		return -1;
+	}
+	msg_pinfo("done.\n");
+
+	return spi_write_chunked(flash, buf, 0, total_size, 12);
+}

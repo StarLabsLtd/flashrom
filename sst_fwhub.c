@@ -22,8 +22,6 @@
 
 /* Adapted from the Intel FW hub stuff for 82802ax parts. */
 
-#include <stdlib.h>
-#include <string.h>
 #include "flash.h"
 #include "chipdrivers.h"
 
@@ -33,20 +31,20 @@ int check_sst_fwhub_block_lock(struct flashchip *flash, int offset)
 	uint8_t blockstatus;
 
 	blockstatus = chip_readb(registers + offset + 2);
-	printf_debug("Lock status for 0x%06x (size 0x%06x) is %02x, ",
+	msg_cdbg("Lock status for 0x%06x (size 0x%06x) is %02x, ",
 		     offset, flash->page_size, blockstatus);
 	switch (blockstatus & 0x3) {
 	case 0x0:
-		printf_debug("full access\n");
+		msg_cdbg("full access\n");
 		break;
 	case 0x1:
-		printf_debug("write locked\n");
+		msg_cdbg("write locked\n");
 		break;
 	case 0x2:
-		printf_debug("locked open\n");
+		msg_cdbg("locked open\n");
 		break;
 	case 0x3:
-		printf_debug("write locked down\n");
+		msg_cdbg("write locked down\n");
 		break;
 	}
 	/* Return content of the write_locked bit */
@@ -61,11 +59,11 @@ int clear_sst_fwhub_block_lock(struct flashchip *flash, int offset)
 	blockstatus = check_sst_fwhub_block_lock(flash, offset);
 
 	if (blockstatus) {
-		printf_debug("Trying to clear lock for 0x%06x... ", offset)
+		msg_cdbg("Trying to clear lock for 0x%06x... ", offset);
 		chip_writeb(0, registers + offset + 2);
 
 		blockstatus = check_sst_fwhub_block_lock(flash, offset);
-		printf_debug("%s\n", (blockstatus) ? "failed" : "OK");
+		msg_cdbg("%s\n", (blockstatus) ? "failed" : "OK");
 	}
 
 	return blockstatus;

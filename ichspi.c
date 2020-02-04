@@ -5,7 +5,7 @@
  * Copyright (C) 2008 Claus Gindhart <claus.gindhart@kontron.com>
  * Copyright (C) 2008 Dominik Geyer <dominik.geyer@kontron.com>
  * Copyright (C) 2008 coresystems GmbH <info@coresystems.de>
- * Copyright (C) 2009 Carl-Daniel Hailfinger
+ * Copyright (C) 2009, 2010 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,21 +33,12 @@
  *
  */
 
+#if defined(__i386__) || defined(__x86_64__)
+
 #include <string.h>
 #include "flash.h"
 #include "chipdrivers.h"
 #include "spi.h"
-
-/* Change this to #define if you want lowlevel debugging of commands
- * sent to the ICH/VIA SPI controller.
- */
-#undef COMM_DEBUG
-
-#ifdef COMM_DEBUG
-#define msg_comm_debug printf_debug
-#else
-#define msg_comm_debug(...) do {} while (0)
-#endif
 
 /* ICH9 controller register definition */
 #define ICH9_REG_FADDR         0x08	/* 32 Bits */
@@ -112,6 +103,8 @@
 /* ICH SPI configuration lock-down. May be set during chipset enabling. */
 int ichspi_lock = 0;
 
+uint32_t ichspi_bbar = 0;
+
 typedef struct _OPCODE {
 	uint8_t opcode;		//This commands spi opcode
 	uint8_t spi_type;	//This commands spi type
@@ -160,8 +153,6 @@ static int generate_opcodes(OPCODES * op);
 static int program_opcodes(OPCODES * op);
 static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data);
-static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
-			      int offset, int maxdata);
 
 /* for pairing opcodes with their required preop */
 struct preop_opcode_pair {
@@ -237,7 +228,7 @@ static int generate_opcodes(OPCODES * op)
 	uint32_t opmenu[2];
 
 	if (op == NULL) {
-		printf_debug("\n%s: null OPCODES pointer!\n", __func__);
+		msg_perr("\n%s: null OPCODES pointer!\n", __func__);
 		return -1;
 	}
 
@@ -256,7 +247,7 @@ static int generate_opcodes(OPCODES * op)
 		opmenu[1] = REGREAD32(ICH9_REG_OPMENU + 4);
 		break;
 	default:
-		printf_debug("%s: unsupported chipset\n", __func__);
+		msg_perr("%s: unsupported chipset\n", __func__);
 		return -1;
 	}
 
@@ -315,7 +306,7 @@ int program_opcodes(OPCODES * op)
 		opmenu[1] |= ((uint32_t) op->opcode[a].opcode) << ((a - 4) * 8);
 	}
 
-	printf_debug("\n%s: preop=%04x optype=%04x opmenu=%08x%08x\n", __func__, preop, optype, opmenu[0], opmenu[1]);
+	msg_pdbg("\n%s: preop=%04x optype=%04x opmenu=%08x%08x\n", __func__, preop, optype, opmenu[0], opmenu[1]);
 	switch (spi_controller) {
 	case SPI_CONTROLLER_ICH7:
 	case SPI_CONTROLLER_VIA:
@@ -331,11 +322,39 @@ int program_opcodes(OPCODES * op)
 		REGWRITE32(ICH9_REG_OPMENU + 4, opmenu[1]);
 		break;
 	default:
-		printf_debug("%s: unsupported chipset\n", __func__);
+		msg_perr("%s: unsupported chipset\n", __func__);
 		return -1;
 	}
 
 	return 0;
+}
+
+/*
+ * Try to set BBAR (BIOS Base Address Register), but read back the value in case
+ * it didn't stick.
+ */
+void ich_set_bbar(uint32_t minaddr)
+{
+	switch (spi_controller) {
+	case SPI_CONTROLLER_ICH7:
+		mmio_writel(minaddr, spibar + 0x50);
+		ichspi_bbar = mmio_readl(spibar + 0x50);
+		/* We don't have any option except complaining. */
+		if (ichspi_bbar != minaddr)
+			msg_perr("Setting BBAR failed!\n");
+		break;
+	case SPI_CONTROLLER_ICH9:
+		mmio_writel(minaddr, spibar + 0xA0);
+		ichspi_bbar = mmio_readl(spibar + 0xA0);
+		/* We don't have any option except complaining. */
+		if (ichspi_bbar != minaddr)
+			msg_perr("Setting BBAR failed!\n");
+		break;
+	default:
+		/* Not sure if BBAR actually exists on VIA. */
+		msg_pdbg("Setting BBAR is not implemented for VIA yet.\n");
+		break;
+	}
 }
 
 /* This function generates OPCODES from or programs OPCODES to ICH according to
@@ -352,22 +371,27 @@ int ich_init_opcodes(void)
 		return 0;
 
 	if (ichspi_lock) {
-		printf_debug("Generating OPCODES... ");
+		msg_pdbg("Reading OPCODES... ");
 		curopcodes_done = &O_EXISTING;
 		rc = generate_opcodes(curopcodes_done);
 	} else {
-		printf_debug("Programming OPCODES... ");
+		msg_pdbg("Programming OPCODES... ");
 		curopcodes_done = &O_ST_M25P;
 		rc = program_opcodes(curopcodes_done);
+		/* Technically not part of opcode init, but it allows opcodes
+		 * to run without transaction errors by setting the lowest
+		 * allowed address to zero.
+		 */
+		ich_set_bbar(0);
 	}
 
 	if (rc) {
 		curopcodes = NULL;
-		printf_debug("failed\n");
+		msg_perr("failed\n");
 		return 1;
 	} else {
 		curopcodes = curopcodes_done;
-		printf_debug("done\n");
+		msg_pdbg("done\n");
 		return 0;
 	}
 }
@@ -439,7 +463,7 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 		opmenu >>= 8;
 	}
 	if (opcode_index == 8) {
-		printf_debug("Opcode %x not found.\n", op.opcode);
+		msg_pdbg("Opcode %x not found.\n", op.opcode);
 		return 1;
 	}
 	temp16 |= ((uint16_t) (opcode_index & 0x07)) << 4;
@@ -468,11 +492,12 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 		programmer_delay(10);
 	}
 	if (!timeout) {
-		printf_debug("timeout\n");
+		msg_perr("timeout\n");
 	}
 
+	/* FIXME: make sure we do not needlessly cause transaction errors. */
 	if ((REGREAD16(ICH7_REG_SPIS) & SPIS_FCERR) != 0) {
-		printf_debug("Transaction error!\n");
+		msg_pdbg("Transaction error!\n");
 		return 1;
 	}
 
@@ -536,7 +561,7 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 
 	/* clear error status registers */
 	temp32 |= (SSFS_CDS + SSFS_FCERR);
-	/* USE 20 MhZ */
+	/* Use 20 MHz */
 	temp32 |= SSFC_SCF_20MHZ;
 
 	if (datalength != 0) {
@@ -557,7 +582,7 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 		opmenu >>= 8;
 	}
 	if (opcode_index == 8) {
-		printf_debug("Opcode %x not found.\n", op.opcode);
+		msg_pdbg("Opcode %x not found.\n", op.opcode);
 		return 1;
 	}
 	temp32 |= ((uint32_t) (opcode_index & 0x07)) << (8 + 4);
@@ -586,11 +611,12 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 		programmer_delay(10);
 	}
 	if (!timeout) {
-		printf_debug("timeout\n");
+		msg_perr("timeout\n");
 	}
 
+	/* FIXME make sure we do not needlessly cause transaction errors. */
 	if ((REGREAD32(ICH9_REG_SSFS) & SSFS_FCERR) != 0) {
-		printf_debug("Transaction error!\n");
+		msg_pdbg("Transaction error!\n");
 		return 1;
 	}
 
@@ -615,7 +641,7 @@ static int run_opcode(OPCODE op, uint32_t offset,
 	switch (spi_controller) {
 	case SPI_CONTROLLER_VIA:
 		if (datalength > 16) {
-			fprintf(stderr, "%s: Internal command size error for "
+			msg_perr("%s: Internal command size error for "
 				"opcode 0x%02x, got datalength=%i, want <=16\n",
 				__func__, op.opcode, datalength);
 			return SPI_INVALID_LENGTH;
@@ -623,7 +649,7 @@ static int run_opcode(OPCODE op, uint32_t offset,
 		return ich7_run_opcode(op, offset, datalength, data, 16);
 	case SPI_CONTROLLER_ICH7:
 		if (datalength > 64) {
-			fprintf(stderr, "%s: Internal command size error for "
+			msg_perr("%s: Internal command size error for "
 				"opcode 0x%02x, got datalength=%i, want <=16\n",
 				__func__, op.opcode, datalength);
 			return SPI_INVALID_LENGTH;
@@ -631,40 +657,18 @@ static int run_opcode(OPCODE op, uint32_t offset,
 		return ich7_run_opcode(op, offset, datalength, data, 64);
 	case SPI_CONTROLLER_ICH9:
 		if (datalength > 64) {
-			fprintf(stderr, "%s: Internal command size error for "
+			msg_perr("%s: Internal command size error for "
 				"opcode 0x%02x, got datalength=%i, want <=16\n",
 				__func__, op.opcode, datalength);
 			return SPI_INVALID_LENGTH;
 		}
 		return ich9_run_opcode(op, offset, datalength, data);
 	default:
-		printf_debug("%s: unsupported chipset\n", __func__);
+		msg_perr("%s: unsupported chipset\n", __func__);
 	}
 
 	/* If we ever get here, something really weird happened */
 	return -1;
-}
-
-static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
-			      int offset, int maxdata)
-{
-	int page_size = flash->page_size;
-	uint32_t remaining = page_size;
-	int towrite;
-
-	msg_comm_debug("ich_spi_write_page: offset=%d, number=%d, buf=%p\n",
-		     offset, page_size, bytes);
-
-	for (; remaining > 0; remaining -= towrite) {
-		towrite = min(remaining, maxdata);
-		if (spi_nbyte_program(offset + (page_size - remaining),
-				      &bytes[page_size - remaining], towrite)) {
-			printf_debug("Error writing");
-			return 1;
-		}
-	}
-
-	return 0;
 }
 
 int ich_spi_read(struct flashchip *flash, uint8_t * buf, int start, int len)
@@ -679,36 +683,34 @@ int ich_spi_read(struct flashchip *flash, uint8_t * buf, int start, int len)
 
 int ich_spi_write_256(struct flashchip *flash, uint8_t * buf)
 {
-	int i, j, rc = 0;
+	int i, ret = 0;
 	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
 	int erase_size = 64 * 1024;
 	int maxdata = 64;
 
+	if (spi_controller == SPI_CONTROLLER_VIA)
+		maxdata = 16;
+
 	spi_disable_blockprotect();
 	/* Erase first */
-	printf("Erasing flash before programming... ");
+	msg_pinfo("Erasing flash before programming... ");
 	if (erase_flash(flash)) {
-		fprintf(stderr, "ERASE FAILED!\n");
+		msg_perr("ERASE FAILED!\n");
 		return -1;
 	}
-	printf("done.\n");
+	msg_pinfo("done.\n");
 
-	printf("Programming page: \n");
+	msg_pinfo("Programming page: \n");
 	for (i = 0; i < total_size / erase_size; i++) {
-		if (spi_controller == SPI_CONTROLLER_VIA)
-			maxdata = 16;
-
-		for (j = 0; j < erase_size / page_size; j++) {
-			ich_spi_write_page(flash,
-			   (void *)(buf + (i * erase_size) + (j * page_size)),
-			   (i * erase_size) + (j * page_size), maxdata);
-		}
+		ret = spi_write_chunked(flash, buf + (i * erase_size),
+					i * erase_size, erase_size, maxdata);
+		if (ret)
+			break;
 	}
 
-	printf("\n");
+	msg_pinfo("\n");
 
-	return rc;
+	return ret;
 }
 
 int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
@@ -728,7 +730,7 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		/* FIXME: Reprogram opcodes if possible. Autodetect type of
 		 * opcode by checking readcnt/writecnt.
 		 */
-		printf_debug("Invalid OPCODE 0x%02x\n", cmd);
+		msg_pdbg("Invalid OPCODE 0x%02x\n", cmd);
 		return SPI_INVALID_OPCODE;
 	}
 
@@ -743,21 +745,21 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	 */
 	if ((opcode->spi_type == SPI_OPCODE_TYPE_READ_WITH_ADDRESS) &&
 	    (writecnt != 4)) {
-		fprintf(stderr, "%s: Internal command size error for opcode "
+		msg_perr("%s: Internal command size error for opcode "
 			"0x%02x, got writecnt=%i, want =4\n", __func__, cmd,
 			writecnt);
 		return SPI_INVALID_LENGTH;
 	}
 	if ((opcode->spi_type == SPI_OPCODE_TYPE_READ_NO_ADDRESS) &&
 	    (writecnt != 1)) {
-		fprintf(stderr, "%s: Internal command size error for opcode "
+		msg_perr("%s: Internal command size error for opcode "
 			"0x%02x, got writecnt=%i, want =1\n", __func__, cmd,
 			writecnt);
 		return SPI_INVALID_LENGTH;
 	}
 	if ((opcode->spi_type == SPI_OPCODE_TYPE_WRITE_WITH_ADDRESS) &&
 	    (writecnt < 4)) {
-		fprintf(stderr, "%s: Internal command size error for opcode "
+		msg_perr("%s: Internal command size error for opcode "
 			"0x%02x, got writecnt=%i, want >=4\n", __func__, cmd,
 			writecnt);
 		return SPI_INVALID_LENGTH;
@@ -765,7 +767,7 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	if (((opcode->spi_type == SPI_OPCODE_TYPE_WRITE_WITH_ADDRESS) ||
 	     (opcode->spi_type == SPI_OPCODE_TYPE_WRITE_NO_ADDRESS)) &&
 	    (readcnt)) {
-		fprintf(stderr, "%s: Internal command size error for opcode "
+		msg_perr("%s: Internal command size error for opcode "
 			"0x%02x, got readcnt=%i, want =0\n", __func__, cmd,
 			readcnt);
 		return SPI_INVALID_LENGTH;
@@ -776,6 +778,19 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	    opcode->spi_type == SPI_OPCODE_TYPE_WRITE_WITH_ADDRESS) {
 		addr = (writearr[1] << 16) |
 		    (writearr[2] << 8) | (writearr[3] << 0);
+		switch (spi_controller) {
+		case SPI_CONTROLLER_ICH7:
+		case SPI_CONTROLLER_ICH9:
+			if (addr < ichspi_bbar) {
+				msg_perr("%s: Address 0x%06x below allowed "
+					 "range 0x%06x-0xffffff\n", __func__,
+					 addr, ichspi_bbar);
+				return SPI_INVALID_ADDRESS;
+			}
+			break;
+		default:
+			break;
+		}
 	}
 
 	/* translate read/write array/count */
@@ -792,7 +807,7 @@ int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 
 	result = run_opcode(*opcode, addr, count, data);
 	if (result) {
-		printf_debug("run OPCODE 0x%02x failed\n", opcode->opcode);
+		msg_pdbg("run OPCODE 0x%02x failed\n", opcode->opcode);
 	}
 
 	return result;
@@ -817,7 +832,7 @@ int ich_spi_send_multicommand(struct spi_command *cmds)
 				 */
 				if (find_preop(curopcodes,
 					       (cmds + 1)->writearr[0]) != -1) {
-					fprintf(stderr, "%s: Two subsequent "
+					msg_perr("%s: Two subsequent "
 						"preopcodes 0x%02x and 0x%02x, "
 						"ignoring the first.\n",
 						__func__, cmds->writearr[0],
@@ -829,7 +844,7 @@ int ich_spi_send_multicommand(struct spi_command *cmds)
 				 * No need to bother with fixups.
 				 */
 				if (!ichspi_lock) {
-					printf_debug("%s: FIXME: Add on-the-fly"
+					msg_pdbg("%s: FIXME: Add on-the-fly"
 						     " reprogramming of the "
 						     "chipset opcode list.\n",
 						     __func__);
@@ -867,3 +882,5 @@ int ich_spi_send_multicommand(struct spi_command *cmds)
 	}
 	return ret;
 }
+
+#endif

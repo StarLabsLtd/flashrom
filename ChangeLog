@@ -1,4 +1,1156 @@
 ------------------------------------------------------------------------
+r1028 | hailfinger | 2010-06-03 23:48:13 +0200 (Thu, 03 Jun 2010) | 15 lines
+
+Do not trust the OS at all and measure timer precision before
+calibrating the delay loop and use that measurement to get reasonable
+precision for our own delay code.
+
+Print a measurement for a delay of 4x the OS timer resolution.
+
+Be precise about how bad the deviation was if we had to recalculate.
+
+Tested on Windows XP, 32 bit, built using MinGW by Uwe.
+Tested on FreeDOS v1.0 Final, 32bit, built using DJGPP 4.3.2 by Idwer.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Idwer Vollering <vidwer+lists.flashrom@gmail.com>
+
+------------------------------------------------------------------------
+r1027 | uwe | 2010-06-03 18:35:51 +0200 (Thu, 03 Jun 2010) | 9 lines
+
+Fix bug in wiki printing and whitespace (trivial).
+
+The required "-m" options were not in the wiki output due to a mistake
+that I think I introduced recently.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1026 | hailfinger | 2010-06-03 02:49:50 +0200 (Thu, 03 Jun 2010) | 6 lines
+
+Fix fallout from r1021 which caused compile failures if only the dummy
+programmer was selected.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1025 | mkarcher | 2010-06-01 18:09:06 +0200 (Tue, 01 Jun 2010) | 8 lines
+
+Add hp xw9400 board enable.
+
+Also modifies nvidia_mcp_gpio_set to cope with multiple MCP55 chips on
+the same board, like on the Tyan S2915-E.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Adis Salcin <crow@linux.org.ba>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1024 | uwe | 2010-06-01 12:13:17 +0200 (Tue, 01 Jun 2010) | 9 lines
+
+Merge print.c and print_wiki.c board/URL tables.
+
+Also, merge the tables in the output, i.e. there's only one table which
+contains both known-good and known-bad/untested boards.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1023 | hailfinger | 2010-05-31 17:27:27 +0200 (Mon, 31 May 2010) | 18 lines
+
+So far, we have up to 4 different names for the same thing (ignoring
+capitalization):
+CONFIG_FT2232SPI (makefile config option)
+FT2232_SPI_SUPPORT (#define)
+ft2232spi (programmer name)
+ft2232_spi.c (programmer file)
+
+Use CONFIG_* with underscores for makefile config options and #defines
+and kill the useless _SUPPORT idiom.
+Use lowercase names with underscores for programmer names and programmer
+files.
+
+With this, you can run "grep -i ft2232_spi" and find everything related
+to the ft2232_spi driver. Same applies to all other programmers.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1022 | hailfinger | 2010-05-31 00:35:14 +0200 (Mon, 31 May 2010) | 8 lines
+
+Add flashrom.exe unconditionally to the list of files removed at make
+clean. This allows users to run make clean without specifying the target
+architecture.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1021 | hailfinger | 2010-05-31 00:24:40 +0200 (Mon, 31 May 2010) | 13 lines
+
+Remove unneeded #include statements completely.
+
+unistd.h was only used to get a definition of NULL in all files. Add our
+own NULL #define and remove unistd.h from flash.h
+stdio.h has no place in flash.h, it should be included only in files
+which really need it.
+Add #include statements in individual .c files where needed.
+
+Replace a few printf with msg_* to eliminate the need for stdio.h.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1020 | uwe | 2010-05-30 19:50:16 +0200 (Sun, 30 May 2010) | 10 lines
+
+Mark the following chip as supported:
+
+ - Winbond W39V040FA (reported by Guenter <lists@gknw.net>)
+   Read (thus also probe), write (thus also erase), and verify tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003078.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1019 | uwe | 2010-05-30 19:00:19 +0200 (Sun, 30 May 2010) | 40 lines
+
+Update the status for the following chips:
+
+ - Eon EN25F80 (reported by oops66 <oops66@wanadoo.fr>)
+   Probe and read tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003183.html
+
+ - AMIC A49LF040A (reported by Guenter <lists@gknw.net>)
+   Read (thus also probe), write (thus also erase), and verify tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003078.html
+   Also reported by Robert Grasso <robert.grasso@modulonet.fr>.
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003006.html
+
+ - SST SST49LF008A (reported by Marco Giacinti <marcogiacinti@hotmail.it>)
+   Erase tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003010.html
+
+ - SST SST29EE020A (reported by Anders Jenbo <anders@jenbo.dk>)
+   Write (and thus erase) tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-April/002961.html
+
+ - SST SST49LF040 (reported by David Westberg <david@uarda.dlinkddns.com>)
+   Probe and read tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-April/002862.html
+
+ - Winbond W39V080FA (reported by Maciej ?\197?\187enczykowski <zenczykowski@gmail.com>)
+   All operations tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-April/002863.html
+
+ - Winbond W29C020C (reported by Urja Rannikko <urjaman@gmail.com>)
+   Erase tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-April/002847.html
+
+ - PMC Pm39LV010 (reported by Tim Small <tim@seoss.co.uk>)
+   Write (and thus also erase) tested.
+   http://www.flashrom.org/pipermail/flashrom/2010-March/002711.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1018 | mkarcher | 2010-05-30 18:55:18 +0200 (Sun, 30 May 2010) | 4 lines
+
+Unlocking for W39V040FA
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r1017 | hailfinger | 2010-05-28 19:07:57 +0200 (Fri, 28 May 2010) | 8 lines
+
+Some chips implement the RES (0xab) opcode, but they use a non-standard
+two byte response instead of the usual one byte response.
+A two-byte response has the accuracy of REMS and RDID, so don't check
+for REMS/RDID availability before running a two-byte RES.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r1016 | hailfinger | 2010-05-28 17:53:08 +0200 (Fri, 28 May 2010) | 11 lines
+
+ICH SPI can enforce address restrictions for all accesses which take an
+address (well, it could if the chipset implementation was not broken).
+Since exploiting the broken implementation is harder than conforming to
+the address restrictions wherever possible, conform to the address
+restrictions instead.
+This patch eliminates a lot of transaction errors people were seeing
+on chip probe.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r1015 | uwe | 2010-05-27 00:29:51 +0200 (Thu, 27 May 2010) | 9 lines
+
+It seems that this board is actually a 'Pro' version. At least it's
+addressed as 'Pro' in the list of boards, which requires board_enable.
+
+See also: http://www.flashrom.org/pipermail/flashrom/2009-July/000003.html
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1014 | uwe | 2010-05-27 00:26:44 +0200 (Thu, 27 May 2010) | 6 lines
+
+Sort boards in board-enable table alphabetically.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1013 | hailfinger | 2010-05-26 03:45:41 +0200 (Wed, 26 May 2010) | 39 lines
+
+Handle the following architectures in generic flashrom code:
+- x86/x86_64 (little endian)
+- PowerPC (big endian)
+- MIPS (big+little endian)
+
+No changes to programmer specific code. This means any drivers with MMIO
+access will _not_ suddenly start working on big endian systems, but with
+this patch everything is in place to fix them.
+
+Compilation should work on all architectures listed above for all
+drivers except nic3com and nicrealtek which require PCI Port IO which is
+x86-only for now.
+
+To compile without nic3com and nicrealtek, run
+make distclean
+make CONFIG_NIC3COM=no CONFIG_NICREALTEK=no
+
+
+Thanks to Misha Manulis for testing early versions of this patch on
+PowerPC (big endian) with the satasii programmer.
+Thanks to Segher Boessenkool for design review and for helping out with
+compiler tricks and pointing out that we need eieio on PowerPC.
+Thanks to Vladimir Serbinenko for compile testing on MIPS (little
+endian) and PowerPC (big endian) and for runtime testing on MIPS (little
+endian).
+Thanks to David Daney for compile testing on MIPS (big endian).
+Thanks to Uwe Hermann for compile and runtime testing on x86_64.
+
+DO NOT RUN FLASHROM ON NON-X86 AFTER APPLYING THIS PATCH!
+This patch only provides the infrastructure, but does not convert any
+drivers, so flashrom will compile, but it won't do the right thing on
+non-x86 platforms.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Misha Manulis <misha@manulis.com>
+Acked-by: Vladimir 'phcoder/?\207?\134-coder' Serbinenko <phcoder@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Segher Boessenkool <segher@kernel.crashing.org>
+
+------------------------------------------------------------------------
+r1012 | uwe | 2010-05-26 01:27:44 +0200 (Wed, 26 May 2010) | 17 lines
+
+Mark the following chips as OK:
+
+ - PMC Pm49FL004
+ - SST SST49LF020
+ - SST SST49LF020A
+ - SST SST49LF040B
+ - SST SST49LF080A
+ - Winbond W39V040B
+
+I tested all operations on hardware using r997. Only on SST49LF040B
+write/erase does not seem to work, will investigate later (probe/read
+works, though).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r1011 | uwe | 2010-05-24 19:39:14 +0200 (Mon, 24 May 2010) | 12 lines
+
+Various nicrealtek fixes:
+
+ - Add missing entries for 'flashrom -L' output and wiki output.
+
+ - Add missing entries in the manpage.
+
+ - nicrealtek.c: Coding style fixes and cosmetics.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1010 | mkarcher | 2010-05-24 18:03:57 +0200 (Mon, 24 May 2010) | 4 lines
+
+Board enable for IP530
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Marc Bertens <mbertens@xs4all.nl>
+------------------------------------------------------------------------
+r1009 | uwe | 2010-05-24 17:28:12 +0200 (Mon, 24 May 2010) | 18 lines
+
+Various wiki output improvements as per IRC discussion (trivial).
+
+ - Use '?3' wiki template (light greenish, not gray) for untested stuff.
+ 
+ - Reduce page width a bit to improve readability on smaller screens.
+ 
+ - Generalize some functions a bit (pass in how many columns to generate).
+ 
+ - Mark untested board-enables as such (were incorrectly marked "OK" so far).
+ 
+ - Drop some useless 'valign=top' entries.
+ 
+ - Make a few more functions 'static' while we're at it.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1008 | hailfinger | 2010-05-22 09:31:50 +0200 (Sat, 22 May 2010) | 8 lines
+
+Add debug output of the exact matched chipset PCI ID to keep track of
+tested PCI IDs for chipsets with one name and multiple IDs.
+This will help avoid problems similar to the Tyan S2915 OEM undetected
+flash in the future.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1007 | hailfinger | 2010-05-22 09:27:16 +0200 (Sat, 22 May 2010) | 13 lines
+
+Fix Tyan S2915 OEM board by commenting out MCP55 LPC bridge PCI ID
+10de:0361 which is the secondary LPC bridge. The same effect could be
+achieved by refusing to run enable_flash_mcp55 if the device class is
+not ISA bridge [0601].
+
+Thanks to Alessandro Polverini, Joel Robertson, Nicolas Aveline,
+Phil LoCascio and Nils-Helge Garli Hegvik for testing flashrom on
+hardware and Michael Karcher for analyzing the factory BIOS for clues.
+In the end, no board enable was needed and it was a pure chipset issue.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1006 | hailfinger | 2010-05-22 09:10:46 +0200 (Sat, 22 May 2010) | 6 lines
+
+Initialize the internal delay function before running programmer init.
+The programmer init may need a good host delay function.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1005 | hailfinger | 2010-05-22 01:09:42 +0200 (Sat, 22 May 2010) | 12 lines
+
+Every SPI programmer driver had its own completely different chip write
+implementation, and all of them were insufficiently commented.
+Create spi_write_chunked as a copy of spi_read_chunked and convert all
+SPI programmers to use it.
+No functional changes except:
+- Bus Pirate uses 12 Byte writes instead of 8 Byte writes
+- SB600 uses 5 Byte writes instead of 1 Byte writes
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: David Hendricks <dhendrix@google.com>
+
+------------------------------------------------------------------------
+r1004 | hailfinger | 2010-05-22 01:00:56 +0200 (Sat, 22 May 2010) | 6 lines
+
+libpci < 2.2.4 can not store class info in struct pci_dev.
+Read class info manually and store it in a separate variable.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1003 | hailfinger | 2010-05-22 00:28:19 +0200 (Sat, 22 May 2010) | 7 lines
+
+Add missing nicrealtek.c which was missing from revision 1002 which was
+
+Support for Realtek RTL8139 network card flashing.
+
+Signed-off-by: Joerg Fischer <turboj@gmx.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1002 | hailfinger | 2010-05-21 23:54:07 +0200 (Fri, 21 May 2010) | 5 lines
+
+Support for Realtek RTL8139 network card flashing.
+
+Signed-off-by: Joerg Fischer <turboj@gmx.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1000 | hailfinger | 2010-05-19 18:46:52 +0200 (Wed, 19 May 2010) | 8 lines
+
+Increase flashrom release number to 0.9.2.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r999 | mkarcher | 2010-05-18 01:19:22 +0200 (Tue, 18 May 2010) | 6 lines
+
+msr_t memory layout may depend on compiler; with optimizations this
+may lead to writing incorrect data to MSR.
+Create a temporary buffer with correct layout to avoid this problem.
+
+Signed-off-by: Anti Sullin <anti.sullin@artecdesign.ee>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r998 | hailfinger | 2010-05-15 17:04:37 +0200 (Sat, 15 May 2010) | 7 lines
+
+Fix assorted documentation, frontend and printing bugs.
+Change the command line interface to make file names positional.
+Add more sanity checks to the command line parser.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r997 | snelson | 2010-05-07 22:09:04 +0200 (Fri, 07 May 2010) | 8 lines
+
+convert programmer print messages to msg_p*
+convert general print messages to msg_g*
+a few fixes as suggested by Carl-Daniel
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r996 | hailfinger | 2010-04-28 17:22:14 +0200 (Wed, 28 Apr 2010) | 37 lines
+
+--force may have been a good idea back when only developers were using
+flashrom, but over the last few months we've seen too many people who
+incorrectly believed that --force would solve anything.
+
+One of the problems is that --force had multiple meanings:
+- Force chip read by faking probe success.
+- Force chip access even if the chip is bigger than max decode size for
+  the flash bus.
+- Force erase even if erase is known bad.
+- Force write even if write is known bad.
+- Force writing even if cbtable tells us that this is the wrong image
+  for this board.
+
+This patch cleans up --force usage:
+- Remove any suggestions to use --force for probe/read from flashrom
+  output.
+- Don't talk about "success" or "Found chip" if the chip is forced.
+- Add a new internal programmer parameter boardmismatch=force. This
+  overrides any mismatch detection from cbtable/image comparisons.
+- Add a new internal programmer parameter laptop=force_I_want_a_brick.
+- Adjust the documentation for --force.
+- Clean up the man page a bit whereever it talks about --force or
+  laptops.
+
+Additional changes in this patch:
+- Add warnings about laptops to the documentation.
+- Abort if a laptop is detected. Can be overridden with the programmer
+parameter mentioned above.
+- Add "Portable" to the list of DMI strings indicating laptops.
+- Check if a chip specified with -c is known to flashrom.
+- Programmer parameter reliability and consistency fixes.
+- More paranoid self-checks.
+- Improve documentation.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r995 | ruik | 2010-04-26 00:47:50 +0200 (Mon, 26 Apr 2010) | 9 lines
+
+
+Fix the DOS port. Now the DS selector limit is set to 4GB and all mmio accesses goes through DS, 
+the 1:1 mapping is fixed so the _DS base is taken onto account. Plus is that the hwaccess.c needs
+no change and memcpy etc can be used on mmaped space.
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz> 
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r994 | ruik | 2010-04-20 21:34:31 +0200 (Tue, 20 Apr 2010) | 9 lines
+
+
+I added following Winbond chips:
+
+W25Q80, W25Q16 and W25Q32. I tested read/write/probe with W25Q80.
+
+Signed-off-by: Rudolf Marek <r.marek@assembler.cz> 
+Acked-by: David Hendricks <dhendrix@google.com>
+
+
+------------------------------------------------------------------------
+r993 | mkarcher | 2010-04-11 23:01:06 +0200 (Sun, 11 Apr 2010) | 5 lines
+
+Add board enable for ABit NF7-S
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Tom Brand <worntreads@sbcglobal.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+------------------------------------------------------------------------
+r992 | hailfinger | 2010-04-09 02:02:38 +0200 (Fri, 09 Apr 2010) | 6 lines
+
+Reinitialize the delay loop upon recalibration.
+Fix an unescaped % in a format specifier.
+
+Signed-off-by: Urja Rannikko <urjaman@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r991 | mkarcher | 2010-04-03 12:27:08 +0200 (Sat, 03 Apr 2010) | 14 lines
+
+Intel 28F004/28F400 support
+
+Remove blockwise write for i82802ab chips. It will be reintroduced
+in post-0.9.2 in a generic way. This is needed to fix
+FWH-like chips with non-uniform sectors.
+
+These are:
+  Intel 28F001
+  Sharp LHF00L04
+  ST M50FW002
+  ST M50LPW116
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r990 | hailfinger | 2010-04-01 01:55:06 +0200 (Thu, 01 Apr 2010) | 37 lines
+
+The current delay loop calculation is still from revision 1 of flashrom,
+and since then it had a logic bug which caused all delays to be twice as
+long as intended. Fix the delay duration.
+
+Protect against delay loop overflows.
+
+Detect a non-working delay loop.
+
+Change the delay loop itself to ensure clever compiler optimizers won't
+eliminate it (as happens with clang/llvm in the current code). Some
+people suggested machine-specific asm, but the empty asm statement with
+the loop counter as register/memory input has the benefit of being
+perfectly cross-platform and working in gcc and clang.
+
+If time goes backwards (catastrophical NTP time difference, manual time
+change), timing measurements were shot because the new-old time
+subtraction yielded negative numbers which weren't handled correctly
+because the variable is unsigned. Work around that issue (a fix is
+mathematically impossible).
+
+If time goes forward too fast, pick the biggest possible timing
+measurement with a guaranteed overflow avoidance for all timing
+calculations.
+
+Check four times if the calculated timing is at most 10% too fast. This
+addresses OS scheduler interactions, e.g. being scheduled out during
+measurement which inflates measurements.
+
+If the timing looks like garbage, recalculate the timer values up to
+four times before giving up.
+
+Avoid division by zero in rare cases where timing measurements for a 250
+ms delay returned 0 us elapsed.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+
+------------------------------------------------------------------------
+r989 | hailfinger | 2010-03-30 04:45:18 +0200 (Tue, 30 Mar 2010) | 8 lines
+
+Add ITE IT8720 SPI support.
+Original patch by Vadim Girlin.
+Message printing updated by Carl-Daniel Hailfinger.
+
+Signed-off-by: Vadim Girlin <vadimgirlin@gmail.com>
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r988 | hailfinger | 2010-03-28 00:25:14 +0100 (Sun, 28 Mar 2010) | 5 lines
+
+Add PMC Pm39LV020 and Pm39LV040.
+
+Signed-off-by: Anders Juel Jensen <andersjjensen@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r987 | hailfinger | 2010-03-27 17:36:40 +0100 (Sat, 27 Mar 2010) | 40 lines
+
+Add runtime and build environment info to the flashrom version message.
+This patch uses code from Idwer Vollering and Maciej Pijanka.
+I've added Makefile support and compiler version printing and
+restructured the code heavily.
+The code prints runtime system information and buildtime libpci
+information (I couldn't find any runtime libpci version function). Due
+to our ability to cross-compile flashrom, buildtime system information
+from "uname -mrs" doesn't help diagnosing any problems. That's why only
+libpci and gcc are buildtime info, and the rest is runtime info.
+
+Examples:
+
+openSUSE 10.3, i686, gcc 4.2.1, with PCI support:
+flashrom v0.9.1-r971 on Linux 2.6.22.19-0.2-default (i686), built with
+libpci 2.2.6, GCC 4.2.1 (SUSE Linux)
+
+openSUSE 10.3, i686, llvm-clang-2.6.99svn97231, with PCI support:
+flashrom v0.9.1-r971 on Linux 2.6.22.19-0.2-default (i686), built with
+libpci 2.2.6, LLVM 1/clang 1
+
+openSUSE 11.1, x86_64, gcc 4.3.2, with PCI support:
+flashrom v0.9.1-r972 on Linux 2.6.27.29-0.1-default (x86_64), built with
+libpci 3.0.1, GCC 4.3.2 [gcc-4_3-branch revision 141291]
+
+openSUSE 10.3, i686, gcc 4.2.1, without PCI support:
+flashrom v0.9.1-r971 on Linux 2.6.22.19-0.2-default (i686), built with
+GCC 4.2.1 (SUSE Linux)
+
+Windows/cygwin, i686, gcc 4.3.4, without PCI support:
+flashrom v0.9.1-r973 on CYGWIN_NT-5.1 1.7.1(0.218/5/3) (i686), built
+with GCC 4.3.4 20090804 (release) 1
+
+FreeBSD 8.0, i386, gcc 4.2.1, with PCI support:
+flashrom v0.9.1-r973 on FreeBSD 8.0-RELEASE-p2 (i386), built with libpci
+3.1.7, GCC 4.2.1 20070719  [FreeBSD]
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+
+------------------------------------------------------------------------
+r986 | hailfinger | 2010-03-27 17:16:01 +0100 (Sat, 27 Mar 2010) | 7 lines
+
+The delay loop is probably one of the oldest pieces of code in flashrom.
+Clean up code duplication and measure timing of 10/100/1000/10000 us
+delays.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+
+------------------------------------------------------------------------
+r985 | uwe | 2010-03-26 00:18:41 +0100 (Fri, 26 Mar 2010) | 10 lines
+
+Polish the flashrom code comments and outputs a bit.
+
+ - Fix a number of typos (found via ispell).
+
+ - Use correct vendor names (as per their websites) consistently.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r984 | mkarcher | 2010-03-25 10:23:46 +0100 (Thu, 25 Mar 2010) | 41 lines
+
+Add success reports
+
+PMC Pm39LV010:
+ See http://www.coreboot.org/pipermail/flashrom/2010-March/002711.html
+ Thanks to Tim Small for reporting!
+
+Supermicro X8DTT-F:
+ See http://www.coreboot.org/pipermail/flashrom/2010-March/002707.html
+ Thank to Taylan Develioglu for testing!
+
+Gigabyte GA-965P-DS4:
+ See http://www.coreboot.org/pipermail/flashrom/2010-March/002426.html
+ Thanks to Michal Andrzejczak for reporting!
+
+Tyan Tempest i5000PW:
+ See http://www.coreboot.org/pipermail/flashrom/2010-February/002358.html
+ Thanks to Rob Lazzurs for reporting!
+
+PCEngines WRAP.2E:
+ See http://www.coreboot.org/pipermail/flashrom/2010-February/002187.html
+ Thanks to Vincenzo Caruso for testing!
+
+Asus P5B:
+ This board has been reporting as working (for r710/0.9.1) in:
+ http://www.coreboot.org/pipermail/flashrom/2010-February/002170.html
+ Thanks to Patrice Levesque for testing!
+
+MSI 7312 (K9MM-V) + W39V040B:
+ See http://www.coreboot.org/pipermail/flashrom/2010-February/002159.html
+ Thanks to David Mears for testing!
+
+Probe + Read on SST49LF080A:
+ See http://www.coreboot.org/pipermail/flashrom/2010-February/002095.html
+ Thanks to Peter Lemenkov for testing!
+
+Finally:
+ remove Asus A7V8X-X from "boards_ok", as this table is meant only for
+ boards not needing a board enable.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r983 | hailfinger | 2010-03-25 03:50:40 +0100 (Thu, 25 Mar 2010) | 20 lines
+
+Autodetect ITE IT87* LPC->SPI translation on all boards without the need
+for a board enable.
+Move boards which had an IT87* SPI board enable from the board enable
+list to the OK list.
+
+Mark the Gigabyte GA-MA78GPM-DS2H as OK.
+
+Change the it87spi forced port parameter to it87spiport=...
+
+Fix incorrect indentation in the man page.
+
+Tested by Ward Vandewege on both variants of the Gigabyte GA-M57SLI-S4
+http://www.flashrom.org/pipermail/flashrom/2010-March/002712.html
+
+Tested by ?\230?\157?\142?\229?\189?\165?\229?\173?\184 (Ian-Xue Li) on the Gigabyte GA-MA78GPM-DS2H
+http://www.flashrom.org/pipermail/flashrom/2010-March/002723.html
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Ward Vandewege <ward@gnu.org>
+
+------------------------------------------------------------------------
+r982 | snelson | 2010-03-25 00:14:32 +0100 (Thu, 25 Mar 2010) | 7 lines
+
+Convert chips' message printing to msg_c*
+Fixed suggestions by Carl-Daniel.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r981 | mkarcher | 2010-03-25 00:10:01 +0100 (Thu, 25 Mar 2010) | 4 lines
+
+Fix copy/paste error in print.c preventing compilation
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+------------------------------------------------------------------------
+r980 | mkarcher | 2010-03-24 23:56:23 +0100 (Wed, 24 Mar 2010) | 8 lines
+
+Flashrom works on Acer Aspire 1520 (Laptop) with W39V040A
+
+See http://www.coreboot.org/pipermail/flashrom/2010-March/002451.html
+
+Thanks to Pawe?\197?\130 Stawicki for reporting!
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r979 | mkarcher | 2010-03-24 23:56:19 +0100 (Wed, 24 Mar 2010) | 9 lines
+
+Shuttle FD37 and MSI K9A2 Platinum are supported
+
+FD37: http://www.coreboot.org/pipermail/flashrom/2010-March/002440.html
+K9A2: http://www.coreboot.org/pipermail/flashrom/2010-March/002433.html
+
+Thanks to Sylvain BERTRAND for reporting!
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r978 | mkarcher | 2010-03-24 23:56:14 +0100 (Wed, 24 Mar 2010) | 12 lines
+
+MSI MS6330 tested with W49F002U and EN29F002
+
+W49F002U: http://www.coreboot.org/pipermail/flashrom/2010-March/002469.html
+EN29F002: http://www.coreboot.org/pipermail/flashrom/2010-March/002480.html
+
+Block erase was broken, chip erase worked, block erase is fixed in r934 but
+has not been tested since.
+
+Thanks to Guy Lacroix for reporting!
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r977 | mkarcher | 2010-03-24 23:56:08 +0100 (Wed, 24 Mar 2010) | 7 lines
+
+ASUS P6T Deluxe is OK
+
+See http://www.coreboot.org/pipermail/flashrom/2010-March/002501.html
+Thanks to Konstantin Matuschek for reporting.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r976 | mkarcher | 2010-03-24 23:56:02 +0100 (Wed, 24 Mar 2010) | 13 lines
+
+Clean up manufacturer mainboard links.
+
+The Asus A8NE-FM/S does exist, you find original ASUS pdf manuals in the
+internet, but seems to be an OEM board that is not documented on the
+Asus page.
+
+A lot of MSI boards are OEM boards that have no page at the MSI site...
+
+This patch also adds links in the Wiki for boards from the board enable
+table.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r975 | mkarcher | 2010-03-24 23:55:56 +0100 (Wed, 24 Mar 2010) | 14 lines
+
+Abit VT6X4 + Winbond W29C020C and Asus A7V133 + Atmel AT29C010A work
+
+Abit VT6X4 / W29C020C: See
+  http://www.coreboot.org/pipermail/flashrom/2010-March/002730.html
+  Fixes typo in comment and marks board-enable as tested (the flashrom
+  running on that machine was patched with the board enable that got
+  in later).
+
+Asus A7V133 / Atmel AT29C010A: See
+  http://www.coreboot.org/pipermail/flashrom/2010-March/002729.html
+  Adding "erase" to tested as there is only one erase function.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r974 | mkarcher | 2010-03-24 23:55:50 +0100 (Wed, 24 Mar 2010) | 7 lines
+
+Probe/Read tested for SST29EE020A
+
+http://www.flashrom.org/pipermail/flashrom/2010-February/002318.html
+Thanks to Andre Robatino for reporting!
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r973 | mkarcher | 2010-03-24 18:55:04 +0100 (Wed, 24 Mar 2010) | 4 lines
+
+Fix handling of empty dmidecode output
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r972 | snelson | 2010-03-23 18:10:28 +0100 (Tue, 23 Mar 2010) | 12 lines
+
+Sst49lfxxxc chips are functionally the same as 82802ab chips.
+Sst49lfxxxc software status register is functionally the same as the 
+82802ab status register, "Block Protect Status"(49lfxxxc) can be treated 
+the same as "Device Protect Status"(82802ab).
+Erase_block_49lfxxxc is the same command sequence as erase_block_82802ab.
+Add unlock_49lfxxxc to chips definitions.
+Write_sector_49lfxxxc is the same as write_page_82802ab.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r971 | hailfinger | 2010-03-23 00:47:38 +0100 (Tue, 23 Mar 2010) | 18 lines
+
+JEDEC ID probing checks the parity of the vendor ID and verifies that
+the ID differs from the flash chip contents.
+Add the same feature to 82802AB ID probing.
+
+This should reduce the number of lines we have to look at to determine
+if we're missing a chip definition or if we need a board enable. Just
+use grep on the log:
+grep -v "parity violation"
+To narrow it down further, try:
+grep -v "id1 is normal flash content, id2 is normal flash content"
+And of course you want to ignore the skipped probes:
+grep -v "skipped"
+The remaining lines are worth examining, and if those look bogus as
+well, you can bet that we just need a board enable.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r970 | hailfinger | 2010-03-23 00:43:51 +0100 (Tue, 23 Mar 2010) | 16 lines
+
+Reduce message severity level for skipped chips.
+
+Old verbose log excerpt:
+Probing for Atmel AT25DF021, 256 KB: skipped. Host bus type Parallel and
+chip bus type SPI are incompatible.
+
+New verbose log excerpt:
+Probing for Atmel AT25DF021, 256 KB: skipped.
+
+This makes logs more readable and manageable. If someone really
+desperately wants all the bus debugging stuff, he/she can switch to SPEW
+mode instead of VERBOSE mode.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-By: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r969 | snelson | 2010-03-22 22:48:51 +0100 (Mon, 22 Mar 2010) | 6 lines
+
+Clang complains loudly when there are duplicate printlock_sst_fwhub, gcc ignores them. Ack via IRC.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r968 | hailfinger | 2010-03-22 13:29:45 +0100 (Mon, 22 Mar 2010) | 13 lines
+
+Idwer Vollering reported problems with the current libpci check on
+FreeBSD 8.0-RELEASE i386
+This is caused by a strict linker. Parsing linker error messages is an
+exercise in futility, and library detection with
+$CC --print-file-name
+is totally useless for libraries outside the standard hardcoded builtin
+gcc search path (probably the same for other compilers as well).
+
+Look for libpciutils instead of libpci on NetBSD during the check.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r967 | snelson | 2010-03-22 08:03:26 +0100 (Mon, 22 Mar 2010) | 5 lines
+
+in unlock_28f004s5, variable 'i' needs to be int...
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r966 | snelson | 2010-03-22 07:57:02 +0100 (Mon, 22 Mar 2010) | 5 lines
+
+fix a few typos from the last commit.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r965 | snelson | 2010-03-22 05:39:31 +0100 (Mon, 22 Mar 2010) | 10 lines
+
+To access/read the lock bits, we use the same mode to read the chip id.
+
+This patch looks into the write situation for the Intel 28F001BX-{B,T}. Looks like they're just a 82802ab page write.
+
+Unlock_28f004s5 has been changed to read all the lock bits and if at least one of the block lock bits are set, clear them all. If the master lock bit is set, we can't do anything about it, so we return.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger<c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r964 | hailfinger | 2010-03-22 04:30:58 +0100 (Mon, 22 Mar 2010) | 4 lines
+
+Multibyte SPI write for the Bus Pirate.
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r963 | hailfinger | 2010-03-21 15:54:57 +0100 (Sun, 21 Mar 2010) | 6 lines
+
+Add DOS cross-compilation support to the Makefile.
+Add a README with build instructions.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Rudolf Marek <r.marek@assembler.cz>
+
+------------------------------------------------------------------------
+r962 | mkarcher | 2010-03-21 14:36:20 +0100 (Sun, 21 Mar 2010) | 4 lines
+
+Adds board enable to Termtek TK-3370 thin client motherboard.
+
+Signed-off-by: Daniel Brandt <dbr@mindglow.se>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r961 | snelson | 2010-03-20 16:15:36 +0100 (Sat, 20 Mar 2010) | 7 lines
+
+unlock fixup
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+
+
+------------------------------------------------------------------------
+r960 | snelson | 2010-03-20 04:01:19 +0100 (Sat, 20 Mar 2010) | 7 lines
+
+The Intel 28F001BX-T/B chips don't have block locks or mention of registers; chip is Old.
+The Intel 28F004S5 mentions block locks which require a remapping registers.
+Fixes problems brought up by carldani because of commit r948.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r959 | snelson | 2010-03-20 00:01:34 +0100 (Sat, 20 Mar 2010) | 6 lines
+
+Rebased Board Enable Patch: iBase MB899.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r958 | snelson | 2010-03-20 00:00:07 +0100 (Sat, 20 Mar 2010) | 8 lines
+
+Rebased Board Enable Patch: Abit AN-M2.
+
+Original patch by: Luc Verhaegen.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r957 | snelson | 2010-03-19 23:58:15 +0100 (Fri, 19 Mar 2010) | 11 lines
+
+Reversed-engineered board enable for the ASUS A8N-LA.
+Rebased.
+IDs are ISA and SMBus.
+Added dmi string to match 3 HP boards: Nagami, Nagami2, Nagami2L.
+
+This could match any HP Nagami board. Needs testing.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r956 | snelson | 2010-03-19 23:55:48 +0100 (Fri, 19 Mar 2010) | 11 lines
+
+Rebased Board Enable Patch: 2nd attempt to fix board detection on GA-MA74GM-S2H.
+
+This board (GA-MA74GM-S2H) has the same list of pciids as the GA-MA78M-S2H,
+so I narroved search conditions by populating corresponding board_pciid_enable
+entry for GA-MA78M-S2H with DMI pattern.
+
+Untested!
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r955 | snelson | 2010-03-19 23:52:00 +0100 (Fri, 19 Mar 2010) | 5 lines
+
+Rebased Board Enable Patch: Asus P4B533-E
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r954 | snelson | 2010-03-19 23:49:09 +0100 (Fri, 19 Mar 2010) | 7 lines
+
+Rebased Board Enable Patch: Factor out Via Apollo GPO setting
+VT6X4 actually depended on this commit, blame snelson.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r953 | snelson | 2010-03-19 23:39:24 +0100 (Fri, 19 Mar 2010) | 5 lines
+
+Rebased Board Enable Patch: A8JM board_enable patch
+Signed-off-by: James Lancaster <deathstalker@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r952 | snelson | 2010-03-19 23:37:29 +0100 (Fri, 19 Mar 2010) | 8 lines
+
+Rebased Board Enable Patch: Abit KN8 Ultra
+
+patch by Chris <zinx+flashrom@zenthought.org>
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r951 | snelson | 2010-03-19 23:35:21 +0100 (Fri, 19 Mar 2010) | 10 lines
+
+Rebased Board Enable Patch: Intel SE440BX-2
+
+This board has no subsystem IDs, but thankfully the DMI patch is in
+now, which is a real life safer. There are *WAY* to many 440BX/PIIX4
+boards out there to match this without DMI.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r950 | snelson | 2010-03-19 23:30:49 +0100 (Fri, 19 Mar 2010) | 11 lines
+
+Rebased Board Enable Patch: Abit VT6X4
+
+This board has *no* usable IDs at all, neither DMI nor PCI
+subsystem IDs. You have to force it using "-m abit:vt6x4"
+
+Try 3: really correct polarity of the GPIO
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r949 | snelson | 2010-03-19 23:26:44 +0100 (Fri, 19 Mar 2010) | 6 lines
+
+Rebased Board Enable Patch: Add Asus A8N.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r948 | snelson | 2010-03-19 19:47:06 +0100 (Fri, 19 Mar 2010) | 18 lines
+
+rename print_82802ab_status to print_status_82802ab
+add unlock_82802ab
+strip unlock code from erase_block_82802ab
+rename erase_82802ab_block  to erase_block_80280ab
+delete sharplhf00l04.o from Makefile
+delete *_lhf00l04* from chipdrivers.h
+add unlock_stm50flw0x0x
+delete wait_stm50flw0x0x
+delete write_page_stm50flw0x0x
+convert erase_stm50flw0x0x to erase_chip_stm50flw0x0x
+delete write_stm50flw0x0x
+add unlock_82802ab to two Intel chips with TEST_BAD_WRITE
+change the status of 82802AB, 82802AC, M50FW040, M50FW080 to TEST_OK_PR
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r947 | mkarcher | 2010-03-17 07:19:23 +0100 (Wed, 17 Mar 2010) | 7 lines
+
+Add board enable for P4C800-E
+
+lspci/flashrom/superiotool at
+http://www.coreboot.org/pipermail/flashrom/2010-March/002579.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
 r946 | hailfinger | 2010-03-17 01:47:56 +0100 (Wed, 17 Mar 2010) | 10 lines
 
 PCI device BARs of all types had only bits 1:0 cleared while reading the
