@@ -131,14 +131,14 @@ static OPCODES *curopcodes = NULL;
 static inline uint32_t REGREAD32(int X)
 {
 	volatile uint32_t regval;
-	regval = *(volatile uint32_t *) ((uint8_t *) spibar + X);
+	regval = *(volatile uint32_t *)((uint8_t *) spibar + X);
 	return regval;
 }
 
 static inline uint16_t REGREAD16(int X)
 {
 	volatile uint16_t regval;
-	regval = *(volatile uint16_t *) ((uint8_t *) spibar + X);
+	regval = *(volatile uint16_t *)((uint8_t *) spibar + X);
 	return regval;
 }
 
@@ -148,13 +148,12 @@ static inline uint16_t REGREAD16(int X)
 
 /* Common SPI functions */
 static int program_opcodes(OPCODES * op);
-static int run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
+static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data);
 static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf,
 			     int offset, int maxdata);
 static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
 			      int offset, int maxdata);
-static int ich_spi_erase_block(struct flashchip *flash, int offset);
 
 OPCODES O_ST_M25P = {
 	{
@@ -184,13 +183,13 @@ int program_opcodes(OPCODES * op)
 	preop = (op->preop[0]);
 	/* 8:16 Prefix Opcode 2 */
 	preop |= ((uint16_t) op->preop[1]) << 8;
-	
+
 	/* Program Opcode Types 0 - 7 */
 	optype = 0;
 	for (a = 0; a < 8; a++) {
 		optype |= ((uint16_t) op->opcode[a].spi_type) << (a * 2);
 	}
-	
+
 	/* Program Allowable Opcodes 0 - 3 */
 	opmenu[0] = 0;
 	for (a = 0; a < 4; a++) {
@@ -204,8 +203,8 @@ int program_opcodes(OPCODES * op)
 	}
 
 	switch (flashbus) {
-	case BUS_TYPE_ICH7_SPI: 
-	case BUS_TYPE_VIA_SPI: 
+	case BUS_TYPE_ICH7_SPI:
+	case BUS_TYPE_VIA_SPI:
 		REGWRITE16(ICH7_REG_PREOP, preop);
 		REGWRITE16(ICH7_REG_OPTYPE, optype);
 		REGWRITE32(ICH7_REG_OPMENU, opmenu[0]);
@@ -225,7 +224,7 @@ int program_opcodes(OPCODES * op)
 	return 0;
 }
 
-static int ich7_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
+static int ich7_run_opcode(OPCODE op, uint32_t offset,
 			   uint8_t datalength, uint8_t * data, int maxdata)
 {
 	int write_cmd = 0;
@@ -233,6 +232,8 @@ static int ich7_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	uint32_t temp32 = 0;
 	uint16_t temp16;
 	uint32_t a;
+	uint64_t opmenu;
+	int opcode_index;
 
 	/* Is it a write command? */
 	if ((op.spi_type == SPI_OPCODE_TYPE_WRITE_NO_ADDRESS)
@@ -280,7 +281,20 @@ static int ich7_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	}
 
 	/* Select opcode */
-	temp16 |= ((uint16_t) (nr & 0x07)) << 4;
+	opmenu = REGREAD32(ICH7_REG_OPMENU);
+	opmenu |= ((uint64_t)REGREAD32(ICH7_REG_OPMENU + 4)) << 32;
+
+	for (opcode_index=0; opcode_index<8; opcode_index++) {
+		if((opmenu & 0xff) == op.opcode) {
+			break;
+		}
+		opmenu >>= 8;
+	}
+	if (opcode_index == 8) {
+		printf_debug("Opcode %x not found.\n", op.opcode);
+		return 1;
+	}
+	temp16 |= ((uint16_t) (opcode_index & 0x07)) << 4;
 
 	/* Handle Atomic */
 	if (op.atomic != 0) {
@@ -328,14 +342,15 @@ static int ich7_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	return 0;
 }
 
-
-static int ich9_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
+static int ich9_run_opcode(OPCODE op, uint32_t offset,
 			   uint8_t datalength, uint8_t * data)
 {
 	int write_cmd = 0;
 	int timeout;
 	uint32_t temp32;
 	uint32_t a;
+	uint64_t opmenu;
+	int opcode_index;
 
 	/* Is it a write command? */
 	if ((op.spi_type == SPI_OPCODE_TYPE_WRITE_NO_ADDRESS)
@@ -384,7 +399,20 @@ static int ich9_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	}
 
 	/* Select opcode */
-	temp32 |= ((uint32_t) (nr & 0x07)) << (8 + 4);
+	opmenu = REGREAD32(ICH9_REG_OPMENU);
+	opmenu |= ((uint64_t)REGREAD32(ICH9_REG_OPMENU + 4)) << 32;
+
+	for (opcode_index=0; opcode_index<8; opcode_index++) {
+		if((opmenu & 0xff) == op.opcode) {
+			break;
+		}
+		opmenu >>= 8;
+	}
+	if (opcode_index == 8) {
+		printf_debug("Opcode %x not found.\n", op.opcode);
+		return 1;
+	}
+	temp32 |= ((uint32_t) (opcode_index & 0x07)) << (8 + 4);
 
 	/* Handle Atomic */
 	if (op.atomic != 0) {
@@ -432,16 +460,16 @@ static int ich9_run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	return 0;
 }
 
-static int run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
+static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data)
 {
 	switch (flashbus) {
 	case BUS_TYPE_VIA_SPI:
-		return ich7_run_opcode(nr, op, offset, datalength, data, 16);
+		return ich7_run_opcode(op, offset, datalength, data, 16);
 	case BUS_TYPE_ICH7_SPI:
-		return ich7_run_opcode(nr, op, offset, datalength, data, 64);
+		return ich7_run_opcode(op, offset, datalength, data, 64);
 	case BUS_TYPE_ICH9_SPI:
-		return ich9_run_opcode(nr, op, offset, datalength, data);
+		return ich9_run_opcode(op, offset, datalength, data);
 	default:
 		printf_debug("%s: unsupported chipset\n", __FUNCTION__);
 	}
@@ -450,22 +478,8 @@ static int run_opcode(uint8_t nr, OPCODE op, uint32_t offset,
 	return -1;
 }
 
-static int ich_spi_erase_block(struct flashchip *flash, int offset)
-{
-	printf_debug("ich_spi_erase_block: offset=%d, sectors=%d\n",
-		     offset, 1);
-
-	if (run_opcode(2, curopcodes->opcode[2], offset, 0, NULL) != 0) {
-		printf_debug("Error erasing sector at 0x%x", offset);
-		return -1;
-	}
-
-	printf("DONE BLOCK 0x%x\n", offset);
-
-	return 0;
-}
-
-static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf, int offset, int maxdata)
+static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf, int offset,
+			     int maxdata)
 {
 	int page_size = flash->page_size;
 	uint32_t remaining = flash->page_size;
@@ -478,7 +492,7 @@ static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf, int offset,
 		if (remaining < maxdata) {
 
 			if (run_opcode
-			    (1, curopcodes->opcode[1],
+			    (curopcodes->opcode[1],
 			     offset + (page_size - remaining), remaining,
 			     &buf[page_size - remaining]) != 0) {
 				printf_debug("Error reading");
@@ -487,7 +501,7 @@ static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf, int offset,
 			remaining = 0;
 		} else {
 			if (run_opcode
-			    (1, curopcodes->opcode[1],
+			    (curopcodes->opcode[1],
 			     offset + (page_size - remaining), maxdata,
 			     &buf[page_size - remaining]) != 0) {
 				printf_debug("Error reading");
@@ -513,7 +527,7 @@ static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
 	for (a = 0; a < page_size; a += maxdata) {
 		if (remaining < maxdata) {
 			if (run_opcode
-			    (0, curopcodes->opcode[0],
+			    (curopcodes->opcode[0],
 			     offset + (page_size - remaining), remaining,
 			     &bytes[page_size - remaining]) != 0) {
 				printf_debug("Error writing");
@@ -522,7 +536,7 @@ static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
 			remaining = 0;
 		} else {
 			if (run_opcode
-			    (0, curopcodes->opcode[0],
+			    (curopcodes->opcode[0],
 			     offset + (page_size - remaining), maxdata,
 			     &bytes[page_size - remaining]) != 0) {
 				printf_debug("Error writing");
@@ -567,7 +581,11 @@ int ich_spi_write(struct flashchip *flash, uint8_t * buf)
 	printf("Programming page: \n");
 
 	for (i = 0; i < total_size / erase_size; i++) {
-		rc = ich_spi_erase_block(flash, i * erase_size);
+		/* FIMXE: call the chip-specific spi_block_erase_XX instead.
+		 * For this, we need to add a block erase function to
+		 * struct flashchip.
+		 */
+		rc = spi_block_erase_d8(flash, i * erase_size);
 		if (rc) {
 			printf("Error erasing block at 0x%x\n", i);
 			break;
@@ -577,8 +595,9 @@ int ich_spi_write(struct flashchip *flash, uint8_t * buf)
 			maxdata = 16;
 
 		for (j = 0; j < erase_size / page_size; j++) {
-			ich_spi_write_page(flash, (void *)(buf + (i * erase_size) + (j * page_size)),
-					   (i * erase_size) + (j * page_size), maxdata);
+			ich_spi_write_page(flash,
+			   (void *)(buf + (i * erase_size) + (j * page_size)),
+			   (i * erase_size) + (j * page_size), maxdata);
 		}
 	}
 
@@ -641,7 +660,7 @@ int ich_spi_command(unsigned int writecnt, unsigned int readcnt,
 		count = readcnt;
 	}
 
-	if (run_opcode(opcode_index, *opcode, addr, count, data) != 0) {
+	if (run_opcode(*opcode, addr, count, data) != 0) {
 		printf_debug("run OPCODE 0x%02x failed\n", opcode->opcode);
 		return 1;
 	}
