@@ -1,4 +1,46 @@
 ------------------------------------------------------------------------
+r1946 | hailfinger | 2016-02-28 23:04:51 +0100 (Sun, 28 Feb 2016) | 9 lines
+
+Makefile: Fix driver blacklist dependencies
+
+Allow mstarddc_spi and pony_spi on Android.
+Allow mstarddc_spi and pony_spi on architectures with unsupported raw
+access.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1945 | stefanct | 2016-02-28 18:04:38 +0100 (Sun, 28 Feb 2016) | 8 lines
+
+rayer_spi: add support for SPI Tiny Tools-compatible hardware.
+
+Apparently, there is at least one board of Russian origin (coined
+SPI_TT LPT) that works with SPI Tiny Tools which is a closed-source
+Windows GUI program somewhat similar to flashrom.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+------------------------------------------------------------------------
+r1944 | stefanct | 2016-02-27 00:51:21 +0100 (Sat, 27 Feb 2016) | 6 lines
+
+makefile: allow to disable all default-yes config variables with CONFIG_NOTHING=yes.
+
+All credit for this should be given to Patrick Georgi (see r1869).
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1943 | hailfinger | 2016-02-25 21:10:26 +0100 (Thu, 25 Feb 2016) | 7 lines
+
+Partial architecture support for alpha hppa m68k sh s390
+
+Only hardware not needing raw access (PCI, memory, port I/O) is supported.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+
+------------------------------------------------------------------------
 r1942 | stefanct | 2016-02-22 09:59:27 +0100 (Mon, 22 Feb 2016) | 7 lines
 
 dediprog: use ordinary USB devs array.
