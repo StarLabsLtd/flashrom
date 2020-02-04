@@ -49,8 +49,7 @@ OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
 	sst49lfxxxc.o sst_fwhub.o layout.o cbtable.o flashchips.o physmap.o \
 	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o it87spi.o \
 	ichspi.o w39v040c.o sb600spi.o wbsio_spi.o m29f002.o internal.o \
-	dummyflasher.o pcidev.o nic3com.o satasii.o ft2232_spi.o \
-	print.o
+	pcidev.o print.o
 
 all: pciutils features dep $(PROGRAM)
 
@@ -58,16 +57,37 @@ all: pciutils features dep $(PROGRAM)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 706
+SVNVERSION := 736
 
-RELEASE := 0.9.0
+RELEASE := 0.9.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
 SVNDEF := -D'FLASHROM_VERSION="$(VERSION)"'
 
 # Always enable serprog for now. Needs to be disabled on Windows.
-CONFIG_SERPROG = yes
+CONFIG_SERPROG ?= yes
+
+# Bitbanging SPI infrastructure is not used yet.
+CONFIG_BITBANG_SPI ?= no
+
+# Always enable 3Com NICs for now.
+CONFIG_NIC3COM ?= yes
+
+# Always enable SiI SATA controllers for now.
+CONFIG_SATASII ?= yes
+
+# Always enable FT2232 SPI dongles for now.
+CONFIG_FT2232SPI ?= yes
+
+# Always enable dummy tracing for now.
+CONFIG_DUMMY ?= yes
+
+# Always enable Dr. Kaiser for now.
+CONFIG_DRKAISER ?= yes
+
+# Always enable wiki printing for now.
+CONFIG_PRINT_WIKI ?= no
 
 ifeq ($(CONFIG_SERPROG), yes)
 FEATURE_CFLAGS += -D'SERPROG_SUPPORT=1'
@@ -77,9 +97,42 @@ LIBS += -lsocket
 endif
 endif
 
-FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
+ifeq ($(CONFIG_BITBANG_SPI), yes)
+FEATURE_CFLAGS += -D'BITBANG_SPI_SUPPORT=1'
+OBJS += bitbang_spi.o
+endif
 
+ifeq ($(CONFIG_NIC3COM), yes)
+FEATURE_CFLAGS += -D'NIC3COM_SUPPORT=1'
+OBJS += nic3com.o
+endif
+
+ifeq ($(CONFIG_SATASII), yes)
+FEATURE_CFLAGS += -D'SATASII_SUPPORT=1'
+OBJS += satasii.o
+endif
+
+ifeq ($(CONFIG_FT2232SPI), yes)
+# This is a totally ugly hack.
+FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
 FEATURE_LIBS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-lftdi")
+OBJS += ft2232_spi.o
+endif
+
+ifeq ($(CONFIG_DUMMY), yes)
+FEATURE_CFLAGS += -D'DUMMY_SUPPORT=1'
+OBJS += dummyflasher.o
+endif
+
+ifeq ($(CONFIG_DRKAISER), yes)
+FEATURE_CFLAGS += -D'DRKAISER_SUPPORT=1'
+OBJS += drkaiser.o
+endif
+
+ifeq ($(CONFIG_PRINT_WIKI), yes)
+FEATURE_CFLAGS += -D'PRINT_WIKI_SUPPORT=1'
+OBJS += print_wiki.o
+endif
 
 $(PROGRAM): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(LIBS) $(FEATURE_LIBS)

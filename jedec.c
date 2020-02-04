@@ -145,7 +145,7 @@ int probe_jedec(struct flashchip *flash)
 	chip_writeb(0xF0, bios + 0x5555);
 	programmer_delay(probe_timing_exit);
 
-	printf_debug("%s: id1 0x%02x, id2 0x%02x", __FUNCTION__, largeid1, largeid2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x", __func__, largeid1, largeid2);
 	if (!oddparity(id1))
 		printf_debug(", id1 parity violation");
 
@@ -175,7 +175,7 @@ int probe_jedec(struct flashchip *flash)
 	return 0;
 }
 
-int erase_sector_jedec(struct flashchip *flash, unsigned int page, int pagesize)
+int erase_sector_jedec(struct flashchip *flash, unsigned int page, unsigned int pagesize)
 {
 	chipaddr bios = flash->virtual_memory;
 
@@ -204,7 +204,7 @@ int erase_sector_jedec(struct flashchip *flash, unsigned int page, int pagesize)
 	return 0;
 }
 
-int erase_block_jedec(struct flashchip *flash, unsigned int block, int blocksize)
+int erase_block_jedec(struct flashchip *flash, unsigned int block, unsigned int blocksize)
 {
 	chipaddr bios = flash->virtual_memory;
 

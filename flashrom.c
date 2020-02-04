@@ -54,6 +54,7 @@ const struct programmer_entry programmer_table[] = {
 		.delay			= internal_delay,
 	},
 
+#if DUMMY_SUPPORT == 1
 	{
 		.name			= "dummy",
 		.init			= dummy_init,
@@ -70,7 +71,9 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= dummy_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
 
+#if NIC3COM_SUPPORT == 1
 	{
 		.name			= "nic3com",
 		.init			= nic3com_init,
@@ -87,7 +90,28 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
 
+#if DRKAISER_SUPPORT == 1
+	{
+		.name			= "drkaiser",
+		.init			= drkaiser_init,
+		.shutdown		= drkaiser_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= drkaiser_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= drkaiser_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if SATASII_SUPPORT == 1
 	{
 		.name			= "satasii",
 		.init			= satasii_init,
@@ -104,18 +128,19 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
 
 	{
 		.name			= "it87spi",
 		.init			= it87spi_init,
-		.shutdown		= fallback_shutdown,
+		.shutdown		= noop_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= dummy_chip_readb,
+		.chip_readb		= noop_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
 		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= fallback_chip_writeb,
+		.chip_writeb		= noop_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
 		.chip_writen		= fallback_chip_writen,
@@ -126,14 +151,14 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "ft2232spi",
 		.init			= ft2232_spi_init,
-		.shutdown		= fallback_shutdown,
+		.shutdown		= noop_shutdown, /* Missing shutdown */
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= dummy_chip_readb,
+		.chip_readb		= noop_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
 		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= fallback_chip_writeb,
+		.chip_writeb		= noop_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
 		.chip_writen		= fallback_chip_writen,
@@ -457,36 +482,66 @@ int read_flash(struct flashchip *flash, char *filename)
 
 int erase_flash(struct flashchip *flash)
 {
-	uint32_t erasedbytes;
-	unsigned long size = flash->total_size * 1024;
-	unsigned char *buf = calloc(size, sizeof(char));
+	int i, j, k, ret = 0, found = 0;
+
 	printf("Erasing flash chip... ");
-	if (NULL == flash->erase) {
-		printf("FAILED!\n");
+	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
+		unsigned long done = 0;
+		struct block_eraser eraser = flash->block_erasers[k];
+
+		printf_debug("Looking at blockwise erase function %i... ", k);
+		if (!eraser.block_erase && !eraser.eraseblocks[0].count) {
+			printf_debug("not defined. "
+				"Looking for another erase function.\n");
+			continue;
+		}
+		if (!eraser.block_erase && eraser.eraseblocks[0].count) {
+			printf_debug("eraseblock layout is known, but no "
+				"matching block erase function found. "
+				"Looking for another erase function.\n");
+			continue;
+		}
+		if (eraser.block_erase && !eraser.eraseblocks[0].count) {
+			printf_debug("block erase function found, but "
+				"eraseblock layout is unknown. "
+				"Looking for another erase function.\n");
+			continue;
+		}
+		found = 1;
+		printf_debug("trying... ");
+		for (i = 0; i < NUM_ERASEREGIONS; i++) {
+			/* count==0 for all automatically initialized array
+			 * members so the loop below won't be executed for them.
+			 */
+			for (j = 0; j < eraser.eraseblocks[i].count; j++) {
+				ret = eraser.block_erase(flash, done + eraser.eraseblocks[i].size * j, eraser.eraseblocks[i].size);
+				if (ret)
+					break;
+			}
+			if (ret)
+				break;
+		}
+		/* If everything is OK, don't try another erase function. */
+		if (!ret)
+			break;
+	}
+	/* If no block erase function was found or block erase failed, retry. */
+	if ((!found || ret) && (flash->erase)) {
+		found = 1;
+		printf_debug("Trying whole-chip erase function... ");
+		ret = flash->erase(flash);
+	}
+	if (!found) {
 		fprintf(stderr, "ERROR: flashrom has no erase function for this flash chip.\n");
 		return 1;
 	}
-	flash->erase(flash);
 
-	/* FIXME: The lines below are superfluous. We should check the result
-	 * of flash->erase(flash) instead.
-	 */
-	if (!flash->read) {
-		printf("FAILED!\n");
-		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
-		return 1;
-	} else
-		flash->read(flash, buf, 0, size);
-
-	for (erasedbytes = 0; erasedbytes < size; erasedbytes++)
-		if (0xff != buf[erasedbytes]) {
-			printf("FAILED!\n");
-			fprintf(stderr, "ERROR at 0x%08x: Expected=0xff, Read=0x%02x\n",
-				erasedbytes, buf[erasedbytes]);
-			return 1;
-		}
-	printf("SUCCESS.\n");
-	return 0;
+	if (ret) {
+		fprintf(stderr, "FAILED!\n");
+	} else {
+		printf("SUCCESS.\n");
+	}
+	return ret;
 }
 
 void emergency_help_message()
@@ -526,7 +581,9 @@ void usage(const char *name)
 	     "   -l | --layout <file.layout>:      read ROM layout from file\n"
 	     "   -i | --image <name>:              only flash image name from flash layout\n"
 	     "   -L | --list-supported:            print supported devices\n"
+#if PRINT_WIKI_SUPPORT == 1
 	     "   -z | --list-supported-wiki:       print supported devices in wiki syntax\n"
+#endif
 	     "   -p | --programmer <name>:         specify the programmer device");
 
 	for (p = 0; p < PROGRAMMER_INVALID; p++) {
@@ -579,10 +636,18 @@ int main(int argc, char *argv[])
 	int option_index = 0;
 	int force = 0;
 	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
-	int dont_verify_it = 0, list_supported = 0, list_supported_wiki = 0;
+	int dont_verify_it = 0, list_supported = 0;
+#if PRINT_WIKI_SUPPORT == 1
+	int list_supported_wiki = 0;
+#endif
 	int operation_specified = 0;
 	int ret = 0, i;
 
+#if PRINT_WIKI_SUPPORT == 1
+	const char *optstring = "rRwvnVEfc:m:l:i:p:Lzh";
+#else
+	const char *optstring = "rRwvnVEfc:m:l:i:p:Lh";
+#endif
 	static struct option long_options[] = {
 		{"read", 0, 0, 'r'},
 		{"write", 0, 0, 'w'},
@@ -596,7 +661,9 @@ int main(int argc, char *argv[])
 		{"layout", 1, 0, 'l'},
 		{"image", 1, 0, 'i'},
 		{"list-supported", 0, 0, 'L'},
+#if PRINT_WIKI_SUPPORT == 1
 		{"list-supported-wiki", 0, 0, 'z'},
+#endif
 		{"programmer", 1, 0, 'p'},
 		{"help", 0, 0, 'h'},
 		{"version", 0, 0, 'R'},
@@ -626,9 +693,15 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "SPI programmer table miscompilation!\n");
 		exit(1);
 	}
+#if BITBANG_SPI_SUPPORT == 1
+	if (spi_bitbang_master_count - 1 != SPI_BITBANG_INVALID) {
+		fprintf(stderr, "Bitbanging SPI master table miscompilation!\n");
+		exit(1);
+	}
+#endif
 
 	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, "rRwvnVEfc:m:l:i:p:Lzh",
+	while ((opt = getopt_long(argc, argv, optstring,
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'r':
@@ -699,9 +772,11 @@ int main(int argc, char *argv[])
 		case 'L':
 			list_supported = 1;
 			break;
+#if PRINT_WIKI_SUPPORT == 1
 		case 'z':
 			list_supported_wiki = 1;
 			break;
+#endif
 		case 'p':
 			for (programmer = 0; programmer < PROGRAMMER_INVALID; programmer++) {
 				name = programmer_table[programmer].name;
@@ -746,15 +821,24 @@ int main(int argc, char *argv[])
 		print_supported_boards();
 		printf("\nSupported PCI devices flashrom can use "
 		       "as programmer:\n\n");
+#if NIC3COM_SUPPORT == 1
 		print_supported_pcidevs(nics_3com);
+#endif
+#if DRKAISER_SUPPORT == 1
+		print_supported_pcidevs(drkaiser_pcidev);
+#endif
+#if SATASII_SUPPORT == 1
 		print_supported_pcidevs(satas_sii);
+#endif
 		exit(0);
 	}
 
+#if PRINT_WIKI_SUPPORT == 1
 	if (list_supported_wiki) {
 		print_wiki_tables();
 		exit(0);
 	}
+#endif
 
 	if (read_it && write_it) {
 		printf("Error: -r and -w are mutually exclusive.\n");

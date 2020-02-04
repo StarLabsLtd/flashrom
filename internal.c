@@ -130,7 +130,11 @@ int internal_init(void)
 
 	board_flash_enable(lb_vendor, lb_part);
 
-	return ret; 
+	/* Even if chipset init returns an error code, we don't want to abort.
+	 * The error code might have been a warning only.
+	 * Besides that, we don't check the board enable return code either.
+	 */
+	return 0; 
 }
 
 int internal_shutdown(void)
@@ -218,8 +222,8 @@ void internal_delay(int usecs)
 	}
 }
 
-/* Fallback shutdown() for programmers which don't need special handling */
-int fallback_shutdown(void)
+/* No-op shutdown() for programmers which don't need special handling */
+int noop_shutdown(void)
 {
 	return 0;
 }
@@ -227,16 +231,23 @@ int fallback_shutdown(void)
 /* Fallback map() for programmers which don't need special handling */
 void *fallback_map(const char *descr, unsigned long phys_addr, size_t len)
 {
+	/* FIXME: Should return phys_addr. */
 	return 0;
 }
 
-/* Fallback unmap() for programmers which don't need special handling */
+/* No-op/fallback unmap() for programmers which don't need special handling */
 void fallback_unmap(void *virt_addr, size_t len)
 {
 }
 
-/* No-op fallback for drivers not supporting addr/data pair accesses */
-void fallback_chip_writeb(uint8_t val, chipaddr addr)
+/* No-op chip_writeb() for drivers not supporting addr/data pair accesses */
+uint8_t noop_chip_readb(const chipaddr addr)
+{
+	return 0xff;
+}
+
+/* No-op chip_writeb() for drivers not supporting addr/data pair accesses */
+void noop_chip_writeb(uint8_t val, chipaddr addr)
 {
 }
 

@@ -91,12 +91,14 @@ const struct spi_programmer spi_programmer[] = {
 	},
 #endif
 
+#if DUMMY_SUPPORT == 1
 	{ /* SPI_CONTROLLER_DUMMY */
 		.command = dummy_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
 		.read = NULL,
 		.write_256 = NULL,
 	},
+#endif
 
 	{}, /* This entry corresponds to SPI_CONTROLLER_INVALID. */
 };
@@ -116,7 +118,7 @@ int spi_send_command(unsigned int writecnt, unsigned int readcnt,
 						      writearr, readarr);
 }
 
-int spi_send_multicommand(struct spi_command *spicommands)
+int spi_send_multicommand(struct spi_command *cmds)
 {
 	if (!spi_programmer[spi_controller].multicommand) {
 		fprintf(stderr, "%s called, but SPI is unsupported on this "
@@ -124,7 +126,7 @@ int spi_send_multicommand(struct spi_command *spicommands)
 		return 1;
 	}
 
-	return spi_programmer[spi_controller].multicommand(spicommands);
+	return spi_programmer[spi_controller].multicommand(cmds);
 }
 
 int default_spi_send_command(unsigned int writecnt, unsigned int readcnt,
@@ -146,13 +148,12 @@ int default_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	return spi_send_multicommand(cmd);
 }
 
-int default_spi_send_multicommand(struct spi_command *spicommands)
+int default_spi_send_multicommand(struct spi_command *cmds)
 {
 	int result = 0;
-	while ((spicommands->writecnt || spicommands->readcnt) && !result) {
-		result = spi_send_command(spicommands->writecnt, spicommands->readcnt,
-					  spicommands->writearr, spicommands->readarr);
-		spicommands++;
+	for (; (cmds->writecnt || cmds->readcnt) && !result; cmds++) {
+		result = spi_send_command(cmds->writecnt, cmds->readcnt,
+					  cmds->writearr, cmds->readarr);
 	}
 	return result;
 }
@@ -264,7 +265,7 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 		id2 = (readarr[1] << 8) | readarr[2];
 	}
 
-	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __func__, id1, id2);
 
 	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
@@ -301,7 +302,9 @@ int probe_spi_rdid4(struct flashchip *flash)
 #if FT2232_SPI_SUPPORT == 1
 	case SPI_CONTROLLER_FT2232:
 #endif
+#if DUMMY_SUPPORT == 1
 	case SPI_CONTROLLER_DUMMY:
+#endif
 		return probe_spi_rdid_generic(flash, 4);
 	default:
 		printf_debug("4b ID not supported on this SPI controller\n");
@@ -321,7 +324,7 @@ int probe_spi_rems(struct flashchip *flash)
 	id1 = readarr[0];
 	id2 = readarr[1];
 
-	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
+	printf_debug("%s: id1 0x%x, id2 0x%x\n", __func__, id1, id2);
 
 	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
 		/* Print the status register to tell the
@@ -356,7 +359,7 @@ int probe_spi_res(struct flashchip *flash)
 		return 0;
 
 	id2 = readarr[0];
-	printf_debug("%s: id 0x%x\n", __FUNCTION__, id2);
+	printf_debug("%s: id 0x%x\n", __func__, id2);
 	if (id2 != flash->model_id)
 		return 0;
 
@@ -490,7 +493,7 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 int spi_chip_erase_60(struct flashchip *flash)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -514,7 +517,7 @@ int spi_chip_erase_60(struct flashchip *flash)
 		return result;
 	}
 	
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -536,7 +539,7 @@ int spi_chip_erase_60(struct flashchip *flash)
 int spi_chip_erase_c7(struct flashchip *flash)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -560,7 +563,7 @@ int spi_chip_erase_c7(struct flashchip *flash)
 		return result;
 	}
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n", __func__);
 		return result;
@@ -592,7 +595,7 @@ int spi_chip_erase_60_c7(struct flashchip *flash)
 int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -610,7 +613,7 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
 		.readarr	= NULL,
 	}};
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -636,7 +639,7 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
 int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -654,7 +657,7 @@ int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int 
 		.readarr	= NULL,
 	}};
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n", __func__);
 		return result;
@@ -698,7 +701,7 @@ int spi_chip_erase_d8(struct flashchip *flash)
 int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -716,7 +719,7 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 		.readarr	= NULL,
 	}};
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -775,7 +778,7 @@ int spi_write_status_enable(void)
 int spi_write_status_register(int status)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_EWSR_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_EWSR },
@@ -793,7 +796,7 @@ int spi_write_status_register(int status)
 		.readarr	= NULL,
 	}};
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -804,7 +807,7 @@ int spi_write_status_register(int status)
 int spi_byte_program(int addr, uint8_t byte)
 {
 	int result;
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -822,7 +825,7 @@ int spi_byte_program(int addr, uint8_t byte)
 		.readarr	= NULL,
 	}};
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -840,7 +843,7 @@ int spi_nbyte_program(int address, uint8_t *bytes, int len)
 		(address >> 8) & 0xff,
 		(address >> 0) & 0xff,
 	};
-	struct spi_command spicommands[] = {
+	struct spi_command cmds[] = {
 	{
 		.writecnt	= JEDEC_WREN_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_WREN },
@@ -869,7 +872,7 @@ int spi_nbyte_program(int address, uint8_t *bytes, int len)
 
 	memcpy(&cmd[4], bytes, len);
 
-	result = spi_send_multicommand(spicommands);
+	result = spi_send_multicommand(cmds);
 	if (result) {
 		fprintf(stderr, "%s failed during command execution\n",
 			__func__);
@@ -972,7 +975,7 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 	spi_disable_blockprotect();
 	/* Erase first */
 	printf("Erasing flash before programming... ");
-	if (flash->erase(flash)) {
+	if (erase_flash(flash)) {
 		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;
 	}
@@ -1021,7 +1024,7 @@ int spi_aai_write(struct flashchip *flash, uint8_t *buf)
 	default:
 		break;
 	}
-	if (flash->erase(flash)) {
+	if (erase_flash(flash)) {
 		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;
 	}
