@@ -6,7 +6,7 @@
 
 PROGRAM = flashrom
 
-CC      = gcc
+CC     ?= gcc
 STRIP	= strip
 INSTALL = /usr/bin/install
 PREFIX  = /usr/local
@@ -57,7 +57,7 @@ distclean: clean
 	rm -f .dependencies
 
 dep:
-	@$(CC) -MM *.c > .dependencies
+	@$(CC) $(SVNDEF) -MM *.c > .dependencies
 
 pciutils:
 	@echo; printf "Checking for pciutils and zlib... "
@@ -65,7 +65,7 @@ pciutils:
 		   echo "struct pci_access *pacc;";	   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
-	@$(CC) $(CFLAGS) .test.c -o .test $(LDFLAGS) &>/dev/null &&	\
+	@$(CC) $(CFLAGS) .test.c -o .test $(LDFLAGS) >/dev/null 2>&1 &&	\
 		echo "found." || ( echo "not found."; echo;		\
 		echo "Please install pciutils-devel and zlib-devel.";	\
 		echo "See README for more information."; echo;		\
