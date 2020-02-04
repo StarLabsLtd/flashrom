@@ -1,4 +1,94 @@
 ------------------------------------------------------------------------
+r1517 | stefanct | 2012-03-13 01:18:19 +0100 (Tue, 13 Mar 2012) | 8 lines
+
+Make the presence of Linux SPI headers mandatory for linux_spi.
+
+This solution is copied from ft2232_spi and is equally hacky.
+Thanks to M.K. for investigating the history of <linux/spi/spidev.h>, which
+led to a hopefully more robust check.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1516 | stefanct | 2012-03-10 20:22:13 +0100 (Sat, 10 Mar 2012) | 9 lines
+
+Add (untested) board enable for ASUS TUSL2-C
+
+Primary IDs SMBus controller, secondary IDs MCH.
+The reverse engineering was done by Michael Karcher.
+?\208?\144?\208?\189?\208?\180?\209?\128?\208?\181?\208?\185 ?\208?\162?\208?\184?\208?\188?\208?\184?\209?\128?\208?\176?\208?\181?\208?\178 <dark_prof@mail.ru> reported the problem, but did not
+reply (yet) to our propsed fix.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1514 | hailfinger | 2012-03-08 22:58:40 +0100 (Thu, 08 Mar 2012) | 5 lines
+
+Increase flashrom release number to 0.9.5.2
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1513 | mkarcher | 2012-03-06 23:17:06 +0100 (Tue, 06 Mar 2012) | 11 lines
+
+Prevent submission of empty read requests in linux_spi.
+
+The submission of zero-sized read requests in a write-only transaction
+fails at least for omap2_mcspi drivers and is pointless in general.
+
+This patch does not address the implementation of zero-sized writes (which
+would need to skip the write command), as there are no flash transactions
+not starting with a command.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+------------------------------------------------------------------------
+r1512 | stefanct | 2012-03-03 19:09:33 +0100 (Sat, 03 Mar 2012) | 11 lines
+
+linux_spi.c: set SPI mode, bit order and bits per word on init.
+
+Previously we relied on a correctly set up state.
+
+Also, we start to rely on the shutdown function for cleanup after
+registering it, i.e. we no longer explicitly call close(fd) after
+register_shutdown().
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Tested-by: Denis 'GNUtoo' Carikli <GNUtoo@no-log.org>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1511 | hailfinger | 2012-03-01 23:38:27 +0100 (Thu, 01 Mar 2012) | 21 lines
+
+Fix parallel-style programmer access from ITE IT87/Winbond W83627 SPI
+
+The ITE IT87 SPI driver uses a trick to speed up reading and writing:
+If a flash chip is 512 kByte or less, the flash chip can be completely
+mapped in memory and both read and write accesses are faster that way.
+The current IT87 SPI code did use the parallel programmer interface for
+memory mapped reads and writes, but that's the wrong abstraction. It has
+been fixed to use mmio_read*/mmio_write* for that purpose.
+
+The Winbond W83627 SPI driver uses the same trick in its read path for
+all supported chip sizes. Fix it the same way.
+
+Switch internal_chip_readn to use mmio_readn as proper abstraction.
+
+Kudos to Michael Karcher for spotting the bugs.
+
+Reported-by: Johan Svensson <flashrom.js@crypt.se>
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Tested-by: Johan Svensson <flashrom.js@crypt.se>
+
+------------------------------------------------------------------------
+r1510 | stefanct | 2012-02-27 20:44:16 +0100 (Mon, 27 Feb 2012) | 4 lines
+
+nicintel_spi.c: check if write enable is really set (and minor comment changes).
+
+Signed-off-by: Stefan Tauner <stefan.tauner@student.tuwien.ac.at>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+------------------------------------------------------------------------
 r1508 | hailfinger | 2012-02-26 00:39:29 +0100 (Sun, 26 Feb 2012) | 5 lines
 
 Increase flashrom release number to 0.9.5.1

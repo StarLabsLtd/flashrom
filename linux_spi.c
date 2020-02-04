@@ -17,6 +17,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#if CONFIG_LINUX_SPI == 1
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -24,6 +26,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <linux/types.h>
 #include <linux/spi/spidev.h>
 #include <sys/ioctl.h>
 #include "flash.h"
@@ -57,6 +60,10 @@ int linux_spi_init(void)
 {
 	char *p, *endp, *dev;
 	uint32_t speed = 0;
+	/* FIXME: make the following configurable by CLI options. */
+	/* SPI mode 0 (beware this also includes: MSB first, CS active low and others */
+	const uint8_t mode = SPI_MODE_0;
+	const uint8_t bits = 8;
 
 	dev = extract_programmer_param("dev");
 	if (!dev || !strlen(dev)) {
@@ -81,19 +88,31 @@ int linux_spi_init(void)
 		return 1;
 	}
 
+	if (register_shutdown(linux_spi_shutdown, NULL))
+		return 1;
+	/* We rely on the shutdown function for cleanup from here on. */
+
 	if (speed > 0) {
 		if (ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed) == -1) {
-			msg_perr("%s: failed to set speed %dHz: %s\n",
+			msg_perr("%s: failed to set speed to %d Hz: %s\n",
 				 __func__, speed, strerror(errno));
-			close(fd);
 			return 1;
 		}
 
 		msg_pdbg("Using %d kHz clock\n", speed);
 	}
 
-	if (register_shutdown(linux_spi_shutdown, NULL))
+	if (ioctl(fd, SPI_IOC_WR_MODE, &mode) == -1) {
+		msg_perr("%s: failed to set SPI mode to 0x%02x: %s\n",
+			 __func__, mode, strerror(errno));
 		return 1;
+	}
+
+	if (ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits) == -1) {
+		msg_perr("%s: failed to set the number of bits per SPI word to %u: %s\n",
+			 __func__, bits == 0 ? 8 : bits, strerror(errno));
+		return 1;
+	}
 
 	register_spi_programmer(&spi_programmer_linux);
 
@@ -114,6 +133,7 @@ static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 				  const unsigned char *txbuf,
 				  unsigned char *rxbuf)
 {
+	int iocontrol_code;
 	struct spi_ioc_transfer msg[2] = {
 		{
 			.tx_buf = (uint64_t)(ptrdiff_t)txbuf,
@@ -127,8 +147,19 @@ static int linux_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 
 	if (fd == -1)
 		return -1;
+	/* The implementation currently does not support requests that
+	   don't start with sending a command. */
+	if (writecnt == 0)
+		return SPI_INVALID_LENGTH;
 
-	if (ioctl(fd, SPI_IOC_MESSAGE(2), msg) == -1) {
+	/* Just submit the first (write) request in case there is nothing
+	   to read. Otherwise submit both requests. */
+	if (readcnt == 0)
+		iocontrol_code = SPI_IOC_MESSAGE(1);
+	else
+		iocontrol_code = SPI_IOC_MESSAGE(2);
+
+	if (ioctl(fd, iocontrol_code, msg) == -1) {
 		msg_cerr("%s: ioctl: %s\n", __func__, strerror(errno));
 		return -1;
 	}
@@ -148,3 +179,5 @@ static int linux_spi_write_256(struct flashctx *flash, uint8_t *buf,
 	return spi_write_chunked(flash, buf, start, len,
 				((unsigned int)getpagesize()) - 4);
 }
+
+#endif // CONFIG_LINUX_SPI == 1
