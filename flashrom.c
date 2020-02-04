@@ -143,7 +143,7 @@ struct flashchip *probe_flash(struct flashchip *flash)
 		flash->virtual_memory = bios;
 
 		if (flash->probe(flash) == 1) {
-			printf("%s found at physical address: 0x%lx\n",
+			printf("%s found at physical address 0x%lx.\n",
 			       flash->name, flash_baseaddr);
 			return flash;
 		}
@@ -159,9 +159,13 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 {
 	int idx;
 	int total_size = flash->total_size * 1024;
-	volatile uint8_t *bios = flash->virtual_memory;
+	uint8_t *buf2 = (uint8_t *) calloc(total_size, sizeof(char));
+	if (flash->read == NULL)
+		memcpy(buf2, (const char *)flash->virtual_memory, total_size);
+	else
+		flash->read(flash, buf2);
 
-	printf("Verifying flash ");
+	printf("Verifying flash... ");
 
 	if (verbose)
 		printf("address: 0x00000000\b\b\b\b\b\b\b\b\b\b");
@@ -170,11 +174,11 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 		if (verbose && ((idx & 0xfff) == 0xfff))
 			printf("0x%08x", idx);
 
-		if (*(bios + idx) != *(buf + idx)) {
+		if (*(buf2 + idx) != *(buf + idx)) {
 			if (verbose) {
 				printf("0x%08x ", idx);
 			}
-			printf("- FAILED\n");
+			printf("FAILED!\n");
 			return 1;
 		}
 
@@ -184,19 +188,18 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	if (verbose)
 		printf("\b\b\b\b\b\b\b\b\b\b ");
 
-	printf("- VERIFIED         \n");
+	printf("VERIFIED.          \n");
 
 	return 0;
 }
 
 void usage(const char *name)
 {
-	printf("usage: %s [-rwvEVfh] [-c chipname] [-s exclude_start]\n", name);
+	printf("usage: %s [-rwvEVfhR] [-c chipname] [-s exclude_start]\n", name);
 	printf("       [-e exclude_end] [-m vendor:part] [-l file.layout] [-i imagename] [file]\n");
 	printf
 	    ("   -r | --read:                    read flash and save into file\n"
-	     "   -w | --write:                   write file into flash (default when\n"
-	     "                                   file is specified)\n"
+	     "   -w | --write:                   write file into flash\n"
 	     "   -v | --verify:                  verify flash against file\n"
 	     "   -E | --erase:                   erase flash device\n"
 	     "   -V | --verbose:                 more verbose output\n"
@@ -207,9 +210,15 @@ void usage(const char *name)
 	     "   -f | --force:                   force write without checking image\n"
 	     "   -l | --layout <file.layout>:    read rom layout from file\n"
 	     "   -i | --image <name>:            only flash image name from flash layout\n"
-	     "\n" " If no file is specified, then all that happens\n"
+	     "   -R | --version:                 print the version (release)\n"
+            "\n" " If no file is specified, then all that happens"
 	     " is that flash info is dumped.\n\n");
 	exit(1);
+}
+
+void print_version(void)
+{
+	printf("flashrom r%s\n", FLASHROM_VERSION);
 }
 
 int main(int argc, char *argv[])
@@ -237,6 +246,7 @@ int main(int argc, char *argv[])
 		{"layout", 1, 0, 'l'},
 		{"image", 1, 0, 'i'},
 		{"help", 0, 0, 'h'},
+		{"version", 0, 0, 'R'},
 		{0, 0, 0, 0}
 	};
 
@@ -254,7 +264,7 @@ int main(int argc, char *argv[])
 	}
 
 	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, "rwvVEfc:s:e:m:l:i:h",
+	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:h",
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'r':
@@ -307,6 +317,10 @@ int main(int argc, char *argv[])
 			tempstr = strdup(optarg);
 			find_romentry(tempstr);
 			break;
+		case 'R':
+			print_version();
+			exit(0);
+			break;
 		case 'h':
 		default:
 			usage(argv[0]);
@@ -351,7 +365,7 @@ int main(int argc, char *argv[])
 	/* We look at the lbtable first to see if we need a
 	 * mainboard specific flash enable sequence.
 	 */
-	linuxbios_init();
+	coreboot_init();
 
 	/* try to enable it. Failure IS an option, since not all motherboards
 	 * really need this to be done, etc., etc.
@@ -366,15 +380,22 @@ int main(int argc, char *argv[])
 
 	if ((flash = probe_flash(flashchips)) == NULL) {
 		printf("No EEPROM/flash device found.\n");
+		// FIXME: flash writes stay enabled!
 		exit(1);
 	}
 
-	printf("Flash part is %s (%d KB)\n", flash->name, flash->total_size);
+	printf("Flash part is %s (%d KB).\n", flash->name, flash->total_size);
+
+	if (!(read_it | write_it | verify_it | erase_it)) {
+		printf("No operations were specified.\n");
+		// FIXME: flash writes stay enabled!
+		exit(1);
+	}
 
 	if (!filename && !erase_it) {
-		// FIXME: Do we really want this feature implicitly?
-		printf("OK, only ENABLING flash write, but NOT FLASHING.\n");
-		return 0;
+		printf("Error: No filename specified.\n");
+		// FIXME: flash writes stay enabled!
+		exit(1);
 	}
 
 	size = flash->total_size * 1024;

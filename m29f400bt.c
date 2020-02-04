@@ -64,6 +64,9 @@ int probe_m29f400bt(struct flashchip *flash)
 	myusec_delay(10);
 
 	id1 = *(volatile uint8_t *)bios;
+	/* The data sheet says id2 is at (bios + 0x01) and id2 listed in
+	 * flash.h does not match. It should be possible to use JEDEC probe.
+	 */
 	id2 = *(volatile uint8_t *)(bios + 0x02);
 
 	*(volatile uint8_t *)(bios + 0xAAA) = 0xAA;
@@ -124,7 +127,7 @@ int write_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	volatile uint8_t *bios = flash->virtual_memory;
 
 	//erase_m29f400bt (flash);
-	printf("Programming Page:\n ");
+	printf("Programming page:\n ");
 	/*********************************
 	*Pages for M29F400BT:
 	* 16	0x7c000		0x7ffff		TOP
@@ -171,11 +174,11 @@ int write_m29f400bt(struct flashchip *flash, uint8_t *buf)
 	return 0;
 }
 
-int write_linuxbios_m29f400bt(struct flashchip *flash, uint8_t *buf)
+int write_coreboot_m29f400bt(struct flashchip *flash, uint8_t *buf)
 {
 	volatile uint8_t *bios = flash->virtual_memory;
 
-	printf("Programming Page:\n ");
+	printf("Programming page:\n ");
 	/*********************************
 	*Pages for M29F400BT:
 	* 16	0x7c000		0x7ffff		TOP

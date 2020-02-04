@@ -31,9 +31,13 @@
 #include <stdio.h>
 
 struct flashchip {
-	char *name;
-	int manufacture_id;
-	int model_id;
+	const char *name;
+	/* With 32bit manufacture_id and model_id we can cover IDs up to
+	 * (including) the 4th bank of JEDEC JEP106W Standard Manufacturer's
+	 * Identification code.
+	 */
+	uint32_t manufacture_id;
+	uint32_t model_id;
 
 	int total_size;
 	int page_size;
@@ -43,38 +47,137 @@ struct flashchip {
 	int (*write) (struct flashchip *flash, uint8_t *buf);
 	int (*read) (struct flashchip *flash, uint8_t *buf);
 
-	/* some flash devices have an additional
-	 * register space
-	 */
+	/* Some flash devices have an additional register space. */
 	volatile uint8_t *virtual_memory;
 	volatile uint8_t *virtual_registers;
 };
 
 extern struct flashchip flashchips[];
 
-/* Please keep this list sorted alphabetically by manufacturer. The first
+/*
+ * Please keep this list sorted alphabetically by manufacturer. The first
  * entry of each section should be the manufacturer ID, followed by the
  * list of devices from that manufacturer (sorted by device IDs).
+ *
+ * All LPC/FWH parts (parallel flash) have 8-bit device IDs if there is no
+ * continuation code.
+ * All SPI parts have 16-bit device IDs.
  */
+
+#define GENERIC_DEVICE_ID	0xffff	/* Only match the vendor ID */
+
+#define ALLIANCE_ID		0x52	/* Alliance Semiconductor */
 
 #define AMD_ID			0x01	/* AMD */
 #define AM_29F040B		0xA4
+#define AM_29LV040B		0x4F
 #define AM_29F016D		0xAD
 
-#define ASD_ID			0x25	/* ASD */
+#define AMIC_ID			0x7F37	/* AMIC */
+
+#define ASD_ID			0x25	/* ASD, not listed in JEP106W */
 #define ASD_AE49F2008		0x52
 
 #define ATMEL_ID		0x1F	/* Atmel */
 #define AT_29C040A		0xA4
 #define AT_29C020		0xDA
+#define AT_49F002N		0x07	/* for AT49F002(N)  */
+#define AT_49F002NT		0x08	/* for AT49F002(N)T */
 
+#define CATALYST_ID		0x31	/* Catalyst */
+
+#define EMST_ID			0x8C	/* EMST / EFST Elite Flash Storage*/
+#define EMST_F49B002UA		0x00
+
+/*
+ * EN25 chips are SPI, first byte of device ID is memory type,
+ * second byte of device ID is log(bitsize)-9.
+ * Vendor and device ID of EN29 series are both prefixed with 0x7F, which
+ * is the continuation code for IDs in bank 2.
+ * Vendor ID of EN25 series is NOT prefixed with 0x7F, this results in
+ * a collision with Mitsubishi. Mitsubishi once manufactured flash chips.
+ * Let's hope they are not manufacturing SPI flash chips as well.
+ */
+#define EON_ID			0x7F1C	/* EON Silicon Devices */
+#define EON_ID_NOPREFIX		0x1C	/* EON, missing 0x7F prefix */
+#define EN_25B05		0x2010	/* 2^19 kbit or 2^16 kByte */
+#define EN_25B10		0x2011
+#define EN_25B20		0x2012
+#define EN_25B40		0x2013
+#define EN_25B80		0x2014
+#define EN_25B16		0x2015
+#define EN_25B32		0x2016
+#define EN_29F512		0x7F21
+#define EN_29F010		0x7F20
+#define EN_29F040A		0x7F04
+#define EN_29LV010		0x7F6E
+#define EN_29LV040A		0x7F4F	/* EN_29LV040(A) */
+#define EN_29F002T		0x7F92
+#define EN_29F002B		0x7F97
+
+#define FUJITSU_ID		0x04	/* Fujitsu */
+/* MBM29F400TC_STRANGE has a value not mentioned in the data sheet and we
+ * try to read it from a location not mentioned in the data sheet.
+ */
+#define MBM29F400TC_STRANGE	0x23
+#define MBM29F400BC		0x7B
+#define MBM29F400TC		0x77
+
+#define HYUNDAI_ID		0xAD	/* Hyundai */
+
+#define IMT_ID			0x7F1F	/* Integrated Memory Technologies */
+#define IM_29F004B		0xAE
+#define IM_29F004T		0xAF
+
+#define INTEL_ID		0x89	/* Intel */
+
+#define ISSI_ID			0xD5	/* ISSI Integrated Silicon Solutions */
+
+#define MSYSTEMS_ID		0x156F	/* M-Systems, not listed in JEP106W */
+#define MSYSTEMS_MD2200		0xDB
+#define MSYSTEMS_MD2800		0x30	/* hmm -- both 0x30 */
+#define MSYSTEMS_MD2802		0x30	/* hmm -- both 0x30 */
+
+/*
+ * MX25 chips are SPI, first byte of device ID is memory type,
+ * second byte of device ID is log(bitsize)-9.
+ */
 #define MX_ID			0xC2	/* Macronix (MX) */
+#define MX_25L512		0x2010	/* 2^19 kbit or 2^16 kByte */
+#define MX_25L1005		0x2011
+#define MX_25L2005		0x2012
+#define MX_25L4005		0x2013	/* MX25L4005{,A} */
+#define MX_25L8005		0x2014
+#define MX_25L1605		0x2015	/* MX25L1605{,A,D} */
+#define MX_25L3205		0x2016	/* MX25L3205{,A} */
+#define MX_25L6405		0x2017	/* MX25L3205{,D} */
+#define MX_25L1635D		0x2415
+#define MX_25L3235D		0x2416
 #define MX_29F002		0xB0
+
+/* Programmable Micro Corp is listed in JEP106W in bank 2, so it should have
+ * a 0x7F continuation code prefix.
+ */
+#define PMC_ID			0x9D	/* PMC */
+#define PMC_49FL002		0x6D
+#define PMC_49FL004		0x6E
 
 #define SHARP_ID		0xB0	/* Sharp */
 #define SHARP_LHF00L04		0xCF
 
+/*
+ * SST25 chips are SPI, first byte of device ID is memory type, second
+ * byte of device ID is related to log(bitsize) at least for some chips.
+ */
 #define SST_ID			0xBF	/* SST */
+#define SST_25WF512		0x2501
+#define SST_25WF010		0x2502
+#define SST_25WF020		0x2503
+#define SST_25WF040		0x2504
+#define SST_25VF016B		0x2541
+#define SST_25VF032B		0x254A
+#define SST_25VF040B		0x258D
+#define SST_25VF080B		0x258E
 #define SST_29EE020A		0x10
 #define SST_28SF040		0x04
 #define SST_39SF010		0xB5
@@ -94,24 +197,20 @@ extern struct flashchip flashchips[];
 #define SST_49LF016C		0x5C
 #define SST_49LF160C		0x4C
 
-#define PMC_ID			0x9D	/* PMC */
-#define PMC_49FL002		0x6D
-#define PMC_49FL004		0x6E
-
-#define WINBOND_ID		0xDA	/* Winbond */
-#define W_29C011		0xC1
-#define W_29C020C		0x45
-#define W_29C040P		0x46
-#define W_29EE011		0xC1
-#define W_39V040FA		0x34
-#define W_39V040A		0x3D
-#define W_39V040B		0x54
-#define W_39V080A		0xD0
-#define W_49F002U		0x0B
-#define W_49V002A		0xB0
-#define W_49V002FA		0x32
-
-#define ST_ID			0x20	/* ST */
+/*
+ * ST25P chips are SPI, first byte of device ID is memory type, second
+ * byte of device ID is related to log(bitsize) at least for some chips.
+ */
+#define ST_ID			0x20	/* ST / SGS/Thomson */
+#define ST_M25P05A		0x2010
+#define ST_M25P10A		0x2011
+#define ST_M25P20		0x2012
+#define ST_M25P40		0x2013
+#define ST_M25P80		0x2014
+#define ST_M25P16		0x2015
+#define ST_M25P32		0x2016
+#define ST_M25P64		0x2017
+#define ST_M25P128		0x2018
 #define ST_M50FLW040A		0x08
 #define ST_M50FLW040B		0x28
 #define ST_M50FLW080A		0x80
@@ -127,36 +226,53 @@ extern struct flashchip flashchips[];
 #define ST_M29W010B		0x23
 #define ST_M29W040B		0xE3
 
-#define EMST_ID			0x8c	/* EMST / EFST */
-#define EMST_F49B002UA		0x00
-
-#define MSYSTEMS_ID		0x156f	/* M-Systems */
-#define MSYSTEMS_MD2200		0xdb	/* ? */
-#define MSYSTEMS_MD2800		0x30	/* hmm -- both 0x30 */
-#define MSYSTEMS_MD2802		0x30	/* hmm -- both 0x30 */
-
-#define SYNCMOS_ID		0x40	/* SyncMOS */
+#define SYNCMOS_ID		0x40	/* SyncMOS and Mosel Vitelic */
 #define S29C51001T		0x01
 #define S29C51002T		0x02
 #define S29C51004T		0x03
 #define S29C31004T		0x63
 
-/* function prototypes from udelay.h */
+#define TI_ID			0x97	/* Texas Instruments */
 
+/*
+ * W25X chips are SPI, first byte of device ID is memory type, second
+ * byte of device ID is related to log(bitsize).
+ */
+#define WINBOND_ID		0xDA	/* Winbond */
+#define WINBOND_NEX_ID		0xEF	/* Winbond (ex Nexcom) serial flash devices */
+#define W_25X10			0x3011
+#define W_25X20			0x3012
+#define W_25X40			0x3013
+#define W_25X80			0x3014
+#define W_29C011		0xC1
+#define W_29C020C		0x45
+#define W_29C040P		0x46
+#define W_29EE011		0xC1
+#define W_39V040FA		0x34
+#define W_39V040A		0x3D
+#define W_39V040B		0x54
+#define W_39V080A		0xD0
+#define W_49F002U		0x0B
+#define W_49V002A		0xB0
+#define W_49V002FA		0x32
+
+/* udelay.c */
 void myusec_delay(int time);
 void myusec_calibrate_delay();
 
-/* pci handling for board/chipset_enable */
-struct pci_access *pacc;	/* For board and chipset_enable */
+/* PCI handling for board/chipset_enable */
+struct pci_access *pacc;
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
 
-int board_flash_enable(char *vendor, char *part);	/* board_enable.c */
-int chipset_flash_enable(void);	/* chipset_enable.c */
+/* board_enable.c */
+int board_flash_enable(const char *vendor, const char *part);
 
-/* physical memory mapping device */
+/* chipset_enable.c */
+int chipset_flash_enable(void);
 
+/* Physical memory mapping device */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
 #  define MEM_DEV "/dev/xsvc"
 #else
@@ -179,8 +295,18 @@ int find_romentry(char *name);
 int handle_romentries(uint8_t *buffer, uint8_t *content);
 
 /* lbtable.c */
-int linuxbios_init(void);
+int coreboot_init(void);
 extern char *lb_part, *lb_vendor;
+
+/* spi.c */
+int probe_spi(struct flashchip *flash);
+int it87xx_probe_spi_flash(const char *name);
+int generic_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+void generic_spi_write_enable();
+void generic_spi_write_disable();
+int generic_spi_chip_erase_c7(struct flashchip *flash);
+int generic_spi_chip_write(struct flashchip *flash, uint8_t *buf);
+int generic_spi_chip_read(struct flashchip *flash, uint8_t *buf);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -213,7 +339,7 @@ int erase_m29f400bt(struct flashchip *flash);
 int block_erase_m29f400bt(volatile uint8_t *bios,
 				 volatile uint8_t *dst);
 int write_m29f400bt(struct flashchip *flash, uint8_t *buf);
-int write_linuxbios_m29f400bt(struct flashchip *flash, uint8_t *buf);
+int write_coreboot_m29f400bt(struct flashchip *flash, uint8_t *buf);
 void toggle_ready_m29f400bt(volatile uint8_t *dst);
 void data_polling_m29f400bt(volatile uint8_t *dst, uint8_t data);
 void protect_m29f400bt(volatile uint8_t *bios);

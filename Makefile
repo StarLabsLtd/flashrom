@@ -23,10 +23,16 @@ endif
 OBJS = chipset_enable.o board_enable.o udelay.o jedec.o sst28sf040.o \
 	am29f040b.o mx29f002.o sst39sf020.o m29f400bt.o w49f002u.o \
 	82802ab.o msys_doc.o pm49fl004.o sst49lf040.o sst49lfxxxc.o \
-	sst_fwhub.o layout.o lbtable.o flashchips.o flashrom.o \
-	sharplhf00l04.o w29ee011.o
+	sst_fwhub.o layout.o cbtable.o flashchips.o flashrom.o \
+	sharplhf00l04.o w29ee011.o spi.o
 
 all: pciutils dep $(PROGRAM)
+
+# Set the flashrom version string from the highest revision number
+# of the checked out flashrom files.
+SVNDEF := -D'FLASHROM_VERSION="$(shell svnversion -cn . \
+          | sed -e "s/.*://" -e "s/\([0-9]*\).*/\1/")"'
+CFLAGS += $(SVNDEF)
 
 $(PROGRAM): $(OBJS)
 	$(CC) -o $(PROGRAM) $(OBJS) $(LDFLAGS)
@@ -55,7 +61,9 @@ pciutils:
 	@rm -f .test.c .test
 
 install: $(PROGRAM)
-	$(INSTALL) flashrom $(PREFIX)/bin
+	$(INSTALL) flashrom $(PREFIX)/sbin
+	mkdir -p $(PREFIX)/share/man/man8
+	$(INSTALL) $(PROGRAM).8 $(PREFIX)/share/man/man8
 
 .PHONY: all clean distclean dep pciutils
 
