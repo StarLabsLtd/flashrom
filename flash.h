@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2000 Ronald G. Minnich <rminnich@gmail.com>
- * Copyright (C) 2005-2007 coresystems GmbH <stepan@coresystems.de>
+ * Copyright (C) 2005-2009 coresystems GmbH
  * Copyright (C) 2006-2009 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
@@ -80,14 +80,22 @@
 
 typedef unsigned long chipaddr;
 
-extern int programmer;
-#define PROGRAMMER_INTERNAL	0x00
-#define PROGRAMMER_DUMMY	0x01
-#define PROGRAMMER_NIC3COM	0x02
-#define PROGRAMMER_SATASII	0x03
-#define PROGRAMMER_IT87SPI	0x04
-#define PROGRAMMER_FT2232SPI	0x05
-#define PROGRAMMER_SERPROG	0x06
+enum programmer {
+	PROGRAMMER_INTERNAL,
+	PROGRAMMER_DUMMY,
+	PROGRAMMER_NIC3COM,
+	PROGRAMMER_SATASII,
+	PROGRAMMER_IT87SPI,
+#if FT2232_SPI_SUPPORT == 1
+	PROGRAMMER_FT2232SPI,
+#endif
+#if SERPROG_SUPPORT == 1
+	PROGRAMMER_SERPROG,
+#endif
+	PROGRAMMER_INVALID /* This must always be the last entry. */
+};
+
+extern enum programmer programmer;
 
 struct programmer_entry {
 	const char *vendor;
@@ -274,7 +282,7 @@ struct pcidev_status {
 	const char *device_name;
 };
 uint32_t pcidev_validate(struct pci_dev *dev, struct pcidev_status *devs);
-uint32_t pcidev_init(uint16_t vendor_id, struct pcidev_status *devs);
+uint32_t pcidev_init(uint16_t vendor_id, struct pcidev_status *devs, char *pcidev_bdf);
 
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
@@ -301,6 +309,23 @@ extern unsigned long flashbase;
 /* physmap.c */
 void *physmap(const char *descr, unsigned long phys_addr, size_t len);
 void physunmap(void *virt_addr, size_t len);
+int setup_cpu_msr(int cpu);
+void cleanup_cpu_msr(void);
+#if !defined(__DARWIN__) && !defined(__FreeBSD__) && !defined(__DragonFly__)
+typedef struct { uint32_t hi, lo; } msr_t;
+msr_t rdmsr(int addr);
+int wrmsr(int addr, msr_t msr);
+#endif
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+/* FreeBSD already has conflicting definitions for wrmsr/rdmsr. */
+#undef rdmsr
+#undef wrmsr
+#define rdmsr freebsd_rdmsr
+#define wrmsr freebsd_wrmsr
+typedef struct { uint32_t hi, lo; } msr_t;
+msr_t freebsd_rdmsr(int addr);
+int freebsd_wrmsr(int addr, msr_t msr);
+#endif
 
 /* internal.c */
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
@@ -308,6 +333,7 @@ struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
 void get_io_perms(void);
+void release_io_perms(void);
 int internal_init(void);
 int internal_shutdown(void);
 void internal_chip_writeb(uint8_t val, chipaddr addr);
@@ -324,8 +350,10 @@ uint8_t mmio_readb(void *addr);
 uint16_t mmio_readw(void *addr);
 uint32_t mmio_readl(void *addr);
 void internal_delay(int usecs);
+int fallback_shutdown(void);
 void *fallback_map(const char *descr, unsigned long phys_addr, size_t len);
 void fallback_unmap(void *virt_addr, size_t len);
+void fallback_chip_writeb(uint8_t val, chipaddr addr);
 void fallback_chip_writew(uint16_t val, chipaddr addr);
 void fallback_chip_writel(uint32_t val, chipaddr addr);
 void fallback_chip_writen(uint8_t *buf, chipaddr addr, size_t len);
@@ -337,7 +365,6 @@ extern int io_fd;
 #endif
 
 /* dummyflasher.c */
-extern char *dummytype;
 int dummy_init(void);
 int dummy_shutdown(void);
 void *dummy_map(const char *descr, unsigned long phys_addr, size_t len);
@@ -350,7 +377,7 @@ uint8_t dummy_chip_readb(const chipaddr addr);
 uint16_t dummy_chip_readw(const chipaddr addr);
 uint32_t dummy_chip_readl(const chipaddr addr);
 void dummy_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
-int dummy_spi_command(unsigned int writecnt, unsigned int readcnt,
+int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		      const unsigned char *writearr, unsigned char *readarr);
 
 /* nic3com.c */
@@ -368,14 +395,17 @@ uint8_t satasii_chip_readb(const chipaddr addr);
 extern struct pcidev_status satas_sii[];
 
 /* ft2232_spi.c */
+#define FTDI_FT2232H 0x6010
+#define FTDI_FT4232H 0x6011
 int ft2232_spi_init(void);
-int ft2232_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int ft2232_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
-int ft2232_spi_write1(struct flashchip *flash, uint8_t *buf);
 int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf);
 
 /* flashrom.c */
+extern char *programmer_param;
 extern int verbose;
+extern const char *flashrom_version;
 #define printf_debug(x...) { if (verbose) printf(x); }
 void map_flash_registers(struct flashchip *flash);
 int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
@@ -383,7 +413,6 @@ int min(int a, int b);
 int max(int a, int b);
 int check_erased_range(struct flashchip *flash, int start, int len);
 int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message);
-extern char *pcidev_bdf;
 char *strcat_realloc(char *dest, const char *src);
 
 #define OK 0
@@ -393,11 +422,12 @@ char *strcat_realloc(char *dest, const char *src);
 int show_id(uint8_t *bios, int size, int force);
 int read_romlayout(char *name);
 int find_romentry(char *name);
-int handle_romentries(uint8_t *buffer, uint8_t *content);
+int handle_romentries(uint8_t *buffer, struct flashchip *flash);
 
 /* cbtable.c */
 int coreboot_init(void);
 extern char *lb_part, *lb_vendor;
+extern int partvendor_from_cbtable;
 
 /* spi.c */
 enum spi_controller {
@@ -408,17 +438,39 @@ enum spi_controller {
 	SPI_CONTROLLER_SB600,
 	SPI_CONTROLLER_VIA,
 	SPI_CONTROLLER_WBSIO,
+#if FT2232_SPI_SUPPORT == 1
 	SPI_CONTROLLER_FT2232,
+#endif
 	SPI_CONTROLLER_DUMMY,
+	SPI_CONTROLLER_INVALID /* This must always be the last entry. */
 };
+extern const int spi_programmer_count;
+struct spi_command {
+	unsigned int writecnt;
+	unsigned int readcnt;
+	const unsigned char *writearr;
+	unsigned char *readarr;
+};
+struct spi_programmer {
+	int (*command)(unsigned int writecnt, unsigned int readcnt,
+		   const unsigned char *writearr, unsigned char *readarr);
+	int (*multicommand)(struct spi_command *spicommands);
+
+	/* Optimized functions for this programmer */
+	int (*read)(struct flashchip *flash, uint8_t *buf, int start, int len);
+	int (*write_256)(struct flashchip *flash, uint8_t *buf);
+};
+
 extern enum spi_controller spi_controller;
+extern const struct spi_programmer spi_programmer[];
 extern void *spibar;
 int probe_spi_rdid(struct flashchip *flash);
 int probe_spi_rdid4(struct flashchip *flash);
 int probe_spi_rems(struct flashchip *flash);
 int probe_spi_res(struct flashchip *flash);
-int spi_command(unsigned int writecnt, unsigned int readcnt,
+int spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr);
+int spi_send_multicommand(struct spi_command *spicommands);
 int spi_write_enable(void);
 int spi_write_disable(void);
 int spi_chip_erase_60(struct flashchip *flash);
@@ -435,12 +487,15 @@ int spi_chip_write_256(struct flashchip *flash, uint8_t *buf);
 int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 uint8_t spi_read_status_register(void);
 int spi_disable_blockprotect(void);
-void spi_byte_program(int address, uint8_t byte);
-int spi_nbyte_program(int address, uint8_t *bytes, int len);
-int spi_nbyte_read(int address, uint8_t *bytes, int len);
+int spi_byte_program(int addr, uint8_t byte);
+int spi_nbyte_program(int addr, uint8_t *bytes, int len);
+int spi_nbyte_read(int addr, uint8_t *bytes, int len);
 int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize);
 int spi_aai_write(struct flashchip *flash, uint8_t *buf);
 uint32_t spi_get_valid_read_addr(void);
+int default_spi_send_command(unsigned int writecnt, unsigned int readcnt,
+			     const unsigned char *writearr, unsigned char *readarr);
+int default_spi_send_multicommand(struct spi_command *spicommands);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -462,10 +517,11 @@ int write_en29f002a(struct flashchip *flash, uint8_t *buf);
 
 /* ichspi.c */
 int ich_init_opcodes(void);
-int ich_spi_command(unsigned int writecnt, unsigned int readcnt,
+int ich_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		    const unsigned char *writearr, unsigned char *readarr);
 int ich_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int ich_spi_write_256(struct flashchip *flash, uint8_t * buf);
+int ich_spi_send_multicommand(struct spi_command *spicommands);
 
 /* it87spi.c */
 extern uint16_t it8716f_flashport;
@@ -473,18 +529,16 @@ void enter_conf_mode_ite(uint16_t port);
 void exit_conf_mode_ite(uint16_t port);
 int it87spi_init(void);
 int it87xx_probe_spi_flash(const char *name);
-int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
+int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 			const unsigned char *writearr, unsigned char *readarr);
 int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len);
-int it8716f_spi_chip_write_1(struct flashchip *flash, uint8_t *buf);
 int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf);
 
 /* sb600spi.c */
-int sb600_spi_command(unsigned int writecnt, unsigned int readcnt,
+int sb600_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		      const unsigned char *writearr, unsigned char *readarr);
 int sb600_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int sb600_spi_write_1(struct flashchip *flash, uint8_t *buf);
-uint8_t sb600_read_status_register(void);
 extern uint8_t *sb600_spibar;
 
 /* jedec.c */
@@ -579,7 +633,7 @@ int write_49f002(struct flashchip *flash, uint8_t *buf);
 
 /* wbsio_spi.c */
 int wbsio_check_for_spi(const char *name);
-int wbsio_spi_command(unsigned int writecnt, unsigned int readcnt,
+int wbsio_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		      const unsigned char *writearr, unsigned char *readarr);
 int wbsio_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len);
 int wbsio_spi_write_1(struct flashchip *flash, uint8_t *buf);
@@ -590,11 +644,11 @@ int erase_stm50flw0x0x(struct flashchip *flash);
 int write_stm50flw0x0x(struct flashchip *flash, uint8_t *buf);
 
 /* serprog.c */
-extern char* serprog_param;
 int serprog_init(void);
 int serprog_shutdown(void);
 void serprog_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t serprog_chip_readb(const chipaddr addr);
 void serprog_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void serprog_delay(int delay);
+
 #endif				/* !__FLASH_H__ */

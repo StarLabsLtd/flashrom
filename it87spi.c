@@ -1,7 +1,7 @@
 /*
  * This file is part of the flashrom project.
  *
- * Copyright (C) 2007, 2008 Carl-Daniel Hailfinger
+ * Copyright (C) 2007, 2008, 2009 Carl-Daniel Hailfinger
  * Copyright (C) 2008 Ronald Hoogenboom <ronald@zonnet.nl>
  * Copyright (C) 2008 coresystems GmbH
  *
@@ -24,6 +24,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 #include "flash.h"
 #include "spi.h"
 
@@ -56,6 +57,7 @@ void exit_conf_mode_ite(uint16_t port)
 static uint16_t find_ite_spi_flash_port(uint16_t port)
 {
 	uint8_t tmp = 0;
+	char *portpos = NULL;
 	uint16_t id, flashport = 0;
 
 	enter_conf_mode_ite(port);
@@ -77,17 +79,32 @@ static uint16_t find_ite_spi_flash_port(uint16_t port)
 		       0xFFF80000, 0xFFFEFFFF, (tmp & 1 << 3) ? "en" : "dis");
 		printf("LPC write to serial flash %sabled\n",
 		       (tmp & 1 << 4) ? "en" : "dis");
+		/* The LPC->SPI force write enable below only makes sense for
+		 * non-programmer mode.
+		 */
 		/* If any serial flash segment is enabled, enable writing. */
 		if ((tmp & 0xe) && (!(tmp & 1 << 4))) {
 			printf("Enabling LPC write to serial flash\n");
 			tmp |= 1 << 4;
 			sio_write(port, 0x24, tmp);
 		}
-		printf("serial flash pin %i\n", (tmp & 1 << 5) ? 87 : 29);
+		printf("Serial flash pin %i\n", (tmp & 1 << 5) ? 87 : 29);
 		/* LDN 0x7, reg 0x64/0x65 */
 		sio_write(port, 0x07, 0x7);
 		flashport = sio_read(port, 0x64) << 8;
 		flashport |= sio_read(port, 0x65);
+		printf("Serial flash port 0x%04x\n", flashport);
+		if (programmer_param && !strlen(programmer_param)) {
+			free(programmer_param);
+			programmer_param = NULL;
+		}
+		if (programmer_param && (portpos = strstr(programmer_param, "port="))) {
+			portpos += 5;
+			flashport = strtol(portpos, (char **)NULL, 0);
+			printf("Forcing serial flash port 0x%04x\n", flashport);
+			sio_write(port, 0x64, (flashport >> 8));
+			sio_write(port, 0x65, (flashport & 0xff));
+		}
 	}
 	exit_conf_mode_ite(port);
 	return flashport;
@@ -113,8 +130,11 @@ int it87spi_init(void)
 
 	get_io_perms();
 	ret = it87spi_common_init();
-	if (!ret)
+	if (!ret) {
 		buses_supported = CHIP_BUSTYPE_SPI;
+	} else {
+		buses_supported = CHIP_BUSTYPE_NONE;
+	}
 	return ret;
 }
 
@@ -137,7 +157,7 @@ int it87xx_probe_spi_flash(const char *name)
  * commands with the address in inverse wire order. That's why the register
  * ordering in case 4 and 5 may seem strange.
  */
-int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
+int it8716f_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 			const unsigned char *writearr, unsigned char *readarr)
 {
 	uint8_t busy, writeenc;
@@ -149,7 +169,7 @@ int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
 	if (readcnt > 3) {
 		printf("%s called with unsupported readcnt %i.\n",
 		       __FUNCTION__, readcnt);
-		return 1;
+		return SPI_INVALID_LENGTH;
 	}
 	switch (writecnt) {
 	case 1:
@@ -179,7 +199,7 @@ int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
 	default:
 		printf("%s called with unsupported writecnt %i.\n",
 		       __FUNCTION__, writecnt);
-		return 1;
+		return SPI_INVALID_LENGTH;
 	}
 	/*
 	 * Start IO, 33 or 16 MHz, readcnt input bytes, writecnt output bytes.
@@ -202,18 +222,20 @@ int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt,
 }
 
 /* Page size is usually 256 bytes */
-static int it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
+static int it8716f_spi_page_program(struct flashchip *flash, int block, uint8_t *buf)
 {
 	int i;
 	int result;
+	chipaddr bios = flash->virtual_memory;
 
 	result = spi_write_enable();
 	if (result)
 		return result;
+	/* FIXME: The command below seems to be redundant or wrong. */
 	OUTB(0x06, it8716f_flashport + 1);
 	OUTB(((2 + (fast_spi ? 1 : 0)) << 4), it8716f_flashport);
 	for (i = 0; i < 256; i++) {
-		bios[256 * block + i] = buf[256 * block + i];
+		chip_writeb(buf[256 * block + i], bios + 256 * block + i);
 	}
 	OUTB(0, it8716f_flashport);
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -221,35 +243,6 @@ static int it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios)
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		programmer_delay(1000);
-	return 0;
-}
-
-/*
- * Program chip using firmware cycle byte programming. (SLOW!)
- * This is for chips which can only handle one byte writes
- * and for chips where memory mapped programming is impossible due to
- * size constraints in IT87* (over 512 kB)
- */
-int it8716f_spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
-{
-	int total_size = 1024 * flash->total_size;
-	int i;
-	int result;
-
-	fast_spi = 0;
-
-	spi_disable_blockprotect();
-	for (i = 0; i < total_size; i++) {
-		result = spi_write_enable();
-		if (result)
-			return result;
-		spi_byte_program(i, buf[i]);
-		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			programmer_delay(10);
-	}
-	/* resume normal ops... */
-	OUTB(0x20, it8716f_flashport);
-
 	return 0;
 }
 
@@ -281,11 +274,18 @@ int it8716f_spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
 	 * mapped access.
 	 */
 	if ((programmer == PROGRAMMER_IT87SPI) || (total_size > 512 * 1024)) {
-		it8716f_spi_chip_write_1(flash, buf);
+		spi_chip_write_1(flash, buf);
 	} else {
+		spi_disable_blockprotect();
+		/* Erase first */
+		printf("Erasing flash before programming... ");
+		if (flash->erase(flash)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
+		printf("done.\n");
 		for (i = 0; i < total_size / 256; i++) {
-			it8716f_spi_page_program(i, buf,
-				(uint8_t *)flash->virtual_memory);
+			it8716f_spi_page_program(flash, i, buf);
 		}
 	}
 

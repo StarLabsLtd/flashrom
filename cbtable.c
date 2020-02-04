@@ -22,15 +22,13 @@
  */
 
 #include <stdlib.h>
-#include <fcntl.h>
 #include <sys/types.h>
 #include <string.h>
-#include <errno.h>
-#include <sys/mman.h>
 #include "flash.h"
 #include "coreboot_tables.h"
 
 char *lb_part = NULL, *lb_vendor = NULL;
+int partvendor_from_cbtable = 0;
 
 static unsigned long compute_checksum(void *addr, unsigned long length)
 {
@@ -150,6 +148,7 @@ static void find_mainboard(struct lb_record *ptr, unsigned long addr)
 	if (lb_part) {
 		printf("Overwritten by command line, vendor ID: %s, part ID: %s.\n", lb_vendor, lb_part);
 	} else {
+		partvendor_from_cbtable = 1;
 		lb_part = strdup(part);
 		lb_vendor = strdup(vendor);
 	}

@@ -18,15 +18,15 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#if FT2232_SPI_SUPPORT == 1
+
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "flash.h"
 #include "spi.h"
-
-#if FT2232_SPI_SUPPORT == 1
-
 #include <ftdi.h>
 
 /* the 'H' chips can run internally at either 12Mhz or 60Mhz.
@@ -71,15 +71,47 @@ int ft2232_spi_init(void)
 	struct ftdi_context *ftdic = &ftdic_context;
 	unsigned char buf[512];
 	unsigned char port_val = 0;
-
+	char *portpos = NULL;
+	int ft2232_type = FTDI_FT4232H;
+	enum ftdi_interface ft2232_interface = INTERFACE_B;
 
 	if (ftdi_init(ftdic) < 0) {
 		fprintf(stderr, "ftdi_init failed\n");
 		return EXIT_FAILURE;
 	}
 
-	// f = ftdi_usb_open(ftdic, 0x0403, 0x6010); // FT2232
-	f = ftdi_usb_open(ftdic, 0x0403, 0x6011); // FT4232
+	if (programmer_param && !strlen(programmer_param)) {
+		free(programmer_param);
+		programmer_param = NULL;
+	}
+	if (programmer_param) {
+		if (strstr(programmer_param, "2232"))
+			ft2232_type = FTDI_FT2232H;
+		if (strstr(programmer_param, "4232"))
+			ft2232_type = FTDI_FT4232H;
+		portpos = strstr(programmer_param, "port=");
+		if (portpos) {
+			portpos += 5;
+			switch (toupper(*portpos)) {
+			case 'A':
+				ft2232_interface = INTERFACE_A;
+				break;
+			case 'B':
+				ft2232_interface = INTERFACE_B;
+				break;
+			default:
+				fprintf(stderr, "Invalid interface specified, "
+					"using default.\n");
+			}
+		}
+		free(programmer_param);
+	}
+	printf_debug("Using device type %s ",
+		     (ft2232_type == FTDI_FT2232H) ? "2232H" : "4232H");
+	printf_debug("interface %s\n",
+		     (ft2232_interface == INTERFACE_A) ? "A" : "B");
+
+	f = ftdi_usb_open(ftdic, 0x0403, ft2232_type);
 
 	if (f < 0 && f != -5) {
 		fprintf(stderr, "Unable to open ftdi device: %d (%s)\n", f,
@@ -87,8 +119,8 @@ int ft2232_spi_init(void)
 		exit(-1);
 	}
 
-	if (ftdi_set_interface(ftdic, INTERFACE_B) < 0) {
-		fprintf(stderr, "Unable to select FT2232 channel B: %s\n",
+	if (ftdi_set_interface(ftdic, ft2232_interface) < 0) {
+		fprintf(stderr, "Unable to select interface: %s\n",
 				ftdic->error_str);
 	}
 
@@ -158,13 +190,16 @@ int ft2232_spi_init(void)
 	return 0;
 }
 
-int ft2232_spi_command(unsigned int writecnt, unsigned int readcnt,
+int ft2232_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		const unsigned char *writearr, unsigned char *readarr)
 {
 	struct ftdi_context *ftdic = &ftdic_context;
 	static unsigned char *buf = NULL;
 	unsigned char port_val = 0;
 	int i, ret = 0;
+
+	if (writecnt > 65536 || readcnt > 65536)
+		return SPI_INVALID_LENGTH;
 
 	buf = realloc(buf, writecnt + readcnt + 100);
 	if (!buf) {
@@ -211,7 +246,7 @@ int ft2232_spi_command(unsigned int writecnt, unsigned int readcnt,
 
 	}
 
-    deassert_cs:
+deassert_cs:
 	printf_debug("De-assert CS#\n");
 	buf[i++] = SET_BITS_LOW;
 	buf[i++] = (port_val |= CS_BIT);
@@ -233,6 +268,14 @@ int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf)
 	int total_size = 1024 * flash->total_size;
 	int i;
 
+	spi_disable_blockprotect();
+	/* Erase first */
+	printf("Erasing flash before programming... ");
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
+	printf("done.\n");
 	printf_debug("total_size is %d\n", total_size);
 	for (i = 0; i < total_size; i += 256) {
 		int l, r;
@@ -241,44 +284,16 @@ int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf)
 		else
 			l = total_size - i;
 
-		spi_write_enable();
 		if ((r = spi_nbyte_program(i, &buf[i], l))) {
 			fprintf(stderr, "%s: write fail %d\n", __FUNCTION__, r);
-			// spi_write_disable();  chip does this for us
 			return 1;
 		}
 		
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 			/* loop */;
 	}
-	// spi_write_disable();  chip does this for us
 
 	return 0;
 }
 
-#else
-int ft2232_spi_init(void)
-{
-	fprintf(stderr, "FT2232 SPI support was not compiled in\n");
-	exit(1);
-}
-
-int ft2232_spi_command(unsigned int writecnt, unsigned int readcnt,
-		const unsigned char *writearr, unsigned char *readarr)
-{
-	fprintf(stderr, "FT2232 SPI support was not compiled in\n");
-	exit(1);
-}
-
-int ft2232_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len)
-{
-	fprintf(stderr, "FT2232 SPI support was not compiled in\n");
-	exit(1);
-}
-
-int ft2232_spi_write_256(struct flashchip *flash, uint8_t *buf)
-{
-	fprintf(stderr, "FT2232 SPI support was not compiled in\n");
-	exit(1);
-}
 #endif

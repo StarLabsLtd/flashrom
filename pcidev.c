@@ -20,16 +20,12 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 #include "flash.h"
 
 uint32_t io_base_addr;
 struct pci_access *pacc;
 struct pci_filter filter;
-char *pcidev_bdf = NULL;
 struct pci_dev *pcidev_dev = NULL;
 
 uint32_t pcidev_validate(struct pci_dev *dev, struct pcidev_status *devs)
@@ -51,7 +47,7 @@ uint32_t pcidev_validate(struct pci_dev *dev, struct pcidev_status *devs)
 		if (devs[i].status == PCI_NT) {
 			printf("===\nThis PCI device is UNTESTED. Please "
 			       "report the 'flashrom -p xxxx' output \n"
-			       "to flashrom@coreboot.org if it works "
+			       "to flashrom@flashrom.org if it works "
 			       "for you. Thank you for your help!\n===\n");
 		}
 
@@ -61,7 +57,7 @@ uint32_t pcidev_validate(struct pci_dev *dev, struct pcidev_status *devs)
 	return 0;
 }
 
-uint32_t pcidev_init(uint16_t vendor_id, struct pcidev_status *devs)
+uint32_t pcidev_init(uint16_t vendor_id, struct pcidev_status *devs, char *pcidev_bdf)
 {
 	struct pci_dev *dev;
 	char *msg = NULL;
