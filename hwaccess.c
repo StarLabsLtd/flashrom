@@ -37,9 +37,21 @@
 #error "Unknown operating system"
 #endif
 
-#define USE_IOPL	(IS_LINUX || IS_MACOSX || defined(__NetBSD__) || defined(__OpenBSD__))
-#define USE_DEV_IO	(defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__))
-#define USE_IOPERM	(defined(__gnu_hurd__))
+#if IS_LINUX || IS_MACOSX || defined(__NetBSD__) || defined(__OpenBSD__)
+#define USE_IOPL 1
+#else
+#define USE_IOPL 0
+#endif
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__) || defined(__DragonFly__)
+#define USE_DEV_IO 1
+#else
+#define USE_DEV_IO 0
+#endif
+#if defined(__gnu_hurd__)
+#define USE_IOPERM 1
+#else
+#define USE_IOPERM 0
+#endif
 
 #if USE_IOPERM
 #include <sys/io.h>
@@ -147,22 +159,22 @@ void mmio_writel(uint32_t val, void *addr)
 	sync_primitive();
 }
 
-uint8_t mmio_readb(void *addr)
+uint8_t mmio_readb(const void *addr)
 {
-	return *(volatile uint8_t *) addr;
+	return *(volatile const uint8_t *) addr;
 }
 
-uint16_t mmio_readw(void *addr)
+uint16_t mmio_readw(const void *addr)
 {
-	return *(volatile uint16_t *) addr;
+	return *(volatile const uint16_t *) addr;
 }
 
-uint32_t mmio_readl(void *addr)
+uint32_t mmio_readl(const void *addr)
 {
-	return *(volatile uint32_t *) addr;
+	return *(volatile const uint32_t *) addr;
 }
 
-void mmio_readn(void *addr, uint8_t *buf, size_t len)
+void mmio_readn(const void *addr, uint8_t *buf, size_t len)
 {
 	memcpy(buf, addr, len);
 	return;
@@ -183,17 +195,17 @@ void mmio_le_writel(uint32_t val, void *addr)
 	mmio_writel(cpu_to_le32(val), addr);
 }
 
-uint8_t mmio_le_readb(void *addr)
+uint8_t mmio_le_readb(const void *addr)
 {
 	return le_to_cpu8(mmio_readb(addr));
 }
 
-uint16_t mmio_le_readw(void *addr)
+uint16_t mmio_le_readw(const void *addr)
 {
 	return le_to_cpu16(mmio_readw(addr));
 }
 
-uint32_t mmio_le_readl(void *addr)
+uint32_t mmio_le_readl(const void *addr)
 {
 	return le_to_cpu32(mmio_readl(addr));
 }

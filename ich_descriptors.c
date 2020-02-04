@@ -19,14 +19,14 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#if defined(__i386__) || defined(__x86_64__)
-
 #include "ich_descriptors.h"
 
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
-
+#ifdef ICH_DESCRIPTORS_FROM_DUMP_ONLY
 #include <stdio.h>
+#include <string.h>
 #define print(t, ...) printf(__VA_ARGS__)
+#endif
+
 #define DESCRIPTOR_MODE_SIGNATURE 0x0ff0a55a
 /* The upper map is located in the word before the 256B-long OEM section at the
  * end of the 4kB-long flash descriptor.
@@ -34,16 +34,52 @@
 #define UPPER_MAP_OFFSET (4096 - 256 - 4)
 #define getVTBA(flumap)	(((flumap)->FLUMAP1 << 4) & 0x00000ff0)
 
-#else /* ICH_DESCRIPTORS_FROM_DUMP */
-
+#include <sys/types.h>
+#include <string.h>
 #include "flash.h" /* for msg_* */
 #include "programmer.h"
 
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
-
 #ifndef min
-#define min(a, b) (a < b) ? a : b
+#define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
+
+ssize_t ich_number_of_regions(const enum ich_chipset cs, const struct ich_desc_content *const cont)
+{
+	switch (cs) {
+	case CHIPSET_C620_SERIES_LEWISBURG:
+		return 16;
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+		return 10;
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+	case CHIPSET_9_SERIES_WILDCAT_POINT:
+	case CHIPSET_8_SERIES_LYNX_POINT_LP:
+	case CHIPSET_8_SERIES_LYNX_POINT:
+	case CHIPSET_8_SERIES_WELLSBURG:
+		if (cont->NR <= 6)
+			return cont->NR + 1;
+		else
+			return -1;
+	default:
+		if (cont->NR <= 4)
+			return cont->NR + 1;
+		else
+			return -1;
+	}
+}
+
+ssize_t ich_number_of_masters(const enum ich_chipset cs, const struct ich_desc_content *const cont)
+{
+	switch (cs) {
+	case CHIPSET_C620_SERIES_LEWISBURG:
+		if (cont->NM <= MAX_NUM_MASTERS)
+			return cont->NM;
+	default:
+		if (cont->NM < MAX_NUM_MASTERS)
+			return cont->NM + 1;
+	}
+
+	return -1;
+}
 
 void prettyprint_ich_reg_vscc(uint32_t reg_val, int verbosity, bool print_vcl)
 {
@@ -63,21 +99,37 @@ void prettyprint_ich_reg_vscc(uint32_t reg_val, int verbosity, bool print_vcl)
 #define getFISBA(cont)	(((cont)->FLMAP1 >> 12) & 0x00000ff0)
 #define getFMSBA(cont)	(((cont)->FLMAP2 <<  4) & 0x00000ff0)
 
+void prettyprint_ich_chipset(enum ich_chipset cs)
+{
+	static const char *const chipset_names[] = {
+		"Unknown ICH", "ICH8", "ICH9", "ICH10",
+		"5 series Ibex Peak", "6 series Cougar Point", "7 series Panther Point",
+		"8 series Lynx Point", "Baytrail", "8 series Lynx Point LP", "8 series Wellsburg",
+		"9 series Wildcat Point", "9 series Wildcat Point LP", "100 series Sunrise Point",
+		"C620 series Lewisburg",
+	};
+	if (cs < CHIPSET_ICH8 || cs - CHIPSET_ICH8 + 1 >= ARRAY_SIZE(chipset_names))
+		cs = 0;
+	else
+		cs = cs - CHIPSET_ICH8 + 1;
+	msg_pdbg2("Assuming chipset '%s'.\n", chipset_names[cs]);
+}
+
 void prettyprint_ich_descriptors(enum ich_chipset cs, const struct ich_descriptors *desc)
 {
-	prettyprint_ich_descriptor_content(&desc->content);
+	prettyprint_ich_descriptor_content(cs, &desc->content);
 	prettyprint_ich_descriptor_component(cs, desc);
-	prettyprint_ich_descriptor_region(desc);
-	prettyprint_ich_descriptor_master(&desc->master);
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
+	prettyprint_ich_descriptor_region(cs, desc);
+	prettyprint_ich_descriptor_master(cs, desc);
+#ifdef ICH_DESCRIPTORS_FROM_DUMP_ONLY
 	if (cs >= CHIPSET_ICH8) {
 		prettyprint_ich_descriptor_upper_map(&desc->upper);
 		prettyprint_ich_descriptor_straps(cs, desc);
 	}
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
+#endif /* ICH_DESCRIPTORS_FROM_DUMP_ONLY */
 }
 
-void prettyprint_ich_descriptor_content(const struct ich_desc_content *cont)
+void prettyprint_ich_descriptor_content(enum ich_chipset cs, const struct ich_desc_content *cont)
 {
 	msg_pdbg2("=== Content Section ===\n");
 	msg_pdbg2("FLVALSIG 0x%08x\n", cont->FLVALSIG);
@@ -87,16 +139,16 @@ void prettyprint_ich_descriptor_content(const struct ich_desc_content *cont)
 	msg_pdbg2("\n");
 
 	msg_pdbg2("--- Details ---\n");
-	msg_pdbg2("NR          (Number of Regions):                 %5d\n",	cont->NR + 1);
-	msg_pdbg2("FRBA        (Flash Region Base Address):         0x%03x\n",	getFRBA(cont));
-	msg_pdbg2("NC          (Number of Components):              %5d\n",	cont->NC + 1);
-	msg_pdbg2("FCBA        (Flash Component Base Address):      0x%03x\n",	getFCBA(cont));
-	msg_pdbg2("ISL         (ICH/PCH Strap Length):              %5d\n",	cont->ISL);
-	msg_pdbg2("FISBA/FPSBA (Flash ICH/PCH Strap Base Address):  0x%03x\n",	getFISBA(cont));
-	msg_pdbg2("NM          (Number of Masters):                 %5d\n",	cont->NM + 1);
-	msg_pdbg2("FMBA        (Flash Master Base Address):         0x%03x\n",	getFMBA(cont));
-	msg_pdbg2("MSL/PSL     (MCH/PROC Strap Length):             %5d\n",	cont->MSL);
-	msg_pdbg2("FMSBA       (Flash MCH/PROC Strap Base Address): 0x%03x\n",	getFMSBA(cont));
+	msg_pdbg2("NR          (Number of Regions):                 %5zd\n",   ich_number_of_regions(cs, cont));
+	msg_pdbg2("FRBA        (Flash Region Base Address):         0x%03x\n", getFRBA(cont));
+	msg_pdbg2("NC          (Number of Components):              %5d\n",    cont->NC + 1);
+	msg_pdbg2("FCBA        (Flash Component Base Address):      0x%03x\n", getFCBA(cont));
+	msg_pdbg2("ISL         (ICH/PCH Strap Length):              %5d\n",    cont->ISL);
+	msg_pdbg2("FISBA/FPSBA (Flash ICH/PCH Strap Base Address):  0x%03x\n", getFISBA(cont));
+	msg_pdbg2("NM          (Number of Masters):                 %5zd\n",   ich_number_of_masters(cs, cont));
+	msg_pdbg2("FMBA        (Flash Master Base Address):         0x%03x\n", getFMBA(cont));
+	msg_pdbg2("MSL/PSL     (MCH/PROC Strap Length):             %5d\n",    cont->MSL);
+	msg_pdbg2("FMSBA       (Flash MCH/PROC Strap Base Address): 0x%03x\n", getFMSBA(cont));
 	msg_pdbg2("\n");
 }
 
@@ -142,7 +194,10 @@ static const char *pprint_density(enum ich_chipset cs, const struct ich_descript
 	case CHIPSET_8_SERIES_LYNX_POINT:
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
 	case CHIPSET_8_SERIES_WELLSBURG:
-	case CHIPSET_9_SERIES_WILDCAT_POINT: {
+	case CHIPSET_9_SERIES_WILDCAT_POINT:
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG: {
 		uint8_t size_enc;
 		if (idx == 0) {
 			size_enc = desc->component.dens_new.comp1_density;
@@ -161,7 +216,7 @@ static const char *pprint_density(enum ich_chipset cs, const struct ich_descript
 
 static const char *pprint_freq(enum ich_chipset cs, uint8_t value)
 {
-	static const char * const freq_str[8] = {
+	static const char *const freq_str[2][8] = { {
 		"20 MHz",	/* 000 */
 		"33 MHz",	/* 001 */
 		"reserved",	/* 010 */
@@ -170,7 +225,16 @@ static const char *pprint_freq(enum ich_chipset cs, uint8_t value)
 		"reserved",	/* 101 */
 		"reserved",	/* 110 */
 		"reserved"	/* 111 */
-	};
+	}, {
+		"reserved",	/* 000 */
+		"reserved",	/* 001 */
+		"48 MHz",	/* 010 */
+		"reserved",	/* 011 */
+		"30 MHz",	/* 100 */
+		"reserved",	/* 101 */
+		"17 MHz",	/* 110 */
+		"reserved"	/* 111 */
+	} };
 
 	switch (cs) {
 	case CHIPSET_ICH8:
@@ -186,7 +250,11 @@ static const char *pprint_freq(enum ich_chipset cs, uint8_t value)
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
 	case CHIPSET_8_SERIES_WELLSBURG:
 	case CHIPSET_9_SERIES_WILDCAT_POINT:
-		return freq_str[value];
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+		return freq_str[0][value];
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG:
+		return freq_str[1][value];
 	case CHIPSET_ICH_UNKNOWN:
 	default:
 		return "unknown";
@@ -199,6 +267,8 @@ void prettyprint_ich_descriptor_component(enum ich_chipset cs, const struct ich_
 	msg_pdbg2("=== Component Section ===\n");
 	msg_pdbg2("FLCOMP   0x%08x\n", desc->component.FLCOMP);
 	msg_pdbg2("FLILL    0x%08x\n", desc->component.FLILL );
+	if (cs == CHIPSET_100_SERIES_SUNRISE_POINT || cs == CHIPSET_C620_SERIES_LEWISBURG)
+		msg_pdbg2("FLILL1   0x%08x\n", desc->component.FLILL1);
 	msg_pdbg2("\n");
 
 	msg_pdbg2("--- Details ---\n");
@@ -217,9 +287,10 @@ void prettyprint_ich_descriptor_component(enum ich_chipset cs, const struct ich_
 	if (cs > CHIPSET_6_SERIES_COUGAR_POINT)
 		msg_pdbg2("Dual Output Fast Read Support:  %sabled\n",
 			  desc->component.modes.dual_output ? "dis" : "en");
-	if (desc->component.FLILL == 0)
-		msg_pdbg2("No forbidden opcodes.\n");
-	else {
+
+	int has_forbidden_opcode = 0;
+	if (desc->component.FLILL != 0) {
+		has_forbidden_opcode = 1;
 		msg_pdbg2("Invalid instruction 0:          0x%02x\n",
 			  desc->component.invalid_instr0);
 		msg_pdbg2("Invalid instruction 1:          0x%02x\n",
@@ -229,79 +300,149 @@ void prettyprint_ich_descriptor_component(enum ich_chipset cs, const struct ich_
 		msg_pdbg2("Invalid instruction 3:          0x%02x\n",
 			  desc->component.invalid_instr3);
 	}
+	if (cs == CHIPSET_100_SERIES_SUNRISE_POINT || cs == CHIPSET_C620_SERIES_LEWISBURG) {
+		if (desc->component.FLILL1 != 0) {
+			has_forbidden_opcode = 1;
+			msg_pdbg2("Invalid instruction 4:          0x%02x\n",
+				  desc->component.invalid_instr4);
+			msg_pdbg2("Invalid instruction 5:          0x%02x\n",
+				  desc->component.invalid_instr5);
+			msg_pdbg2("Invalid instruction 6:          0x%02x\n",
+				  desc->component.invalid_instr6);
+			msg_pdbg2("Invalid instruction 7:          0x%02x\n",
+				  desc->component.invalid_instr7);
+		}
+	}
+	if (!has_forbidden_opcode)
+		msg_pdbg2("No forbidden opcodes.\n");
+
 	msg_pdbg2("\n");
 }
 
 static void pprint_freg(const struct ich_desc_region *reg, uint32_t i)
 {
-	static const char *const region_names[5] = {
-		"Descr.", "BIOS", "ME", "GbE", "Platf."
+	static const char *const region_names[] = {
+		"Descr.", "BIOS", "ME", "GbE", "Platf.", "unknown", "BIOS2", "unknown",
+		"EC/BMC", "unknown", "IE", "10GbE", "unknown", "unknown", "unknown", "unknown"
 	};
-	if (i >= 5) {
+	if (i >= ARRAY_SIZE(region_names)) {
 		msg_pdbg2("%s: region index too high.\n", __func__);
 		return;
 	}
 	uint32_t base = ICH_FREG_BASE(reg->FLREGs[i]);
 	uint32_t limit = ICH_FREG_LIMIT(reg->FLREGs[i]);
-	msg_pdbg2("Region %d (%-6s) ", i, region_names[i]);
+	msg_pdbg2("Region %d (%-7s) ", i, region_names[i]);
 	if (base > limit)
 		msg_pdbg2("is unused.\n");
 	else
-		msg_pdbg2("0x%08x - 0x%08x\n", base, limit | 0x0fff);
+		msg_pdbg2("0x%08x - 0x%08x\n", base, limit);
 }
 
-void prettyprint_ich_descriptor_region(const struct ich_descriptors *desc)
+void prettyprint_ich_descriptor_region(const enum ich_chipset cs, const struct ich_descriptors *const desc)
 {
-	uint8_t i;
-	uint8_t nr = desc->content.NR + 1;
+	size_t i;
+	const ssize_t nr = ich_number_of_regions(cs, &desc->content);
 	msg_pdbg2("=== Region Section ===\n");
-	if (nr > 5) {
+	if (nr < 0) {
 		msg_pdbg2("%s: number of regions too high (%d).\n", __func__,
-			 nr);
+			  desc->content.NR + 1);
 		return;
 	}
-	for (i = 0; i < 5; i++)
-		msg_pdbg2("FLREG%d   0x%08x\n", i, desc->region.FLREGs[i]);
+	for (i = 0; i < nr; i++)
+		msg_pdbg2("FLREG%zu   0x%08x\n", i, desc->region.FLREGs[i]);
 	msg_pdbg2("\n");
 
 	msg_pdbg2("--- Details ---\n");
-	for (i = 0; i < 5; i++)
+	for (i = 0; i < nr; i++)
 		pprint_freg(&desc->region, i);
 	msg_pdbg2("\n");
 }
 
-void prettyprint_ich_descriptor_master(const struct ich_desc_master *mstr)
+void prettyprint_ich_descriptor_master(const enum ich_chipset cs, const struct ich_descriptors *const desc)
 {
+	size_t i;
+	const ssize_t nm = ich_number_of_masters(cs, &desc->content);
 	msg_pdbg2("=== Master Section ===\n");
-	msg_pdbg2("FLMSTR1  0x%08x\n", mstr->FLMSTR1);
-	msg_pdbg2("FLMSTR2  0x%08x\n", mstr->FLMSTR2);
-	msg_pdbg2("FLMSTR3  0x%08x\n", mstr->FLMSTR3);
+	if (nm < 0) {
+		msg_pdbg2("%s: number of masters too high (%d).\n", __func__,
+			  desc->content.NM + 1);
+		return;
+	}
+	for (i = 0; i < nm; i++)
+		msg_pdbg2("FLMSTR%zu  0x%08x\n", i + 1, desc->master.FLMSTRs[i]);
 	msg_pdbg2("\n");
 
 	msg_pdbg2("--- Details ---\n");
-	msg_pdbg2("      Descr. BIOS ME GbE Platf.\n");
-	msg_pdbg2("BIOS    %c%c    %c%c  %c%c  %c%c   %c%c\n",
-	(mstr->BIOS_descr_r)	?'r':' ', (mstr->BIOS_descr_w)	?'w':' ',
-	(mstr->BIOS_BIOS_r)	?'r':' ', (mstr->BIOS_BIOS_w)	?'w':' ',
-	(mstr->BIOS_ME_r)	?'r':' ', (mstr->BIOS_ME_w)	?'w':' ',
-	(mstr->BIOS_GbE_r)	?'r':' ', (mstr->BIOS_GbE_w)	?'w':' ',
-	(mstr->BIOS_plat_r)	?'r':' ', (mstr->BIOS_plat_w)	?'w':' ');
-	msg_pdbg2("ME      %c%c    %c%c  %c%c  %c%c   %c%c\n",
-	(mstr->ME_descr_r)	?'r':' ', (mstr->ME_descr_w)	?'w':' ',
-	(mstr->ME_BIOS_r)	?'r':' ', (mstr->ME_BIOS_w)	?'w':' ',
-	(mstr->ME_ME_r)		?'r':' ', (mstr->ME_ME_w)	?'w':' ',
-	(mstr->ME_GbE_r)	?'r':' ', (mstr->ME_GbE_w)	?'w':' ',
-	(mstr->ME_plat_r)	?'r':' ', (mstr->ME_plat_w)	?'w':' ');
-	msg_pdbg2("GbE     %c%c    %c%c  %c%c  %c%c   %c%c\n",
-	(mstr->GbE_descr_r)	?'r':' ', (mstr->GbE_descr_w)	?'w':' ',
-	(mstr->GbE_BIOS_r)	?'r':' ', (mstr->GbE_BIOS_w)	?'w':' ',
-	(mstr->GbE_ME_r)	?'r':' ', (mstr->GbE_ME_w)	?'w':' ',
-	(mstr->GbE_GbE_r)	?'r':' ', (mstr->GbE_GbE_w)	?'w':' ',
-	(mstr->GbE_plat_r)	?'r':' ', (mstr->GbE_plat_w)	?'w':' ');
+	if (cs == CHIPSET_100_SERIES_SUNRISE_POINT) {
+		const char *const master_names[] = {
+			"BIOS", "ME", "GbE", "unknown", "EC",
+		};
+		if (nm >= ARRAY_SIZE(master_names)) {
+			msg_pdbg2("%s: number of masters too high (%d).\n", __func__,
+				  desc->content.NM + 1);
+			return;
+		}
+
+		msg_pdbg2("      FD  BIOS  ME  GbE  Pltf Reg5 Reg6 Reg7  EC  Reg9\n");
+		for (i = 0; i < nm; i++) {
+			size_t j;
+			msg_pdbg2("%-4s", master_names[i]);
+			for (j = 0; j < 10; j++)
+				msg_pdbg2("  %c%c ",
+					  desc->master.mstr[i].read & (1 << j) ? 'r' : ' ',
+					  desc->master.mstr[i].write & (1 << j) ? 'w' : ' ');
+			msg_pdbg2("\n");
+		}
+	} else if (cs == CHIPSET_C620_SERIES_LEWISBURG) {
+		const char *const master_names[] = {
+			"BIOS", "ME", "GbE", "DE", "BMC", "IE",
+		};
+		/* NM starts at 1 instead of 0 for LBG */
+		if (nm > ARRAY_SIZE(master_names)) {
+			msg_pdbg2("%s: number of masters too high (%d).\n", __func__,
+				  desc->content.NM);
+			return;
+		}
+
+		msg_pdbg2("%s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s %s\n",
+				"    ", /* width of master name (4 chars minimum) */
+				" FD  ", " BIOS", " ME  ", " GbE ", " Pltf",
+				" DE  ", "BIOS2", " Reg7", " BMC ", " DE2 ",
+				" IE  ", "10GbE", "OpROM", "Reg13", "Reg14",
+				"Reg15");
+		for (i = 0; i < nm; i++) {
+			size_t j;
+			msg_pdbg2("%-4s", master_names[i]);
+			for (j = 0; j < 16; j++)
+				msg_pdbg2("  %c%c  ",
+					  desc->master.mstr[i].read & (1 << j) ? 'r' : ' ',
+					  desc->master.mstr[i].write & (1 << j) ? 'w' : ' ');
+			msg_pdbg2("\n");
+		}
+	} else {
+		const struct ich_desc_master *const mstr = &desc->master;
+		msg_pdbg2("      Descr. BIOS ME GbE Platf.\n");
+		msg_pdbg2("BIOS    %c%c    %c%c  %c%c  %c%c   %c%c\n",
+		(mstr->BIOS_descr_r)	?'r':' ', (mstr->BIOS_descr_w)	?'w':' ',
+		(mstr->BIOS_BIOS_r)	?'r':' ', (mstr->BIOS_BIOS_w)	?'w':' ',
+		(mstr->BIOS_ME_r)	?'r':' ', (mstr->BIOS_ME_w)	?'w':' ',
+		(mstr->BIOS_GbE_r)	?'r':' ', (mstr->BIOS_GbE_w)	?'w':' ',
+		(mstr->BIOS_plat_r)	?'r':' ', (mstr->BIOS_plat_w)	?'w':' ');
+		msg_pdbg2("ME      %c%c    %c%c  %c%c  %c%c   %c%c\n",
+		(mstr->ME_descr_r)	?'r':' ', (mstr->ME_descr_w)	?'w':' ',
+		(mstr->ME_BIOS_r)	?'r':' ', (mstr->ME_BIOS_w)	?'w':' ',
+		(mstr->ME_ME_r)		?'r':' ', (mstr->ME_ME_w)	?'w':' ',
+		(mstr->ME_GbE_r)	?'r':' ', (mstr->ME_GbE_w)	?'w':' ',
+		(mstr->ME_plat_r)	?'r':' ', (mstr->ME_plat_w)	?'w':' ');
+		msg_pdbg2("GbE     %c%c    %c%c  %c%c  %c%c   %c%c\n",
+		(mstr->GbE_descr_r)	?'r':' ', (mstr->GbE_descr_w)	?'w':' ',
+		(mstr->GbE_BIOS_r)	?'r':' ', (mstr->GbE_BIOS_w)	?'w':' ',
+		(mstr->GbE_ME_r)	?'r':' ', (mstr->GbE_ME_w)	?'w':' ',
+		(mstr->GbE_GbE_r)	?'r':' ', (mstr->GbE_GbE_w)	?'w':' ',
+		(mstr->GbE_plat_r)	?'r':' ', (mstr->GbE_plat_w)	?'w':' ');
+	}
 	msg_pdbg2("\n");
 }
-
-#ifdef ICH_DESCRIPTORS_FROM_DUMP
 
 void prettyprint_ich_descriptor_straps_ich8(const struct ich_descriptors *desc)
 {
@@ -616,26 +757,24 @@ void prettyprint_ich_descriptor_straps(enum ich_chipset cs, const struct ich_des
 	unsigned int i, max_count;
 	msg_pdbg2("=== Softstraps ===\n");
 
-	if (sizeof(desc->north.STRPs) / 4 + 1 < desc->content.MSL) {
-		max_count = sizeof(desc->north.STRPs) / 4 + 1;
+	max_count = min(ARRAY_SIZE(desc->north.STRPs), desc->content.MSL);
+	if (max_count < desc->content.MSL) {
 		msg_pdbg2("MSL (%u) is greater than the current maximum of %u entries.\n",
-			  desc->content.MSL, max_count + 1);
+			  desc->content.MSL, max_count);
 		msg_pdbg2("Only the first %u entries will be printed.\n", max_count);
-	} else
-		max_count = desc->content.MSL;
+	}
 
 	msg_pdbg2("--- North/MCH/PROC (%d entries) ---\n", max_count);
 	for (i = 0; i < max_count; i++)
 		msg_pdbg2("STRP%-2d = 0x%08x\n", i, desc->north.STRPs[i]);
 	msg_pdbg2("\n");
 
-	if (sizeof(desc->south.STRPs) / 4 < desc->content.ISL) {
-		max_count = sizeof(desc->south.STRPs) / 4;
+	max_count = min(ARRAY_SIZE(desc->south.STRPs), desc->content.ISL);
+	if (max_count < desc->content.ISL) {
 		msg_pdbg2("ISL (%u) is greater than the current maximum of %u entries.\n",
 			  desc->content.ISL, max_count);
 		msg_pdbg2("Only the first %u entries will be printed.\n", max_count);
-	} else
-		max_count = desc->content.ISL;
+	}
 
 	msg_pdbg2("--- South/ICH/PCH (%d entries) ---\n", max_count);
 	for (i = 0; i < max_count; i++)
@@ -707,10 +846,77 @@ void prettyprint_ich_descriptor_upper_map(const struct ich_desc_upper_map *umap)
 	msg_pdbg2("\n");
 }
 
-/* len is the length of dump in bytes */
-int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struct ich_descriptors *desc)
+/*
+ * Guesses a minimum chipset version based on the maximum number of
+ * soft straps per generation.
+ */
+static enum ich_chipset guess_ich_chipset_from_content(const struct ich_desc_content *const content)
 {
-	unsigned int i, max_count;
+	if (content->ICCRIBA == 0x00) {
+		if (content->MSL == 0 && content->ISL <= 2)
+			return CHIPSET_ICH8;
+		else if (content->ISL <= 2)
+			return CHIPSET_ICH9;
+		else if (content->ISL <= 10)
+			return CHIPSET_ICH10;
+		else if (content->ISL <= 16)
+			return CHIPSET_5_SERIES_IBEX_PEAK;
+		msg_pwarn("Peculiar firmware descriptor, assuming Ibex Peak compatibility.\n");
+		return CHIPSET_5_SERIES_IBEX_PEAK;
+	} else if (content->ICCRIBA < 0x31 && content->FMSBA < 0x30) {
+		if (content->MSL == 0 && content->ISL <= 17)
+			return CHIPSET_BAYTRAIL;
+		else if (content->MSL <= 1 && content->ISL <= 18)
+			return CHIPSET_6_SERIES_COUGAR_POINT;
+		else if (content->MSL <= 1 && content->ISL <= 21)
+			return CHIPSET_8_SERIES_LYNX_POINT;
+		msg_pwarn("Peculiar firmware descriptor, assuming Wildcat Point compatibility.\n");
+		return CHIPSET_9_SERIES_WILDCAT_POINT;
+	} else if (content->NM == 6) {
+		return CHIPSET_C620_SERIES_LEWISBURG;
+	} else {
+		return CHIPSET_100_SERIES_SUNRISE_POINT;
+	}
+}
+
+/*
+ * As an additional measure, we check the read frequency like `ifdtool`.
+ * The frequency value 6 (17MHz) was reserved before Skylake and is the
+ * only valid value since. Skylake is currently the most important dis-
+ * tinction because of the dropped number of regions field (NR).
+ */
+static enum ich_chipset guess_ich_chipset(const struct ich_desc_content *const content,
+					  const struct ich_desc_component *const component)
+{
+	const enum ich_chipset guess = guess_ich_chipset_from_content(content);
+
+	if (component->modes.freq_read == 6) {
+		if ((guess != CHIPSET_100_SERIES_SUNRISE_POINT) && (guess != CHIPSET_C620_SERIES_LEWISBURG)) {
+			msg_pwarn("\nThe firmware descriptor has the read frequency set to 17MHz. However,\n"
+				  "it doesn't look like a Skylake/Sunrise Point compatible descriptor.\n"
+				  "Please report this message, the output of `ich_descriptors_tool` for\n"
+				  "your descriptor and the output of `lspci -nn` to flashrom@flashrom.org\n\n");
+			return CHIPSET_100_SERIES_SUNRISE_POINT;
+		}
+		return guess;
+	} else {
+		if (guess == CHIPSET_100_SERIES_SUNRISE_POINT || guess == CHIPSET_C620_SERIES_LEWISBURG) {
+			msg_pwarn("\nThe firmware descriptor looks like a Skylake/Sunrise Point descriptor.\n"
+				  "However, the read frequency isn't set to 17MHz (the only valid value).\n"
+				  "Please report this message, the output of `ich_descriptors_tool` for\n"
+				  "your descriptor and the output of `lspci -nn` to flashrom@flashrom.org\n\n");
+			return CHIPSET_9_SERIES_WILDCAT_POINT;
+		}
+	}
+
+	return guess;
+}
+
+/* len is the length of dump in bytes */
+int read_ich_descriptors_from_dump(const uint32_t *const dump, const size_t len,
+				   enum ich_chipset *const cs, struct ich_descriptors *const desc)
+{
+	size_t i, max_count;
 	uint8_t pch_bug_offset = 0;
 
 	if (dump == NULL || desc == NULL)
@@ -724,7 +930,7 @@ int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struc
 	}
 
 	/* map */
-	if (len < (4 + pch_bug_offset) * 4 - 1)
+	if (len < (4 + pch_bug_offset) * 4)
 		return ICH_RET_OOB;
 	desc->content.FLVALSIG	= dump[0 + pch_bug_offset];
 	desc->content.FLMAP0	= dump[1 + pch_bug_offset];
@@ -732,27 +938,30 @@ int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struc
 	desc->content.FLMAP2	= dump[3 + pch_bug_offset];
 
 	/* component */
-	if (len < (getFCBA(&desc->content) + 3 * 4 - 1))
+	if (len < getFCBA(&desc->content) + 3 * 4)
 		return ICH_RET_OOB;
 	desc->component.FLCOMP	= dump[(getFCBA(&desc->content) >> 2) + 0];
 	desc->component.FLILL	= dump[(getFCBA(&desc->content) >> 2) + 1];
 	desc->component.FLPB	= dump[(getFCBA(&desc->content) >> 2) + 2];
 
+	if (*cs == CHIPSET_ICH_UNKNOWN) {
+		*cs = guess_ich_chipset(&desc->content, &desc->component);
+		prettyprint_ich_chipset(*cs);
+	}
+
 	/* region */
-	if (len < (getFRBA(&desc->content) + 5 * 4 - 1))
+	const ssize_t nr = ich_number_of_regions(*cs, &desc->content);
+	if (nr < 0 || len < getFRBA(&desc->content) + nr * 4)
 		return ICH_RET_OOB;
-	desc->region.FLREGs[0] = dump[(getFRBA(&desc->content) >> 2) + 0];
-	desc->region.FLREGs[1] = dump[(getFRBA(&desc->content) >> 2) + 1];
-	desc->region.FLREGs[2] = dump[(getFRBA(&desc->content) >> 2) + 2];
-	desc->region.FLREGs[3] = dump[(getFRBA(&desc->content) >> 2) + 3];
-	desc->region.FLREGs[4] = dump[(getFRBA(&desc->content) >> 2) + 4];
+	for (i = 0; i < nr; i++)
+		desc->region.FLREGs[i] = dump[(getFRBA(&desc->content) >> 2) + i];
 
 	/* master */
-	if (len < (getFMBA(&desc->content) + 3 * 4 - 1))
+	const ssize_t nm = ich_number_of_masters(*cs, &desc->content);
+	if (nm < 0 || len < getFMBA(&desc->content) + nm * 4)
 		return ICH_RET_OOB;
-	desc->master.FLMSTR1 = dump[(getFMBA(&desc->content) >> 2) + 0];
-	desc->master.FLMSTR2 = dump[(getFMBA(&desc->content) >> 2) + 1];
-	desc->master.FLMSTR3 = dump[(getFMBA(&desc->content) >> 2) + 2];
+	for (i = 0; i < nm; i++)
+		desc->master.FLMSTRs[i] = dump[(getFMBA(&desc->content) >> 2) + i];
 
 	/* upper map */
 	desc->upper.FLUMAP1 = dump[(UPPER_MAP_OFFSET >> 2) + 0];
@@ -763,7 +972,7 @@ int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struc
 	 * the maximum of 255 gives us 127.5 SPI components(!?) 8 bytes each. A
 	 * check ensures that the maximum offset actually accessed is available.
 	 */
-	if (len < (getVTBA(&desc->upper) + (desc->upper.VTL / 2 * 8) - 1))
+	if (len < getVTBA(&desc->upper) + (desc->upper.VTL / 2 * 8))
 		return ICH_RET_OOB;
 
 	for (i = 0; i < desc->upper.VTL/2; i++) {
@@ -792,7 +1001,7 @@ int read_ich_descriptors_from_dump(const uint32_t *dump, unsigned int len, struc
 	return ICH_RET_OK;
 }
 
-#else /* ICH_DESCRIPTORS_FROM_DUMP */
+#ifndef ICH_DESCRIPTORS_FROM_DUMP_ONLY
 
 /** Returns the integer representation of the component density with index
 \em idx in bytes or -1 if the correct size can not be determined. */
@@ -828,6 +1037,9 @@ int getFCBA_component_density(enum ich_chipset cs, const struct ich_descriptors 
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
 	case CHIPSET_8_SERIES_WELLSBURG:
 	case CHIPSET_9_SERIES_WILDCAT_POINT:
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG:
 		if (idx == 0) {
 			size_enc = desc->component.dens_new.comp1_density;
 		} else {
@@ -851,19 +1063,25 @@ int getFCBA_component_density(enum ich_chipset cs, const struct ich_descriptors 
 	return (1 << (19 + size_enc));
 }
 
-static uint32_t read_descriptor_reg(uint8_t section, uint16_t offset, void *spibar)
+/* Only used by ichspi.c */
+#if CONFIG_INTERNAL == 1 && (defined(__i386__) || defined(__x86_64__))
+static uint32_t read_descriptor_reg(enum ich_chipset cs, uint8_t section, uint16_t offset, void *spibar)
 {
 	uint32_t control = 0;
 	control |= (section << FDOC_FDSS_OFF) & FDOC_FDSS;
 	control |= (offset << FDOC_FDSI_OFF) & FDOC_FDSI;
-	mmio_le_writel(control, spibar + ICH9_REG_FDOC);
-	return mmio_le_readl(spibar + ICH9_REG_FDOD);
+	if (cs == CHIPSET_100_SERIES_SUNRISE_POINT || cs == CHIPSET_C620_SERIES_LEWISBURG) {
+		mmio_le_writel(control, spibar + PCH100_REG_FDOC);
+		return mmio_le_readl(spibar + PCH100_REG_FDOD);
+	} else {
+		mmio_le_writel(control, spibar + ICH9_REG_FDOC);
+		return mmio_le_readl(spibar + ICH9_REG_FDOD);
+	}
 }
 
-int read_ich_descriptors_via_fdo(void *spibar, struct ich_descriptors *desc)
+int read_ich_descriptors_via_fdo(enum ich_chipset cs, void *spibar, struct ich_descriptors *desc)
 {
-	uint8_t i;
-	uint8_t nr;
+	size_t i;
 	struct ich_desc_region *r = &desc->region;
 
 	/* Test if bit-fields are working as expected.
@@ -871,49 +1089,54 @@ int read_ich_descriptors_via_fdo(void *spibar, struct ich_descriptors *desc)
 	 */
 	for (i = 0; i < 4; i++)
 		desc->region.FLREGs[i] = 0x5A << (i * 8);
-	if (r->reg0_base != 0x005A || r->reg0_limit != 0x0000 ||
-	    r->reg1_base != 0x1A00 || r->reg1_limit != 0x0000 ||
-	    r->reg2_base != 0x0000 || r->reg2_limit != 0x005A ||
-	    r->reg3_base != 0x0000 || r->reg3_limit != 0x1A00) {
+	if (r->old_reg[0].base != 0x005A || r->old_reg[0].limit != 0x0000 ||
+	    r->old_reg[1].base != 0x1A00 || r->old_reg[1].limit != 0x0000 ||
+	    r->old_reg[2].base != 0x0000 || r->old_reg[2].limit != 0x005A ||
+	    r->old_reg[3].base != 0x0000 || r->old_reg[3].limit != 0x1A00) {
 		msg_pdbg("The combination of compiler and CPU architecture used"
 			 "does not lay out bit-fields as expected, sorry.\n");
-		msg_pspew("r->reg0_base  = 0x%04X (0x005A)\n", r->reg0_base);
-		msg_pspew("r->reg0_limit = 0x%04X (0x0000)\n", r->reg0_limit);
-		msg_pspew("r->reg1_base  = 0x%04X (0x1A00)\n", r->reg1_base);
-		msg_pspew("r->reg1_limit = 0x%04X (0x0000)\n", r->reg1_limit);
-		msg_pspew("r->reg2_base  = 0x%04X (0x0000)\n", r->reg2_base);
-		msg_pspew("r->reg2_limit = 0x%04X (0x005A)\n", r->reg2_limit);
-		msg_pspew("r->reg3_base  = 0x%04X (0x0000)\n", r->reg3_base);
-		msg_pspew("r->reg3_limit = 0x%04X (0x1A00)\n", r->reg3_limit);
+		msg_pspew("r->old_reg[0].base  = 0x%04X (0x005A)\n", r->old_reg[0].base);
+		msg_pspew("r->old_reg[0].limit = 0x%04X (0x0000)\n", r->old_reg[0].limit);
+		msg_pspew("r->old_reg[1].base  = 0x%04X (0x1A00)\n", r->old_reg[1].base);
+		msg_pspew("r->old_reg[1].limit = 0x%04X (0x0000)\n", r->old_reg[1].limit);
+		msg_pspew("r->old_reg[2].base  = 0x%04X (0x0000)\n", r->old_reg[2].base);
+		msg_pspew("r->old_reg[2].limit = 0x%04X (0x005A)\n", r->old_reg[2].limit);
+		msg_pspew("r->old_reg[3].base  = 0x%04X (0x0000)\n", r->old_reg[3].base);
+		msg_pspew("r->old_reg[3].limit = 0x%04X (0x1A00)\n", r->old_reg[3].limit);
 		return ICH_RET_ERR;
 	}
 
 	msg_pdbg2("Reading flash descriptors mapped by the chipset via FDOC/FDOD...");
 	/* content section */
-	desc->content.FLVALSIG	= read_descriptor_reg(0, 0, spibar);
-	desc->content.FLMAP0	= read_descriptor_reg(0, 1, spibar);
-	desc->content.FLMAP1	= read_descriptor_reg(0, 2, spibar);
-	desc->content.FLMAP2	= read_descriptor_reg(0, 3, spibar);
+	desc->content.FLVALSIG	= read_descriptor_reg(cs, 0, 0, spibar);
+	desc->content.FLMAP0	= read_descriptor_reg(cs, 0, 1, spibar);
+	desc->content.FLMAP1	= read_descriptor_reg(cs, 0, 2, spibar);
+	desc->content.FLMAP2	= read_descriptor_reg(cs, 0, 3, spibar);
 
 	/* component section */
-	desc->component.FLCOMP	= read_descriptor_reg(1, 0, spibar);
-	desc->component.FLILL	= read_descriptor_reg(1, 1, spibar);
-	desc->component.FLPB	= read_descriptor_reg(1, 2, spibar);
+	desc->component.FLCOMP	= read_descriptor_reg(cs, 1, 0, spibar);
+	desc->component.FLILL	= read_descriptor_reg(cs, 1, 1, spibar);
+	desc->component.FLPB	= read_descriptor_reg(cs, 1, 2, spibar);
 
 	/* region section */
-	nr = desc->content.NR + 1;
-	if (nr > 5) {
+	const ssize_t nr = ich_number_of_regions(cs, &desc->content);
+	if (nr < 0) {
 		msg_pdbg2("%s: number of regions too high (%d) - failed\n",
-			  __func__, nr);
+			  __func__, desc->content.NR + 1);
 		return ICH_RET_ERR;
 	}
-	for (i = 0; i < 5; i++)
-		desc->region.FLREGs[i] = read_descriptor_reg(2, i, spibar);
+	for (i = 0; i < nr; i++)
+		desc->region.FLREGs[i] = read_descriptor_reg(cs, 2, i, spibar);
 
 	/* master section */
-	desc->master.FLMSTR1 = read_descriptor_reg(3, 0, spibar);
-	desc->master.FLMSTR2 = read_descriptor_reg(3, 1, spibar);
-	desc->master.FLMSTR3 = read_descriptor_reg(3, 2, spibar);
+	const ssize_t nm = ich_number_of_masters(cs, &desc->content);
+	if (nm < 0) {
+		msg_pdbg2("%s: number of masters too high (%d) - failed\n",
+			  __func__, desc->content.NM + 1);
+		return ICH_RET_ERR;
+	}
+	for (i = 0; i < nm; i++)
+		desc->master.FLMSTRs[i] = read_descriptor_reg(cs, 3, i, spibar);
 
 	/* Accessing the strap section via FDOC/D is only possible on ICH8 and
 	 * reading the upper map is impossible on all chipsets, so don't bother.
@@ -922,5 +1145,47 @@ int read_ich_descriptors_via_fdo(void *spibar, struct ich_descriptors *desc)
 	msg_pdbg2(" done.\n");
 	return ICH_RET_OK;
 }
-#endif /* ICH_DESCRIPTORS_FROM_DUMP */
-#endif /* defined(__i386__) || defined(__x86_64__) */
+#endif
+
+/**
+ * @brief Read a layout from the dump of an Intel ICH descriptor.
+ *
+ * @param layout Pointer where to store the layout.
+ * @param dump   The descriptor dump to read from.
+ * @param len    The length of the descriptor dump.
+ *
+ * @return 0 on success,
+ *	   1 if the descriptor couldn't be parsed.
+ */
+int layout_from_ich_descriptors(struct ich_layout *const layout, const void *const dump, const size_t len)
+{
+	static const char *const regions[] = {
+		"fd", "bios", "me", "gbe", "pd", "reg5", "bios2", "reg7", "ec", "reg9", "ie",
+		"10gbe", "reg12", "reg13", "reg14", "reg15"
+	};
+
+	struct ich_descriptors desc;
+	enum ich_chipset cs = CHIPSET_ICH_UNKNOWN;
+	if (read_ich_descriptors_from_dump(dump, len, &cs, &desc))
+		return 1;
+
+	memset(layout, 0x00, sizeof(*layout));
+
+	ssize_t i, j;
+	for (i = 0, j = 0; i < min(ich_number_of_regions(cs, &desc.content), ARRAY_SIZE(regions)); ++i) {
+		const chipoff_t base = ICH_FREG_BASE(desc.region.FLREGs[i]);
+		const chipoff_t limit = ICH_FREG_LIMIT(desc.region.FLREGs[i]);
+		if (limit <= base)
+			continue;
+		layout->entries[j].start = base;
+		layout->entries[j].end = limit;
+		layout->entries[j].included = false;
+		snprintf(layout->entries[j].name, sizeof(layout->entries[j].name), "%s", regions[i]);
+		++j;
+	}
+	layout->base.entries = layout->entries;
+	layout->base.num_entries = j;
+	return 0;
+}
+
+#endif /* ICH_DESCRIPTORS_FROM_DUMP_ONLY */

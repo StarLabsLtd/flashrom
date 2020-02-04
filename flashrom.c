@@ -5,6 +5,8 @@
  * Copyright (C) 2004 Tyan Corp <yhlu@tyan.com>
  * Copyright (C) 2005-2008 coresystems GmbH
  * Copyright (C) 2008,2009 Carl-Daniel Hailfinger
+ * Copyright (C) 2016 secunet Security Networks AG
+ * (Written by Nico Huber <nico.huber@secunet.com> for secunet)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -407,6 +409,7 @@ const struct programmer_entry programmer_table[] = {
 
 #define SHUTDOWN_MAXFN 32
 static int shutdown_fn_count = 0;
+/** @private */
 struct shutdown_func_data {
 	int (*func) (void *data);
 	void *data;
@@ -1160,6 +1163,39 @@ int map_flash(struct flashctx *flash)
 	return 0;
 }
 
+/*
+ * Return a string corresponding to the bustype parameter.
+ * Memory is obtained with malloc() and must be freed with free() by the caller.
+ */
+char *flashbuses_to_text(enum chipbustype bustype)
+{
+	char *ret = calloc(1, 1);
+	/*
+	 * FIXME: Once all chipsets and flash chips have been updated, NONSPI
+	 * will cease to exist and should be eliminated here as well.
+	 */
+	if (bustype == BUS_NONSPI) {
+		ret = strcat_realloc(ret, "Non-SPI, ");
+	} else {
+		if (bustype & BUS_PARALLEL)
+			ret = strcat_realloc(ret, "Parallel, ");
+		if (bustype & BUS_LPC)
+			ret = strcat_realloc(ret, "LPC, ");
+		if (bustype & BUS_FWH)
+			ret = strcat_realloc(ret, "FWH, ");
+		if (bustype & BUS_SPI)
+			ret = strcat_realloc(ret, "SPI, ");
+		if (bustype & BUS_PROG)
+			ret = strcat_realloc(ret, "Programmer-specific, ");
+		if (bustype == BUS_NONE)
+			ret = strcat_realloc(ret, "None, ");
+	}
+	/* Kill last comma. */
+	ret[strlen(ret) - 2] = '\0';
+	ret = realloc(ret, strlen(ret) + 1);
+	return ret;
+}
+
 int probe_flash(struct registered_master *mst, int startchip, struct flashctx *flash, int force)
 {
 	const struct flashchip *chip;
@@ -1245,6 +1281,14 @@ notfound:
 	if (!flash->chip)
 		return -1;
 
+	/* Fill fallback layout covering the whole chip. */
+	struct single_layout *const fallback = &flash->fallback_layout;
+	fallback->base.entries		= &fallback->entry;
+	fallback->base.num_entries	= 1;
+	fallback->entry.start		= 0;
+	fallback->entry.end		= flash->chip->total_size * 1024 - 1;
+	fallback->entry.included	= true;
+	strcpy(fallback->entry.name, "complete flash");
 
 	tmp = flashbuses_to_text(flash->chip->bustype);
 	msg_cinfo("%s %s flash chip \"%s\" (%d kB, %s) ", force ? "Assuming" : "Found",
@@ -1363,6 +1407,7 @@ out:
 #endif
 }
 
+static int read_by_layout(struct flashctx *, uint8_t *);
 int read_flash_to_file(struct flashctx *flash, const char *filename)
 {
 	unsigned long size = flash->chip->total_size * 1024;
@@ -1380,7 +1425,7 @@ int read_flash_to_file(struct flashctx *flash, const char *filename)
 		ret = 1;
 		goto out_free;
 	}
-	if (flash->chip->read(flash, buf, 0, size)) {
+	if (read_by_layout(flash, buf)) {
 		msg_cerr("Read operation failed!\n");
 		ret = 1;
 		goto out_free;
@@ -1459,97 +1504,6 @@ static int selfcheck_eraseblocks(const struct flashchip *chip)
 	return ret;
 }
 
-static int erase_and_write_block_helper(struct flashctx *flash,
-					unsigned int start, unsigned int len,
-					uint8_t *curcontents,
-					uint8_t *newcontents,
-					int (*erasefn) (struct flashctx *flash,
-							unsigned int addr,
-							unsigned int len))
-{
-	unsigned int starthere = 0, lenhere = 0;
-	int ret = 0, skip = 1, writecount = 0;
-	enum write_granularity gran = flash->chip->gran;
-
-	/* curcontents and newcontents are opaque to walk_eraseregions, and
-	 * need to be adjusted here to keep the impression of proper abstraction
-	 */
-	curcontents += start;
-	newcontents += start;
-	msg_cdbg(":");
-	if (need_erase(curcontents, newcontents, len, gran)) {
-		msg_cdbg("E");
-		ret = erasefn(flash, start, len);
-		if (ret)
-			return ret;
-		if (check_erased_range(flash, start, len)) {
-			msg_cerr("ERASE FAILED!\n");
-			return -1;
-		}
-		/* Erase was successful. Adjust curcontents. */
-		memset(curcontents, 0xff, len);
-		skip = 0;
-	}
-	/* get_next_write() sets starthere to a new value after the call. */
-	while ((lenhere = get_next_write(curcontents + starthere,
-					 newcontents + starthere,
-					 len - starthere, &starthere, gran))) {
-		if (!writecount++)
-			msg_cdbg("W");
-		/* Needs the partial write function signature. */
-		ret = flash->chip->write(flash, newcontents + starthere,
-				   start + starthere, lenhere);
-		if (ret)
-			return ret;
-		starthere += lenhere;
-		skip = 0;
-	}
-	if (skip)
-		msg_cdbg("S");
-	else
-		all_skipped = false;
-	return ret;
-}
-
-static int walk_eraseregions(struct flashctx *flash, int erasefunction,
-			     int (*do_something) (struct flashctx *flash,
-						  unsigned int addr,
-						  unsigned int len,
-						  uint8_t *param1,
-						  uint8_t *param2,
-						  int (*erasefn) (
-							struct flashctx *flash,
-							unsigned int addr,
-							unsigned int len)),
-			     void *param1, void *param2)
-{
-	int i, j;
-	unsigned int start = 0;
-	unsigned int len;
-	struct block_eraser eraser = flash->chip->block_erasers[erasefunction];
-
-	for (i = 0; i < NUM_ERASEREGIONS; i++) {
-		/* count==0 for all automatically initialized array
-		 * members so the loop below won't be executed for them.
-		 */
-		len = eraser.eraseblocks[i].size;
-		for (j = 0; j < eraser.eraseblocks[i].count; j++) {
-			/* Print this for every block except the first one. */
-			if (i || j)
-				msg_cdbg(", ");
-			msg_cdbg("0x%06x-0x%06x", start,
-				     start + len - 1);
-			if (do_something(flash, start, len, param1, param2,
-					 eraser.block_erase)) {
-				return 1;
-			}
-			start += len;
-		}
-	}
-	msg_cdbg("\n");
-	return 0;
-}
-
 static int check_block_eraser(const struct flashctx *flash, int k, int log)
 {
 	struct block_eraser eraser = flash->chip->block_erasers[k];
@@ -1575,69 +1529,344 @@ static int check_block_eraser(const struct flashctx *flash, int k, int log)
 	return 0;
 }
 
-int erase_and_write_flash(struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents)
+static const struct flashrom_layout *get_layout(const struct flashctx *const flashctx)
 {
-	int k, ret = 1;
+	if (flashctx->layout && flashctx->layout->num_entries)
+		return flashctx->layout;
+	else
+		return &flashctx->fallback_layout.base;
+}
+
+/**
+ * @brief Reads the included layout regions into a buffer.
+ *
+ * If there is no layout set in the given flash context, the whole chip will
+ * be read.
+ *
+ * @param flashctx Flash context to be used.
+ * @param buffer   Buffer of full chip size to read into.
+ * @return 0 on success,
+ *	   1 if any read fails.
+ */
+static int read_by_layout(struct flashctx *const flashctx, uint8_t *const buffer)
+{
+	const struct flashrom_layout *const layout = get_layout(flashctx);
+
+	size_t i;
+	for (i = 0; i < layout->num_entries; ++i) {
+		if (!layout->entries[i].included)
+			continue;
+
+		const chipoff_t region_start	= layout->entries[i].start;
+		const chipsize_t region_len	= layout->entries[i].end - layout->entries[i].start + 1;
+
+		if (flashctx->chip->read(flashctx, buffer + region_start, region_start, region_len))
+			return 1;
+	}
+	return 0;
+}
+
+typedef int (*erasefn_t)(struct flashctx *, unsigned int addr, unsigned int len);
+/**
+ * @private
+ *
+ * For read-erase-write, `curcontents` and `newcontents` shall point
+ * to buffers of the chip's size. Both are supposed to be prefilled
+ * with at least the included layout regions of the current flash
+ * contents (`curcontents`) and the data to be written to the flash
+ * (`newcontents`).
+ *
+ * For erase, `curcontents` and `newcontents` shall be NULL-pointers.
+ *
+ * The `chipoff_t` values are used internally by `walk_by_layout()`.
+ */
+struct walk_info {
 	uint8_t *curcontents;
-	unsigned long size = flash->chip->total_size * 1024;
-	unsigned int usable_erasefunctions = count_usable_erasers(flash);
+	const uint8_t *newcontents;
+	chipoff_t region_start;
+	chipoff_t region_end;
+	chipoff_t erase_start;
+	chipoff_t erase_end;
+};
+/* returns 0 on success, 1 to retry with another erase function, 2 for immediate abort */
+typedef int (*per_blockfn_t)(struct flashctx *, const struct walk_info *, erasefn_t);
 
+static int walk_eraseblocks(struct flashctx *const flashctx,
+			    struct walk_info *const info,
+			    const size_t erasefunction, const per_blockfn_t per_blockfn)
+{
+	int ret;
+	size_t i, j;
+	bool first = true;
+	struct block_eraser *const eraser = &flashctx->chip->block_erasers[erasefunction];
+
+	info->erase_start = 0;
+	for (i = 0; i < NUM_ERASEREGIONS; ++i) {
+		/* count==0 for all automatically initialized array
+		   members so the loop below won't be executed for them. */
+		for (j = 0; j < eraser->eraseblocks[i].count; ++j, info->erase_start = info->erase_end + 1) {
+			info->erase_end = info->erase_start + eraser->eraseblocks[i].size - 1;
+
+			/* Skip any eraseblock that is completely outside the current region. */
+			if (info->erase_end < info->region_start)
+				continue;
+			if (info->region_end < info->erase_start)
+				break;
+
+			/* Print this for every block except the first one. */
+			if (first)
+				first = false;
+			else
+				msg_cdbg(", ");
+			msg_cdbg("0x%06x-0x%06x:", info->erase_start, info->erase_end);
+
+			ret = per_blockfn(flashctx, info, eraser->block_erase);
+			if (ret)
+				return ret;
+		}
+		if (info->region_end < info->erase_start)
+			break;
+	}
+	msg_cdbg("\n");
+	return 0;
+}
+
+static int walk_by_layout(struct flashctx *const flashctx, struct walk_info *const info,
+			  const per_blockfn_t per_blockfn)
+{
+	const struct flashrom_layout *const layout = get_layout(flashctx);
+
+	all_skipped = true;
 	msg_cinfo("Erasing and writing flash chip... ");
-	curcontents = malloc(size);
-	if (!curcontents) {
-		msg_gerr("Out of memory!\n");
-		exit(1);
-	}
-	/* Copy oldcontents to curcontents to avoid clobbering oldcontents. */
-	memcpy(curcontents, oldcontents, size);
 
-	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
-		if (k != 0)
-			msg_cinfo("Looking for another erase function.\n");
-		if (!usable_erasefunctions) {
+	size_t i;
+	for (i = 0; i < layout->num_entries; ++i) {
+		if (!layout->entries[i].included)
+			continue;
+
+		info->region_start = layout->entries[i].start;
+		info->region_end   = layout->entries[i].end;
+
+		size_t j;
+		int error = 1; /* retry as long as it's 1 */
+		for (j = 0; j < NUM_ERASEFUNCTIONS; ++j) {
+			if (j != 0)
+				msg_cinfo("Looking for another erase function.\n");
+			msg_cdbg("Trying erase function %zi... ", j);
+			if (check_block_eraser(flashctx, j, 1))
+				continue;
+
+			error = walk_eraseblocks(flashctx, info, j, per_blockfn);
+			if (error != 1)
+				break;
+
+			if (info->curcontents) {
+				msg_cinfo("Reading current flash chip contents... ");
+				if (read_by_layout(flashctx, info->curcontents)) {
+					/* Now we are truly screwed. Read failed as well. */
+					msg_cerr("Can't read anymore! Aborting.\n");
+					/* We have no idea about the flash chip contents, so
+					   retrying with another erase function is pointless. */
+					error = 2;
+					break;
+				}
+				msg_cinfo("done. ");
+			}
+		}
+		if (error == 1)
 			msg_cinfo("No usable erase functions left.\n");
-			break;
+		if (error) {
+			msg_cerr("FAILED!\n");
+			return 1;
 		}
-		msg_cdbg("Trying erase function %i... ", k);
-		if (check_block_eraser(flash, k, 1))
-			continue;
-		usable_erasefunctions--;
-		ret = walk_eraseregions(flash, k, &erase_and_write_block_helper,
-					curcontents, newcontents);
-		/* If everything is OK, don't try another erase function. */
-		if (!ret)
-			break;
-		/* Write/erase failed, so try to find out what the current chip
-		 * contents are. If no usable erase functions remain, we can
-		 * skip this: the next iteration will break immediately anyway.
-		 */
-		if (!usable_erasefunctions)
-			continue;
-		/* Reading the whole chip may take a while, inform the user even
-		 * in non-verbose mode.
-		 */
-		msg_cinfo("Reading current flash chip contents... ");
-		if (flash->chip->read(flash, curcontents, 0, size)) {
-			/* Now we are truly screwed. Read failed as well. */
-			msg_cerr("Can't read anymore! Aborting.\n");
-			/* We have no idea about the flash chip contents, so
-			 * retrying with another erase function is pointless.
-			 */
-			break;
-		}
-		msg_cinfo("done. ");
 	}
-	/* Free the scratchpad. */
-	free(curcontents);
+	if (all_skipped)
+		msg_cinfo("\nWarning: Chip content is identical to the requested image.\n");
+	msg_cinfo("Erase/write done.\n");
+	return 0;
+}
 
-	if (ret) {
-		msg_cerr("FAILED!\n");
-	} else {
-		if (all_skipped)
-			msg_cinfo("\nWarning: Chip content is identical to the requested image.\n");
-		msg_cinfo("Erase/write done.\n");
+static int erase_block(struct flashctx *const flashctx,
+		       const struct walk_info *const info, const erasefn_t erasefn)
+{
+	const unsigned int erase_len = info->erase_end + 1 - info->erase_start;
+
+	all_skipped = false;
+
+	msg_cdbg("E");
+	if (erasefn(flashctx, info->erase_start, erase_len))
+		return 1;
+	if (check_erased_range(flashctx, info->erase_start, erase_len)) {
+		msg_cerr("ERASE FAILED!\n");
+		return 1;
 	}
+	return 0;
+}
+
+/**
+ * @brief Erases the included layout regions.
+ *
+ * If there is no layout set in the given flash context, the whole chip will
+ * be erased.
+ *
+ * @param flashctx Flash context to be used.
+ * @param buffer   Buffer of full chip size to read into.
+ * @return 0 on success,
+ *	   1 if all available erase functions failed.
+ */
+static int erase_by_layout(struct flashctx *const flashctx)
+{
+	struct walk_info info = { 0 };
+	return walk_by_layout(flashctx, &info, &erase_block);
+}
+
+static int read_erase_write_block(struct flashctx *const flashctx,
+				  const struct walk_info *const info, const erasefn_t erasefn)
+{
+	const chipsize_t erase_len = info->erase_end + 1 - info->erase_start;
+	const bool region_unaligned = info->region_start > info->erase_start ||
+				      info->erase_end > info->region_end;
+	const uint8_t *newcontents = NULL;
+	int ret = 2;
+
+	/*
+	 * If the region is not erase-block aligned, merge current flash con-
+	 * tents into `info->curcontents` and a new buffer `newc`. The former
+	 * is necessary since we have no guarantee that the full erase block
+	 * was already read into `info->curcontents`. For the latter a new
+	 * buffer is used since `info->newcontents` might contain data for
+	 * other unaligned regions that touch this erase block too.
+	 */
+	if (region_unaligned) {
+		msg_cdbg("R");
+		uint8_t *const newc = malloc(erase_len);
+		if (!newc) {
+			msg_cerr("Out of memory!\n");
+			return 1;
+		}
+		memcpy(newc, info->newcontents + info->erase_start, erase_len);
+
+		/* Merge data preceding the current region. */
+		if (info->region_start > info->erase_start) {
+			const chipoff_t start	= info->erase_start;
+			const chipsize_t len	= info->region_start - info->erase_start;
+			if (flashctx->chip->read(flashctx, newc, start, len)) {
+				msg_cerr("Can't read! Aborting.\n");
+				goto _free_ret;
+			}
+			memcpy(info->curcontents + start, newc, len);
+		}
+		/* Merge data following the current region. */
+		if (info->erase_end > info->region_end) {
+			const chipoff_t start     = info->region_end + 1;
+			const chipoff_t rel_start = start - info->erase_start; /* within this erase block */
+			const chipsize_t len      = info->erase_end - info->region_end;
+			if (flashctx->chip->read(flashctx, newc + rel_start, start, len)) {
+				msg_cerr("Can't read! Aborting.\n");
+				goto _free_ret;
+			}
+			memcpy(info->curcontents + start, newc + rel_start, len);
+		}
+
+		newcontents = newc;
+	} else {
+		newcontents = info->newcontents + info->erase_start;
+	}
+
+	ret = 1;
+	bool skipped = true;
+	uint8_t *const curcontents = info->curcontents + info->erase_start;
+	if (need_erase(curcontents, newcontents, erase_len, flashctx->chip->gran)) {
+		if (erase_block(flashctx, info, erasefn))
+			goto _free_ret;
+		/* Erase was successful. Adjust curcontents. */
+		memset(curcontents, 0xff, erase_len);
+		skipped = false;
+	}
+
+	unsigned int starthere = 0, lenhere = 0, writecount = 0;
+	/* get_next_write() sets starthere to a new value after the call. */
+	while ((lenhere = get_next_write(curcontents + starthere, newcontents + starthere,
+					 erase_len - starthere, &starthere, flashctx->chip->gran))) {
+		if (!writecount++)
+			msg_cdbg("W");
+		/* Needs the partial write function signature. */
+		if (flashctx->chip->write(flashctx, newcontents + starthere,
+					  info->erase_start + starthere, lenhere))
+			goto _free_ret;
+		starthere += lenhere;
+		skipped = false;
+	}
+	if (skipped)
+		msg_cdbg("S");
+	else
+		all_skipped = false;
+
+	/* Update curcontents, other regions with overlapping erase blocks
+	   might rely on this. */
+	memcpy(curcontents, newcontents, erase_len);
+	ret = 0;
+
+_free_ret:
+	if (region_unaligned)
+		free((void *)newcontents);
 	return ret;
+}
+
+/**
+ * @brief Writes the included layout regions from a given image.
+ *
+ * If there is no layout set in the given flash context, the whole image
+ * will be written.
+ *
+ * @param flashctx    Flash context to be used.
+ * @param curcontents A buffer of full chip size with current chip contents of included regions.
+ * @param newcontents The new image to be written.
+ * @return 0 on success,
+ *	   1 if anything has gone wrong.
+ */
+static int write_by_layout(struct flashctx *const flashctx,
+			   void *const curcontents, const void *const newcontents)
+{
+	struct walk_info info;
+	info.curcontents = curcontents;
+	info.newcontents = newcontents;
+	return walk_by_layout(flashctx, &info, read_erase_write_block);
+}
+
+/**
+ * @brief Compares the included layout regions with content from a buffer.
+ *
+ * If there is no layout set in the given flash context, the whole chip's
+ * contents will be compared.
+ *
+ * @param flashctx    Flash context to be used.
+ * @param curcontents A buffer of full chip size to read current chip contents into.
+ * @param newcontents The new image to compare to.
+ * @return 0 on success,
+ *	   1 if reading failed,
+ *	   3 if the contents don't match.
+ */
+static int verify_by_layout(struct flashctx *const flashctx,
+			    void *const curcontents, const uint8_t *const newcontents)
+{
+	const struct flashrom_layout *const layout = get_layout(flashctx);
+
+	size_t i;
+	for (i = 0; i < layout->num_entries; ++i) {
+		if (!layout->entries[i].included)
+			continue;
+
+		const chipoff_t region_start	= layout->entries[i].start;
+		const chipsize_t region_len	= layout->entries[i].end - layout->entries[i].start + 1;
+
+		if (flashctx->chip->read(flashctx, curcontents + region_start, region_start, region_len))
+			return 1;
+		if (compare_range(newcontents + region_start, curcontents + region_start,
+				  region_start, region_len))
+			return 3;
+	}
+	return 0;
 }
 
 static void nonfatal_help_message(void)
@@ -1801,7 +2030,7 @@ void print_buildinfo(void)
 
 void print_version(void)
 {
-	msg_ginfo("flashrom v%s", flashrom_version);
+	msg_ginfo("flashrom %s", flashrom_version);
 	print_sysinfo();
 	msg_ginfo("\n");
 }
@@ -1972,165 +2201,369 @@ int chip_safety_check(const struct flashctx *flash, int force, int read_it, int 
 	return 0;
 }
 
-/* This function signature is horrible. We need to design a better interface,
- * but right now it allows us to split off the CLI code.
- * Besides that, the function itself is a textbook example of abysmal code flow.
- */
-int doit(struct flashctx *flash, int force, const char *filename, int read_it,
-	 int write_it, int erase_it, int verify_it)
+int prepare_flash_access(struct flashctx *const flash,
+			 const bool read_it, const bool write_it,
+			 const bool erase_it, const bool verify_it)
 {
-	uint8_t *oldcontents;
-	uint8_t *newcontents;
-	int ret = 0;
-	unsigned long size = flash->chip->total_size * 1024;
-	int read_all_first = 1; /* FIXME: Make this configurable. */
-
-	if (chip_safety_check(flash, force, read_it, write_it, erase_it, verify_it)) {
+	if (chip_safety_check(flash, flash->flags.force, read_it, write_it, erase_it, verify_it)) {
 		msg_cerr("Aborting.\n");
 		return 1;
 	}
 
-	if (normalize_romentries(flash)) {
+	if (flash->layout == get_global_layout() && normalize_romentries(flash)) {
 		msg_cerr("Requested regions can not be handled. Aborting.\n");
 		return 1;
 	}
 
+	if (map_flash(flash) != 0)
+		return 1;
+
 	/* Given the existence of read locks, we want to unlock for read,
-	 * erase and write.
-	 */
+	   erase and write. */
 	if (flash->chip->unlock)
 		flash->chip->unlock(flash);
 
-	if (read_it) {
-		return read_flash_to_file(flash, filename);
-	}
+	return 0;
+}
 
-	oldcontents = malloc(size);
-	if (!oldcontents) {
+void finalize_flash_access(struct flashctx *const flash)
+{
+	unmap_flash(flash);
+}
+
+/**
+ * @addtogroup flashrom-flash
+ * @{
+ */
+
+/**
+ * @brief Erase the specified ROM chip.
+ *
+ * If a layout is set in the given flash context, only included regions
+ * will be erased.
+ *
+ * @param flashctx The context of the flash chip to erase.
+ * @return 0 on success.
+ */
+int flashrom_flash_erase(struct flashctx *const flashctx)
+{
+	if (prepare_flash_access(flashctx, false, false, true, false))
+		return 1;
+
+	const int ret = erase_by_layout(flashctx);
+
+	finalize_flash_access(flashctx);
+
+	return ret;
+}
+
+/** @} */ /* end flashrom-flash */
+
+/**
+ * @defgroup flashrom-ops Operations
+ * @{
+ */
+
+/**
+ * @brief Read the current image from the specified ROM chip.
+ *
+ * If a layout is set in the specified flash context, only included regions
+ * will be read.
+ *
+ * @param flashctx The context of the flash chip.
+ * @param buffer Target buffer to write image to.
+ * @param buffer_len Size of target buffer in bytes.
+ * @return 0 on success,
+ *         2 if buffer_len is too short for the flash chip's contents,
+ *         or 1 on any other failure.
+ */
+int flashrom_image_read(struct flashctx *const flashctx, void *const buffer, const size_t buffer_len)
+{
+	const size_t flash_size = flashctx->chip->total_size * 1024;
+
+	if (flash_size > buffer_len)
+		return 2;
+
+	if (prepare_flash_access(flashctx, true, false, false, false))
+		return 1;
+
+	msg_cinfo("Reading flash... ");
+
+	int ret = 1;
+	if (read_by_layout(flashctx, buffer)) {
+		msg_cerr("Read operation failed!\n");
+		msg_cinfo("FAILED.\n");
+		goto _finalize_ret;
+	}
+	msg_cinfo("done.\n");
+	ret = 0;
+
+_finalize_ret:
+	finalize_flash_access(flashctx);
+	return ret;
+}
+
+static void combine_image_by_layout(const struct flashctx *const flashctx,
+				    uint8_t *const newcontents, const uint8_t *const oldcontents)
+{
+	const struct flashrom_layout *const layout = get_layout(flashctx);
+
+	size_t i;
+	for (i = 0; i < layout->num_entries; ++i) {
+		if (layout->entries[i].included)
+			continue;
+
+		const chipoff_t region_start	= layout->entries[i].start;
+		const chipsize_t region_len	= layout->entries[i].end - layout->entries[i].start + 1;
+
+		memcpy(newcontents + region_start, oldcontents + region_start, region_len);
+	}
+}
+
+/**
+ * @brief Write the specified image to the ROM chip.
+ *
+ * If a layout is set in the specified flash context, only erase blocks
+ * containing included regions will be touched.
+ *
+ * @param flashctx The context of the flash chip.
+ * @param buffer Source buffer to read image from (may be altered for full verification).
+ * @param buffer_len Size of source buffer in bytes.
+ * @return 0 on success,
+ *         4 if buffer_len doesn't match the size of the flash chip,
+ *         3 if write was tried but nothing has changed,
+ *         2 if write failed and flash contents changed,
+ *         or 1 on any other failure.
+ */
+int flashrom_image_write(struct flashctx *const flashctx, void *const buffer, const size_t buffer_len)
+{
+	const size_t flash_size = flashctx->chip->total_size * 1024;
+	const bool verify_all = flashctx->flags.verify_whole_chip;
+	const bool verify = flashctx->flags.verify_after_write;
+
+	if (buffer_len != flash_size)
+		return 4;
+
+	int ret = 1;
+
+	uint8_t *const newcontents = buffer;
+	uint8_t *const curcontents = malloc(flash_size);
+	uint8_t *oldcontents = NULL;
+	if (verify_all)
+		oldcontents = malloc(flash_size);
+	if (!curcontents || (verify_all && !oldcontents)) {
 		msg_gerr("Out of memory!\n");
-		exit(1);
+		goto _free_ret;
 	}
-	/* Assume worst case: All bits are 0. */
-	memset(oldcontents, 0x00, size);
-	newcontents = malloc(size);
-	if (!newcontents) {
-		msg_gerr("Out of memory!\n");
-		exit(1);
-	}
-	/* Assume best case: All bits should be 1. */
-	memset(newcontents, 0xff, size);
-	/* Side effect of the assumptions above: Default write action is erase
-	 * because newcontents looks like a completely erased chip, and
-	 * oldcontents being completely 0x00 means we have to erase everything
-	 * before we can write.
-	 */
-
-	if (erase_it) {
-		/* FIXME: Do we really want the scary warning if erase failed?
-		 * After all, after erase the chip is either blank or partially
-		 * blank or it has the old contents. A blank chip won't boot,
-		 * so if the user wanted erase and reboots afterwards, the user
-		 * knows very well that booting won't work.
-		 */
-		if (erase_and_write_flash(flash, oldcontents, newcontents)) {
-			emergency_help_message();
-			ret = 1;
-		}
-		goto out;
-	}
-
-	if (write_it || verify_it) {
-		if (read_buf_from_file(newcontents, size, filename)) {
-			ret = 1;
-			goto out;
-		}
 
 #if CONFIG_INTERNAL == 1
-		if (programmer == PROGRAMMER_INTERNAL && cb_check_image(newcontents, size) < 0) {
-			if (force_boardmismatch) {
-				msg_pinfo("Proceeding anyway because user forced us to.\n");
-			} else {
-				msg_perr("Aborting. You can override this with "
-					 "-p internal:boardmismatch=force.\n");
-				ret = 1;
-				goto out;
-			}
+	if (programmer == PROGRAMMER_INTERNAL && cb_check_image(newcontents, flash_size) < 0) {
+		if (flashctx->flags.force_boardmismatch) {
+			msg_pinfo("Proceeding anyway because user forced us to.\n");
+		} else {
+			msg_perr("Aborting. You can override this with "
+				 "-p internal:boardmismatch=force.\n");
+			goto _free_ret;
 		}
-#endif
 	}
+#endif
 
-	/* Read the whole chip to be able to check whether regions need to be
+	if (prepare_flash_access(flashctx, false, true, false, verify))
+		goto _free_ret;
+
+	/*
+	 * Read the whole chip to be able to check whether regions need to be
 	 * erased and to give better diagnostics in case write fails.
 	 * The alternative is to read only the regions which are to be
 	 * preserved, but in that case we might perform unneeded erase which
 	 * takes time as well.
 	 */
-	if (read_all_first) {
-		msg_cinfo("Reading old flash chip contents... ");
-		if (flash->chip->read(flash, oldcontents, 0, size)) {
-			ret = 1;
+	msg_cinfo("Reading old flash chip contents... ");
+	if (verify_all) {
+		if (flashctx->chip->read(flashctx, oldcontents, 0, flash_size)) {
 			msg_cinfo("FAILED.\n");
-			goto out;
+			goto _finalize_ret;
+		}
+		memcpy(curcontents, oldcontents, flash_size);
+	} else {
+		if (read_by_layout(flashctx, curcontents)) {
+			msg_cinfo("FAILED.\n");
+			goto _finalize_ret;
 		}
 	}
 	msg_cinfo("done.\n");
 
-	/* Build a new image taking the given layout into account. */
-	if (build_new_image(flash, read_all_first, oldcontents, newcontents)) {
-		msg_gerr("Could not prepare the data to be written, aborting.\n");
-		ret = 1;
-		goto out;
-	}
-
-	// ////////////////////////////////////////////////////////////
-
-	if (write_it && erase_and_write_flash(flash, oldcontents, newcontents)) {
+	if (write_by_layout(flashctx, curcontents, newcontents)) {
 		msg_cerr("Uh oh. Erase/write failed. ");
-		if (read_all_first) {
+		ret = 2;
+		if (verify_all) {
 			msg_cerr("Checking if anything has changed.\n");
 			msg_cinfo("Reading current flash chip contents... ");
-			if (!flash->chip->read(flash, newcontents, 0, size)) {
+			if (!flashctx->chip->read(flashctx, curcontents, 0, flash_size)) {
 				msg_cinfo("done.\n");
-				if (!memcmp(oldcontents, newcontents, size)) {
+				if (!memcmp(oldcontents, curcontents, flash_size)) {
 					nonfatal_help_message();
-					ret = 1;
-					goto out;
+					goto _finalize_ret;
 				}
 				msg_cerr("Apparently at least some data has changed.\n");
 			} else
 				msg_cerr("Can't even read anymore!\n");
 			emergency_help_message();
-			ret = 1;
-			goto out;
-		} else
+			goto _finalize_ret;
+		} else {
 			msg_cerr("\n");
+		}
 		emergency_help_message();
-		ret = 1;
-		goto out;
+		goto _finalize_ret;
 	}
 
-	/* Verify only if we either did not try to write (verify operation) or actually changed something. */
-	if (verify_it && (!write_it || !all_skipped)) {
+	/* Verify only if we actually changed something. */
+	if (verify && !all_skipped) {
+		const struct flashrom_layout *const layout_bak = flashctx->layout;
+
 		msg_cinfo("Verifying flash... ");
 
-		if (write_it) {
-			/* Work around chips which need some time to calm down. */
-			programmer_delay(1000*1000);
-			ret = verify_range(flash, newcontents, 0, size);
-			/* If we tried to write, and verification now fails, we
-			 * might have an emergency situation.
-			 */
-			if (ret)
-				emergency_help_message();
-		} else {
-			ret = compare_range(newcontents, oldcontents, 0, size);
+		/* Work around chips which need some time to calm down. */
+		programmer_delay(1000*1000);
+
+		if (verify_all) {
+			combine_image_by_layout(flashctx, newcontents, oldcontents);
+			flashctx->layout = NULL;
 		}
-		if (!ret)
+		ret = verify_by_layout(flashctx, curcontents, newcontents);
+		flashctx->layout = layout_bak;
+		/* If we tried to write, and verification now fails, we
+		   might have an emergency situation. */
+		if (ret)
+			emergency_help_message();
+		else
 			msg_cinfo("VERIFIED.\n");
+	} else {
+		/* We didn't change anything. */
+		ret = 0;
 	}
 
-out:
+_finalize_ret:
+	finalize_flash_access(flashctx);
+_free_ret:
 	free(oldcontents);
+	free(curcontents);
+	return ret;
+}
+
+/**
+ * @brief Verify the ROM chip's contents with the specified image.
+ *
+ * If a layout is set in the specified flash context, only included regions
+ * will be verified.
+ *
+ * @param flashctx The context of the flash chip.
+ * @param buffer Source buffer to verify with.
+ * @param buffer_len Size of source buffer in bytes.
+ * @return 0 on success,
+ *         3 if the chip's contents don't match,
+ *         2 if buffer_len doesn't match the size of the flash chip,
+ *         or 1 on any other failure.
+ */
+int flashrom_image_verify(struct flashctx *const flashctx, const void *const buffer, const size_t buffer_len)
+{
+	const size_t flash_size = flashctx->chip->total_size * 1024;
+
+	if (buffer_len != flash_size)
+		return 2;
+
+	const uint8_t *const newcontents = buffer;
+	uint8_t *const curcontents = malloc(flash_size);
+	if (!curcontents) {
+		msg_gerr("Out of memory!\n");
+		return 1;
+	}
+
+	int ret = 1;
+
+	if (prepare_flash_access(flashctx, false, false, false, true))
+		goto _free_ret;
+
+	msg_cinfo("Verifying flash... ");
+	ret = verify_by_layout(flashctx, curcontents, newcontents);
+	if (!ret)
+		msg_cinfo("VERIFIED.\n");
+
+	finalize_flash_access(flashctx);
+_free_ret:
+	free(curcontents);
+	return ret;
+}
+
+/** @} */ /* end flashrom-ops */
+
+int do_read(struct flashctx *const flash, const char *const filename)
+{
+	if (prepare_flash_access(flash, true, false, false, false))
+		return 1;
+
+	const int ret = read_flash_to_file(flash, filename);
+
+	finalize_flash_access(flash);
+
+	return ret;
+}
+
+int do_erase(struct flashctx *const flash)
+{
+	const int ret = flashrom_flash_erase(flash);
+
+	/*
+	 * FIXME: Do we really want the scary warning if erase failed?
+	 * After all, after erase the chip is either blank or partially
+	 * blank or it has the old contents. A blank chip won't boot,
+	 * so if the user wanted erase and reboots afterwards, the user
+	 * knows very well that booting won't work.
+	 */
+	if (ret)
+		emergency_help_message();
+
+	return ret;
+}
+
+int do_write(struct flashctx *const flash, const char *const filename)
+{
+	const size_t flash_size = flash->chip->total_size * 1024;
+	int ret = 1;
+
+	uint8_t *const newcontents = malloc(flash_size);
+	if (!newcontents) {
+		msg_gerr("Out of memory!\n");
+		goto _free_ret;
+	}
+
+	if (read_buf_from_file(newcontents, flash_size, filename))
+		goto _free_ret;
+
+	ret = flashrom_image_write(flash, newcontents, flash_size);
+
+_free_ret:
+	free(newcontents);
+	return ret;
+}
+
+int do_verify(struct flashctx *const flash, const char *const filename)
+{
+	const size_t flash_size = flash->chip->total_size * 1024;
+	int ret = 1;
+
+	uint8_t *const newcontents = malloc(flash_size);
+	if (!newcontents) {
+		msg_gerr("Out of memory!\n");
+		goto _free_ret;
+	}
+
+	if (read_buf_from_file(newcontents, flash_size, filename))
+		goto _free_ret;
+
+	ret = flashrom_image_verify(flash, newcontents, flash_size);
+
+_free_ret:
 	free(newcontents);
 	return ret;
 }

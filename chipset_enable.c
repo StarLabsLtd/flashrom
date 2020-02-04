@@ -7,6 +7,8 @@
  * Copyright (C) 2007,2008,2009 Carl-Daniel Hailfinger
  * Copyright (C) 2009 Kontron Modular Computers GmbH
  * Copyright (C) 2011, 2012 Stefan Tauner
+ * Copyright (C) 2017 secunet Security Networks AG
+ * (Written by Nico Huber <nico.huber@secunet.com> for secunet)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -584,10 +586,37 @@ static int enable_flash_poulsbo(struct pci_dev *dev, const char *name)
 	return enable_flash_ich_fwh(dev, CHIPSET_POULSBO, 0xd8);
 }
 
-static void enable_flash_ich_handle_gcs(struct pci_dev *dev, enum ich_chipset ich_generation, uint32_t gcs, bool top_swap)
+static void enable_flash_ich_report_gcs(struct pci_dev *const dev, const enum ich_chipset ich_generation,
+					const uint8_t *const rcrb)
 {
-	msg_pdbg("GCS = 0x%x: ", gcs);
-	msg_pdbg("BIOS Interface Lock-Down: %sabled, ", (gcs & 0x1) ? "en" : "dis");
+	uint32_t gcs;
+	const char *reg_name;
+	bool bild, top_swap;
+
+	switch (ich_generation) {
+	case CHIPSET_BAYTRAIL:
+		reg_name = "GCS";
+		gcs = mmio_readl(rcrb + 0);
+		bild = gcs & 1;
+		top_swap = (gcs & 2) >> 1;
+		break;
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG:
+		reg_name = "BIOS_SPI_BC";
+		gcs = pci_read_long(dev, 0xdc);
+		bild = (gcs >> 7) & 1;
+		top_swap = (gcs >> 4) & 1;
+		break;
+	default:
+		reg_name = "GCS";
+		gcs = mmio_readl(rcrb + 0x3410);
+		bild = gcs & 1;
+		top_swap = mmio_readb(rcrb + 0x3414) & 1;
+		break;
+	}
+
+	msg_pdbg("%s = 0x%x: ", reg_name, gcs);
+	msg_pdbg("BIOS Interface Lock-Down: %sabled, ", bild ? "en" : "dis");
 
 	static const char *const straps_names_EP80579[] = { "SPI", "reserved", "reserved", "LPC" };
 	static const char *const straps_names_ich7_nm10[] = { "reserved", "SPI", "PCI", "LPC" };
@@ -628,6 +657,9 @@ static void enable_flash_ich_handle_gcs(struct pci_dev *dev, enum ich_chipset ic
 		straps_names = straps_names_pch89_baytrail;
 		break;
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG:
 		straps_names = straps_names_pch8_lp;
 		break;
 	case CHIPSET_8_SERIES_WELLSBURG: // FIXME: check datasheet
@@ -646,8 +678,13 @@ static void enable_flash_ich_handle_gcs(struct pci_dev *dev, enum ich_chipset ic
 		bbs = (gcs >> 1) & 0x1;
 		break;
 	case CHIPSET_8_SERIES_LYNX_POINT_LP:
-		/* Lynx Point LP uses a single bit for BBS */
+	case CHIPSET_9_SERIES_WILDCAT_POINT_LP:
+		/* LP PCHs use a single bit for BBS */
 		bbs = (gcs >> 10) & 0x1;
+		break;
+	case CHIPSET_100_SERIES_SUNRISE_POINT:
+	case CHIPSET_C620_SERIES_LEWISBURG:
+		bbs = (gcs >> 6) & 0x1;
 		break;
 	default:
 		/* Other chipsets use two bits for BBS */
@@ -673,7 +710,7 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 	if (rcrb == ERROR_PTR)
 		return ERROR_FATAL;
 
-	enable_flash_ich_handle_gcs(dev, ich_generation, mmio_readl(rcrb + 0x3410), mmio_readb(rcrb + 0x3414));
+	enable_flash_ich_report_gcs(dev, ich_generation, rcrb);
 
 	/* Handle FWH-related parameters and initialization */
 	int ret_fwh = enable_flash_ich_fwh(dev, ich_generation, bios_cntl);
@@ -701,7 +738,7 @@ static int enable_flash_ich_spi(struct pci_dev *dev, enum ich_chipset ich_genera
 	void *spibar = rcrb + spibar_offset;
 
 	/* This adds BUS_SPI */
-	int ret_spi = ich_init_spi(dev, spibar, ich_generation);
+	int ret_spi = ich_init_spi(spibar, ich_generation);
 	if (ret_spi == ERROR_FATAL)
 		return ret_spi;
 	
@@ -783,6 +820,86 @@ static int enable_flash_pch9(struct pci_dev *dev, const char *name)
 	return enable_flash_ich_spi(dev, CHIPSET_9_SERIES_WILDCAT_POINT, 0xdc);
 }
 
+/* Wildcat Point LP */
+static int enable_flash_pch9_lp(struct pci_dev *dev, const char *name)
+{
+	return enable_flash_ich_spi(dev, CHIPSET_9_SERIES_WILDCAT_POINT_LP, 0xdc);
+}
+
+/* Sunrise Point */
+static int enable_flash_pch100_shutdown(void *const pci_acc)
+{
+	pci_cleanup(pci_acc);
+	return 0;
+}
+
+static int enable_flash_pch100_or_c620(struct pci_dev *const dev, const char *const name, const enum ich_chipset pch_generation)
+{
+	int ret = ERROR_FATAL;
+
+	/*
+	 * The SPI PCI device is usually hidden (by hiding PCI vendor
+	 * and device IDs). So we need a PCI access method that works
+	 * even when the OS doesn't know the PCI device. We can't use
+	 * this method globally since it would bring along other con-
+	 * straints (e.g. on PCI domains, extended PCIe config space).
+	 */
+	struct pci_access *const pci_acc = pci_alloc();
+	struct pci_access *const saved_pacc = pacc;
+	if (!pci_acc) {
+		msg_perr("Can't allocate PCI accessor.\n");
+		return ret;
+	}
+	pci_acc->method = PCI_ACCESS_I386_TYPE1;
+	pci_init(pci_acc);
+	register_shutdown(enable_flash_pch100_shutdown, pci_acc);
+
+	struct pci_dev *const spi_dev = pci_get_dev(pci_acc, dev->domain, dev->bus, 0x1f, 5);
+	if (!spi_dev) {
+		msg_perr("Can't allocate PCI device.\n");
+		return ret;
+	}
+
+	/* Modify pacc so the rpci_write can register the undo callback with a
+	 * device using the correct pci_access */
+	pacc = pci_acc;
+	enable_flash_ich_report_gcs(spi_dev, pch_generation, NULL);
+
+	const int ret_bc = enable_flash_ich_bios_cntl_config_space(spi_dev, pch_generation, 0xdc);
+	if (ret_bc == ERROR_FATAL)
+		goto _freepci_ret;
+
+	const uint32_t phys_spibar = pci_read_long(spi_dev, PCI_BASE_ADDRESS_0) & 0xfffff000;
+	void *const spibar = rphysmap("SPIBAR", phys_spibar, 0x1000);
+	if (spibar == ERROR_PTR)
+		goto _freepci_ret;
+	msg_pdbg("SPIBAR = 0x%0*" PRIxPTR " (phys = 0x%08x)\n", PRIxPTR_WIDTH, (uintptr_t)spibar, phys_spibar);
+
+	/* This adds BUS_SPI */
+	const int ret_spi = ich_init_spi(spibar, pch_generation);
+	if (ret_spi != ERROR_FATAL) {
+		if (ret_bc || ret_spi)
+			ret = ERROR_NONFATAL;
+		else
+			ret = 0;
+	}
+
+_freepci_ret:
+	pci_free_dev(spi_dev);
+	pacc = saved_pacc;
+	return ret;
+}
+
+static int enable_flash_pch100(struct pci_dev *const dev, const char *const name)
+{
+	return enable_flash_pch100_or_c620(dev, name, CHIPSET_100_SERIES_SUNRISE_POINT);
+}
+
+static int enable_flash_c620(struct pci_dev *const dev, const char *const name)
+{
+	return enable_flash_pch100_or_c620(dev, name, CHIPSET_C620_SERIES_LEWISBURG);
+}
+
 /* Silvermont architecture: Bay Trail(-T/-I), Avoton/Rangeley.
  * These have a distinctly different behavior compared to other Intel chipsets and hence are handled separately.
  *
@@ -803,8 +920,7 @@ static int enable_flash_silvermont(struct pci_dev *dev, const char *name)
 
 	/* Handle GCS (in RCRB) */
 	void *rcrb = physmap("BYT RCRB", rcba, 4);
-	uint32_t gcs = mmio_readl(rcrb + 0);
-	enable_flash_ich_handle_gcs(dev, ich_generation, gcs, gcs & 0x2);
+	enable_flash_ich_report_gcs(dev, ich_generation, rcrb);
 	physunmap(rcrb, 4);
 
 	/* Handle fwh_idsel parameter */
@@ -824,7 +940,7 @@ static int enable_flash_silvermont(struct pci_dev *dev, const char *name)
 	 */
 	enable_flash_ich_bios_cntl_memmapped(ich_generation, spibar + 0xFC);
 
-	int ret_spi = ich_init_spi(dev, spibar, ich_generation);
+	int ret_spi = ich_init_spi(spibar, ich_generation);
 	if (ret_spi == ERROR_FATAL)
 		return ret_spi;
 
@@ -927,12 +1043,12 @@ static int enable_flash_vt_vx(struct pci_dev *dev, const char *name)
 			return ERROR_FATAL;
 	}
 
-	return via_init_spi(dev, spi0_mm_base);
+	return via_init_spi(spi0_mm_base);
 }
 
 static int enable_flash_vt8237s_spi(struct pci_dev *dev, const char *name)
 {
-	return via_init_spi(dev, pci_read_long(dev, 0xbc) << 8);
+	return via_init_spi(pci_read_long(dev, 0xbc) << 8);
 }
 
 static int enable_flash_cs5530(struct pci_dev *dev, const char *name)
@@ -1492,6 +1608,7 @@ const struct penable chipset_enables[] = {
 	{0x1022, 0x7440, OK,  "AMD", "AMD-768",				enable_flash_amd_768_8111},
 	{0x1022, 0x7468, OK,  "AMD", "AMD-8111",			enable_flash_amd_768_8111},
 	{0x1022, 0x780e, OK,  "AMD", "FCH",				enable_flash_sb600},
+	{0x1022, 0x790e, OK,  "AMD", "FP4",				enable_flash_sb600},
 	{0x1039, 0x0406, NT,  "SiS", "501/5101/5501",			enable_flash_sis501},
 	{0x1039, 0x0496, NT,  "SiS", "85C496+497",			enable_flash_sis85c496},
 	{0x1039, 0x0530, OK,  "SiS", "530",				enable_flash_sis530},
@@ -1636,7 +1753,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x1f39, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
 	{0x8086, 0x1f3a, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
 	{0x8086, 0x1f3b, NT,  "Intel", "Avoton/Rangeley",		enable_flash_silvermont},
-	{0x8086, 0x229c, NT,  "Intel", "Braswell",			enable_flash_silvermont},
+	{0x8086, 0x229c, OK,  "Intel", "Braswell",			enable_flash_silvermont},
 	{0x8086, 0x2310, NT,  "Intel", "DH89xxCC (Cave Creek)",		enable_flash_pch7},
 	{0x8086, 0x2390, NT,  "Intel", "Coleto Creek",			enable_flash_pch7},
 	{0x8086, 0x2410, OK,  "Intel", "ICH",				enable_flash_ich0},
@@ -1773,18 +1890,57 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x9c43, NT,  "Intel", "Lynx Point LP Premium",		enable_flash_pch8_lp},
 	{0x8086, 0x9c45, NT,  "Intel", "Lynx Point LP Mainstream",	enable_flash_pch8_lp},
 	{0x8086, 0x9c47, NT,  "Intel", "Lynx Point LP Value",		enable_flash_pch8_lp},
-	{0x8086, 0x9cc1, NT,  "Intel", "Haswell U Sample",		enable_flash_pch9},
-	{0x8086, 0x9cc2, NT,  "Intel", "Broadwell U Sample",		enable_flash_pch9},
-	{0x8086, 0x9cc3, NT,  "Intel", "Broadwell U Premium",		enable_flash_pch9},
-	{0x8086, 0x9cc5, NT,  "Intel", "Broadwell U Base",		enable_flash_pch9},
-	{0x8086, 0x9cc6, NT,  "Intel", "Broadwell Y Sample",		enable_flash_pch9},
-	{0x8086, 0x9cc7, NT,  "Intel", "Broadwell Y Premium",		enable_flash_pch9},
-	{0x8086, 0x9cc9, NT,  "Intel", "Broadwell Y Base",		enable_flash_pch9},
+	{0x8086, 0x9cc1, NT,  "Intel", "Haswell U Sample",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc2, NT,  "Intel", "Broadwell U Sample",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc3, NT,  "Intel", "Broadwell U Premium",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc5, NT,  "Intel", "Broadwell U Base",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc6, NT,  "Intel", "Broadwell Y Sample",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc7, NT,  "Intel", "Broadwell Y Premium",		enable_flash_pch9_lp},
+	{0x8086, 0x9cc9, NT,  "Intel", "Broadwell Y Base",		enable_flash_pch9_lp},
 	{0x8086, 0x9ccb, NT,  "Intel", "Broadwell H",			enable_flash_pch9},
-	{0x8086, 0x9d41, BAD, "Intel", "Sunrise Point (Skylake LP Sample)",	NULL},
-	{0x8086, 0x9d43, BAD, "Intel", "Sunrise Point (Skylake-U Base)",	NULL},
-	{0x8086, 0x9d48, BAD, "Intel", "Sunrise Point (Skylake-U Premium)",	NULL},
-	{0x8086, 0x9d46, BAD, "Intel", "Sunrise Point (Skylake-Y Premium)",	NULL},
+	{0x8086, 0x9d41, NT,  "Intel", "Skylake / Kaby Lake Sample",	enable_flash_pch100},
+	{0x8086, 0x9d43, NT,  "Intel", "Skylake U Base",		enable_flash_pch100},
+	{0x8086, 0x9d46, NT,  "Intel", "Skylake Y Premium",		enable_flash_pch100},
+	{0x8086, 0x9d48, NT,  "Intel", "Skylake U Premium",		enable_flash_pch100},
+	{0x8086, 0x9d4b, NT,  "Intel", "Kaby Lake Y w/ iHDCP2.2 Prem.",	enable_flash_pch100},
+	{0x8086, 0x9d4e, NT,  "Intel", "Kaby Lake U w/ iHDCP2.2 Prem.",	enable_flash_pch100},
+	{0x8086, 0x9d50, NT,  "Intel", "Kaby Lake U w/ iHDCP2.2 Base",	enable_flash_pch100},
+	{0x8086, 0x9d51, NT,  "Intel", "Kabe Lake w/ iHDCP2.2 Sample",	enable_flash_pch100},
+	{0x8086, 0x9d53, NT,  "Intel", "Kaby Lake U Base",		enable_flash_pch100},
+	{0x8086, 0x9d56, NT,  "Intel", "Kaby Lake Y Premium",		enable_flash_pch100},
+	{0x8086, 0x9d58, NT,  "Intel", "Kaby Lake U Premium",		enable_flash_pch100},
+	{0x8086, 0xa141, NT,  "Intel", "Sunrise Point Desktop Sample",	enable_flash_pch100},
+	{0x8086, 0xa142, NT,  "Intel", "Sunrise Point Unknown Sample",	enable_flash_pch100},
+	{0x8086, 0xa143, NT,  "Intel", "H110",				enable_flash_pch100},
+	{0x8086, 0xa144, NT,  "Intel", "H170",				enable_flash_pch100},
+	{0x8086, 0xa145, NT,  "Intel", "Z170",				enable_flash_pch100},
+	{0x8086, 0xa146, NT,  "Intel", "Q170",				enable_flash_pch100},
+	{0x8086, 0xa147, NT,  "Intel", "Q150",				enable_flash_pch100},
+	{0x8086, 0xa148, NT,  "Intel", "B150",				enable_flash_pch100},
+	{0x8086, 0xa149, NT,  "Intel", "C236",				enable_flash_pch100},
+	{0x8086, 0xa14a, NT,  "Intel", "C232",				enable_flash_pch100},
+	{0x8086, 0xa14b, NT,  "Intel", "Sunrise Point Server Sample",	enable_flash_pch100},
+	{0x8086, 0xa14d, NT,  "Intel", "QM170",				enable_flash_pch100},
+	{0x8086, 0xa14e, NT,  "Intel", "HM170",				enable_flash_pch100},
+	{0x8086, 0xa150, NT,  "Intel", "CM236",				enable_flash_pch100},
+	{0x8086, 0xa151, NT,  "Intel", "QMS180",			enable_flash_pch100},
+	{0x8086, 0xa152, NT,  "Intel", "HM175",				enable_flash_pch100},
+	{0x8086, 0xa153, NT,  "Intel", "QM175",				enable_flash_pch100},
+	{0x8086, 0xa154, NT,  "Intel", "CM238",				enable_flash_pch100},
+	{0x8086, 0xa155, NT,  "Intel", "QMU185",			enable_flash_pch100},
+	{0x8086, 0xa1c1, NT,  "Intel", "C621 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c2, NT,  "Intel", "C622 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c3, NT,  "Intel", "C624 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c4, NT,  "Intel", "C625 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c5, NT,  "Intel", "C626 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c6, NT,  "Intel", "C627 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa1c7, NT,  "Intel", "C628 Series Chipset (QS/PRQ)",	enable_flash_c620},
+	{0x8086, 0xa242, NT,  "Intel", "C624 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa243, NT,  "Intel", "C627 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa244, NT,  "Intel", "C621 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa245, NT,  "Intel", "C627 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa246, NT,  "Intel", "C628 Series Chipset Supersku",	enable_flash_c620},
+	{0x8086, 0xa247, NT,  "Intel", "C620 Series Chipset Supersku",	enable_flash_c620},
 #endif
 	{0},
 };
