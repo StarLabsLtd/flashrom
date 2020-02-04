@@ -34,6 +34,7 @@
 #include <errno.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define NOT_DONE_YET 1
 
@@ -525,7 +526,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	static const char *const straps_names_EP80579[] = { "SPI", "reserved", "reserved", "LPC" };
 	static const char *const straps_names_ich7_nm10[] = { "reserved", "SPI", "PCI", "LPC" };
 	static const char *const straps_names_ich8910[] = { "SPI", "SPI", "PCI", "LPC" };
-	static const char *const straps_names_pch56[] = { "LPC", "reserved", "PCI", "SPI" };
+	static const char *const straps_names_pch567[] = { "LPC", "reserved", "PCI", "SPI" };
 	static const char *const straps_names_unknown[] = { "unknown", "unknown", "unknown", "unknown" };
 
 	switch (ich_generation) {
@@ -545,7 +546,8 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		break;
 	case CHIPSET_5_SERIES_IBEX_PEAK:
 	case CHIPSET_6_SERIES_COUGAR_POINT:
-		straps_names = straps_names_pch56;
+	case CHIPSET_7_SERIES_PANTHER_POINT:
+		straps_names = straps_names_pch567;
 		break;
 	default:
 		msg_gerr("%s: unknown ICH generation. Please report!\n",
@@ -1297,6 +1299,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x1e46, NT, "Intel", "Z75",		enable_flash_pch7},
 	{0x8086, 0x1e49, NT, "Intel", "B75",		enable_flash_pch7},
 	{0x8086, 0x1e4a, NT, "Intel", "H77",		enable_flash_pch7},
+	{0x8086, 0x1e55, OK, "Intel", "QM77",		enable_flash_pch7},
 	{0x8086, 0x1e57, NT, "Intel", "HM77",		enable_flash_pch7},
 	{0x8086, 0x1e58, NT, "Intel", "UM77",		enable_flash_pch7},
 	{0x8086, 0x1e59, NT, "Intel", "HM76",		enable_flash_pch7},
@@ -1355,7 +1358,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x3b0e, NT, "Intel", "B55",		enable_flash_pch5},
 	{0x8086, 0x3b0f, OK, "Intel", "QS57",		enable_flash_pch5},
 	{0x8086, 0x3b12, NT, "Intel", "3400",		enable_flash_pch5},
-	{0x8086, 0x3b14, NT, "Intel", "3420",		enable_flash_pch5},
+	{0x8086, 0x3b14, OK, "Intel", "3420",		enable_flash_pch5},
 	{0x8086, 0x3b16, NT, "Intel", "3450",		enable_flash_pch5},
 	{0x8086, 0x3b1e, NT, "Intel", "B55",		enable_flash_pch5},
 	{0x8086, 0x5031, OK, "Intel", "EP80579",	enable_flash_ich7},

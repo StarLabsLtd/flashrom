@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define PCI_VENDOR_ID_DRKAISER		0x1803
 
@@ -59,7 +60,6 @@ static int drkaiser_shutdown(void *data)
 	physunmap(drkaiser_bar, DRKAISER_MEMMAP_SIZE);
 	/* Flash write is disabled automatically by PCI restore. */
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 };
 
@@ -67,7 +67,8 @@ int drkaiser_init(void)
 {
 	uint32_t addr;
 
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	addr = pcidev_init(PCI_BASE_ADDRESS_2, drkaiser_pcidev);
 

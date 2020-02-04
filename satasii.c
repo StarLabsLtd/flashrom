@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
+#include "hwaccess.h"
 
 #define PCI_VENDOR_ID_SII	0x1095
 
@@ -61,7 +62,6 @@ static int satasii_shutdown(void *data)
 {
 	physunmap(sii_bar, SATASII_MEMMAP_SIZE);
 	pci_cleanup(pacc);
-	release_io_perms();
 	return 0;
 }
 
@@ -70,7 +70,8 @@ int satasii_init(void)
 	uint32_t addr;
 	uint16_t reg_offset;
 
-	get_io_perms();
+	if (rget_io_perms())
+		return 1;
 
 	pcidev_init(PCI_BASE_ADDRESS_0, satas_sii);
 
