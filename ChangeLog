@@ -1,4 +1,1641 @@
 ------------------------------------------------------------------------
+r1141 | uwe | 2010-08-15 17:26:30 +0200 (Sun, 15 Aug 2010) | 46 lines
+
+Various board status updates and fixes (trivial).
+
+- There are number of boards that have board-enables in board-enable.c but
+  have no corresponding entry in print.c (with or without URL doesn't matter)
+  and thus appear neither in the "flashrom -L" list of boards nor in the
+  wiki output. Fix this by adding entries for them in print.c.
+
+   - abit AN-M2
+   - abit KN8 Ultra
+   - ASUS A8Jm (laptop)
+   - ASUS A8N (might need changing to "A8N-SLI Deluxe", see
+     http://www.coreboot.org/pipermail/flashrom/2009-November/000878.html)
+   - ASUS A8N-LA (Nagami-GL8E)
+   - ASUS P4B533-E
+   - ASUS P4S800-MX
+   - HP ProLiant DL165 G6
+   - IBASE MB899
+   - Intel SE440BX-2 (marked as non-working for now though, due to
+     http://www.coreboot.org/pipermail/flashrom/2010-July/003952.html)
+   - MSI MS-6577 (Xenon)
+   - MSI MS-7207 (K8NGM2-L)
+
+- Fix / amend a few board names:
+
+   - Add "ProLiant" name to the "DL145 G3" (and the new "DL165 G6"), we
+     use such "series" names for various other boards (e.g. "Vectra" etc)
+     and it also helps users googling for those names.
+
+   - HP "Vectra VL400 PC" should be "Vectra VL400" really, I'm pretty sure
+     the "PC" is not part of the board name but simply stands for
+     "personal computer". Same for "Vectra VL420 SFF PC".
+
+   - Change "ASUS A8JM" to "ASUS A8Jm" as per vendor website.
+
+   - Add comments for boards which may be listed with incorrect names,
+     I sent out clarification requests to the list, URLs listed as comment.
+
+   - Add "Xenon" HP name to the "MSI MS-6577" OEM board.
+
+   - Fix typo in "MS-7207 (K8N GM2-L)", should be "MS-7207 (K8NGM2-L)" as
+     per vendor website.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1140 | uwe | 2010-08-15 16:36:18 +0200 (Sun, 15 Aug 2010) | 13 lines
+
+Mark the board-enable for ASUS A8N-LA (HP OEM "Nagami-GL8E") as tested.
+
+Change the DMI string to only match this exact board (DMI "NAGAMI2L")
+as only this one is tested.
+
+Similar HP OEM boards might also work using this board-enable but that's
+not sure and not tested. Two of those boards have DMI strings "NAGAMI"
+and "NAGAMI2".
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1139 | mkarcher | 2010-08-15 12:21:29 +0200 (Sun, 15 Aug 2010) | 9 lines
+
+Board enable for MSI MS-7061 (KM4AM-V)
+
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-August/004414.html
+
+(URL added by Michael Karcher)
+
+Signed-off-by: Mattias Mattsson <vitplister@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1138 | mkarcher | 2010-08-13 14:49:01 +0200 (Fri, 13 Aug 2010) | 11 lines
+
+Board enable for GA-8PE667 Ultra 2
+
+I had to use the USB controller in the board enable because all other
+subsystem IDs are having vendor: Gigabyte but mostly copy the Intel
+product IDs.
+
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-August/004420.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Thomas Kalka <thomas.kalka@googlemail.com>
+------------------------------------------------------------------------
+r1137 | mkarcher | 2010-08-11 23:06:10 +0200 (Wed, 11 Aug 2010) | 8 lines
+
+Add support for Intel 5 Series / 3400 Series chipsets
+
+(At least) for the QM57 which i have tested an additional patch was
+needed as some reserved bits in the "Software Sequencing Flash Control
+Register" (SSFC) needs to be programmed to 1 in the QM57.
+
+Signed-off-by: Helge Wagner <helge.wagner@ge.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1136 | mkarcher | 2010-08-08 23:56:52 +0200 (Sun, 08 Aug 2010) | 9 lines
+
+Add dmidecode quirk workaround
+
+dmidecode emits a warning message about unsupported SMBIOS versions
+to stdout before the information asked for when using "-s". I consider
+this behaviour broken, but we still need to workaround it as e.g. Fedora
+currently distributes an dmidecode with this behaviour.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r1135 | uwe | 2010-08-08 19:04:21 +0200 (Sun, 08 Aug 2010) | 6 lines
+
+Fix typo (s/Bit/Bits/) to clarify code comment.
+ 
+Signed-off-by: David Borg <borg.db@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1134 | uwe | 2010-08-08 19:01:18 +0200 (Sun, 08 Aug 2010) | 20 lines
+
+Various cosmetic and coding-style fixes (trivial).
+
+ - Fix incorrect whitespace, indentation, and coding style in some places.
+
+ - Drop '/**' Doxygen comments, we don't use Doxygen. Even if we would use
+   it, the comments are useless as we don't have any Doxygen markup in there.
+
+ - Use consistent vendor name spelling as per current website (NVIDIA,
+   abit, GIGABYTE).
+
+ - Use consistent / common format for "Suited for:" lines in board_enable.c.
+
+ - Add some missing 'void's in functions taking no arguments.
+
+ - Add missing fullstops in sentences, remove them from non-sentences (lists).
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1133 | uwe | 2010-08-08 18:05:23 +0200 (Sun, 08 Aug 2010) | 10 lines
+
+Add a board-enable for the ASRock 775i65G.
+
+This was successfully tested by 'kai2343' on IRC.
+
+Thanks to Michael Karcher for finding the board enable.
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1132 | uwe | 2010-08-08 17:52:07 +0200 (Sun, 08 Aug 2010) | 41 lines
+
+Mark the following boards/chips as tested (trivial).
+
+Boards:
+
+ - ASUS M4A785TD-M EVO (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-August/004283.html
+
+ - ASUS M2N32-SLI Deluxe (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-August/004287.html
+
+ - ASUS P2E-M (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004261.html
+
+ - ASUS M2N-SLI Deluxe (reported by
+   Kasper M. Nielsen <kasper.nielsen85@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003015.html
+   
+ - iBASE MB899 (reported by Bernhard M. Wiedemann <bernhard@lsmod.de>)
+   http://www.flashrom.org/pipermail/flashrom/2010-April/002953.html
+   
+   Board-enable is now marked as tested.
+
+ - ASRock 939A785GMH/128M (reported by
+   Lennart Sauerbeck <lists@lennart.sauerbeck.org>)
+   http://www.flashrom.org/pipermail/flashrom/2010-August/004340.html
+
+Chips:
+ 
+ - ST M50FLW080A (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-August/004287.html
+ 
+ - Winbond W29EE011 (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004261.html
+ 
+ - SST SST49LF040 (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-August/004296.html
+ 
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1131 | mkarcher | 2010-08-07 23:49:11 +0200 (Sat, 07 Aug 2010) | 9 lines
+
+Board enable for MSI MS-6577
+
+Thanks to "Putlinuxonit" <putlinuxonit@gmail.com> for reporting
+and testing.
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-August/004309.html
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1130 | mkarcher | 2010-08-02 10:29:34 +0200 (Mon, 02 Aug 2010) | 7 lines
+
+Board enable for Asus P4S800-MX
+
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-July/004172.html
+
+Signed-off-by: David Borg <borg.db@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1129 | uwe | 2010-08-01 02:13:49 +0200 (Sun, 01 Aug 2010) | 55 lines
+
+Further chip and board status updates (trivial).
+
+Mark the following boards as supported:
+
+ - Foxconn A6VMX (reported by Alec Wright <alecjw@member.fsf.org>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004186.html
+
+ - GIGABYTE GA-8IRML (reported by Putlinuxonit <putlinuxonit@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004175.html
+
+   Marking the board-enable as tested now.
+
+ - MSI MS-7253 (K9VGM-V) (reported by Alex <cerebro.alexiel@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003411.html
+
+ - Soyo SY-6BA+ III (reported by Andrew Morgan <ziltro@ziltro.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003409.html
+
+ - GIGABYTE GA-770TA-UD3 (reported by Hering <boerni@pakke.de>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003267.html
+
+ - Shuttle AV11V30 (reported by
+   "N?\195?\169stor a.k.a. DarkMan" <master_darkman@hotmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003260.html
+
+ - Tyan S3992 (reported by Alessandro Gervaso <gervaso@appliedgenomics.org>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003129.html
+
+ - GIGABYTE GA-MA785GMT-UD2H (reported by
+   Dominick Layfield <dom.layfield@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003061.html
+
+Mark the following chips as tested:
+
+ - ST M25P10-A (reported by Joshua Blanton <jblanton@rldrake.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003451.html
+
+ - ST M50FLW080A (reported by Vincent Pelletier <plr.vincent@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003410.html
+
+   Marked PROBE and READ as tested.
+
+ - SST SST39SF020A (reported by Andrew Morgan <ziltro@ziltro.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003409.html
+
+ - AMD Am29F010A/B (reported by Andrew Morgan <ziltro@ziltro.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003335.html
+
+ - SST SST39VF010 (reported by Tim Small <tim@buttersideup.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-May/003310.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1128 | hailfinger | 2010-08-01 01:16:09 +0200 (Sun, 01 Aug 2010) | 7 lines
+
+Add support for SIS661 (SIS963).
+
+Tested on Asus P4S800-MX.
+
+Signed-off-by: David Borg <borg.db@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1127 | uwe | 2010-07-30 19:08:29 +0200 (Fri, 30 Jul 2010) | 10 lines
+
+Mark the following boards as supported:
+
+ - Elitegroup RS485M-M
+
+ - Biostar TA780G M2+
+
+Signed-off-by: Daniel Lenski <dlenski@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1126 | uwe | 2010-07-30 00:39:47 +0200 (Fri, 30 Jul 2010) | 65 lines
+
+Mark the following chips/boards/PCI-cards as OK (trivial).
+
+Chips:
+
+ - Winbond W25x80 (reported by Michael Cole <michaelcole@michaelcole.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004176.html
+
+ - Winbond W25Q80 (reported by Jonathan A. Kollasch <jakllsch@kollasch.net>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/003847.html
+
+ - SST SST25VF080B (reported by Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/003807.html
+
+   Also reported by Daniel Flinkmann <dflinkmann@gmx.de>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003659.html
+
+ - Winbond W25x16 (reported by Michael Dunphy <mdunphy@uwaterloo.ca>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003631.html
+
+ - Atmel AT25DF321 (reported by
+   Ramakrishna Kvv <Ramakrishna.Koduri@emerson.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003529.html
+
+ - Winbond W25x40 (reported by Prakash J Kokkatt <pjkonweb@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003502.html
+
+ - Winbond W49V002A (reported by David <dung@aon.at>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003375.html
+
+ - Macronix MX25L8005 (reported by Peter Lemenkov <lemenkov@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003373.html
+
+   Also reported by Alec Wright <alecjw@member.fsf.org>.
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004186.html
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004159.html
+
+   Also reported by J?\195?\182rg Fischer <turboj@gmx.de>.
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004080.html
+
+   Also reported by Kevin Malec <kevin.010@gmail.com>.
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003698.html
+
+   Heck, also reported by myself (tested on hardware, never sent mail).
+
+ - SST SST49LF002A/B (reported by Udu Ogah <putlinuxonit@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004184.html
+
+ - SST SST49LF160C (reported by Ed Swierk <eswierk@aristanetworks.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003634.html
+
+Mark the following boards as supported:
+
+ - ASUS M3A76-CM (reported by Kevin Malec <kevin.010@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003698.html
+
+Mark the following PCI cards as supported:
+
+ - "Silicon Image SiI 3124 PCI-X SATA Ctrl" (1095:3124)
+   Reported by Max Kalashnikov <mmt@maxkalashnikov.com>
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004007.html
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1125 | uwe | 2010-07-29 23:15:45 +0200 (Thu, 29 Jul 2010) | 6 lines
+
+Mark GIGABYTE GA-MA74GM-S2H (rev. 3.0) as supported.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1124 | hailfinger | 2010-07-29 22:01:13 +0200 (Thu, 29 Jul 2010) | 18 lines
+
+Add definitions for the following chips:
+
+Mosel Vitelic Corporation:
+V29C51000B, V29C51000T, V29C51400B, V29C51400T, V29LC51000, V29LC51001,
+V29LC51002
+
+SyncMOS / Mosel Vitelic Corporation:
+{F,S,V}29C51001B, {F,S,V}29C51001T, {F,S,V}29C51002B, {F,S,V}29C51002T,
+{F,S,V}29C51004B, {F,S,V}29C51004T, {V,S}29C31004B, {V,S}29C31004T
+
+Modify earlier definitions of
+S29C31004T/S29C51001T/S29C51002T/S29C51004T to change name and correct
+page size.
+
+Signed-off-by: Mattias Mattsson <vitplister@gmail.com>
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1123 | uwe | 2010-07-29 21:57:55 +0200 (Thu, 29 Jul 2010) | 9 lines
+
+ft2232_spi: Cosmetic fixes (trivial).
+
+Various whitespace- and cosmetic fixes. Also, Use %04x:%04x for printing
+the USB IDs (which are 4 hex digits long), not %02x:%02x.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1122 | uwe | 2010-07-29 21:26:15 +0200 (Thu, 29 Jul 2010) | 51 lines
+
+Mark the following boards as tested OK (trivial).
+
+ - ASUS M4A79T Deluxe (reported by Michael Cole <michaelcole@michaelcole.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004176.html
+
+ - Tyan S2915 (Thunder n6650W) (reported by
+   Axel Bergerhoff <axelbergerhoff@compuserve.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/004140.html
+
+ - ASRock ALiveNF6G-DVI (reported by Sven Lankes <sven@lank.es>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/003951.html
+
+ - ASUS M4A87TD/USB3 (reported by Jonathan A. Kollasch <jakllsch@kollasch.net>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/003847.html
+
+ - Fujitsu-Siemens ESPRIMO P5915 (reported by
+   Mattias Mattsson <vitplister@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-July/003807.html
+
+ - ASUS P6T SE (reported by Michael Dunphy <mdunphy@uwaterloo.ca>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003631.html
+
+   Also reported by Sinisa Dukanovic <sinisa@dukanovic.com>.
+   http://www.flashrom.org/pipermail/flashrom/2010-January/001799.html
+
+ - Emerson ATCA-7360 (reported by
+   Ramakrishna Kvv <Ramakrishna.Koduri@emerson.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003529.html
+
+ - ASUS P5GC-MX/1333 (reported by Prakash J Kokkatt <pjkonweb@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003502.html
+
+ - Elitegroup P6IWP-Fe (reported by Anders Jenbo <anders@jenbo.dk>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003419.html
+
+ - Biostar M7NCD Pro (reported by David <dung@aon.at>)
+   http://www.flashrom.org/pipermail/flashrom/2010-June/003375.html
+
+Mark the "HP Compaq nx9005" laptop as non-supported for now.
+Reported by Anders <mail@jagtogfiskerimagasinet.dk>.
+http://www.flashrom.org/pipermail/flashrom/2010-May/003321.html
+
+Fix "Samsung Polaris 32" URL entry from "" to NULL, otherwise the wiki
+output is broken.
+
+Also do some minor whitespace fixing in print.c.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r1121 | hailfinger | 2010-07-29 18:32:24 +0200 (Thu, 29 Jul 2010) | 9 lines
+
+The AAI code rewrite in r1052 introduced a bug: The writelen of AAI
+continuation is 3 bytes, but the code incorrectly had 6 bytes there.
+This causes all AAI writes (except the first two bytes of a chip) to
+fail.
+Thanks to den_m for reporting the bug and for testing the fix.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1120 | hailfinger | 2010-07-29 18:24:09 +0200 (Thu, 29 Jul 2010) | 13 lines
+
+If we violate the raw SPI communication protocol requirements of the Bus
+Pirate (namely, waiting for the completion of one command before sending
+the next one), we can reduce the number of round trips by a factor of 3.
+The FT2232 chip present in the Bus Pirate has a big enough buffer (at
+least 128 bytes IIRC) to avoid overflows in the tiny buffer of the Bus
+Pirate PIC.
+
+Thanks to Daniel Flinkmann for sponsoring development of this patch.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested-by: Daniel Flinkmann <DFlinkmann@gmx.de>
+Acked-by: Daniel Flinkmann <dflinkmann@gmx.de>
+
+------------------------------------------------------------------------
+r1119 | hailfinger | 2010-07-29 17:54:53 +0200 (Thu, 29 Jul 2010) | 18 lines
+
+Add support for the Amontec JTAGkey2, see
+http://www.amontec.com/jtagkey2.shtml
+http://www.amontec.com/jtagkey.shtml
+
+This FTDI 2232H variant has an additional output enable, which will be
+set to its "on" (L) when CS is pulled low.
+But it lacks a power supply and you need an external 3.3V source.
+
+The attached patch adds "jtagkey" as "type" parameter for ft2232_spi.
+It should work with all JTAGkeys (JTAGkey, JTAGkey-tiny and JTAGkey2)
+but I only have a JTAGkey2 here for testing.
+
+Add all FT2232H/FT4232H based programmers to the list printed with
+flashrom -L
+
+Signed-off-by: J?\195?\182rg Fischer <turboj@gmx.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1118 | hailfinger | 2010-07-29 17:00:40 +0200 (Thu, 29 Jul 2010) | 7 lines
+
+Add support for
+AMIC A25L512, A25L010, A25L020, A25L040, A25L080, A25L016, A25L032
+AMIC A25LQ032 (quad-rate read)
+
+Signed-off-by: Dan Lenski <dlenski@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1117 | hailfinger | 2010-07-29 16:41:46 +0200 (Thu, 29 Jul 2010) | 5 lines
+
+Compile gfxnvidia by default, but disallow write/erase.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1116 | hailfinger | 2010-07-29 15:17:37 +0200 (Thu, 29 Jul 2010) | 7 lines
+
+Allow compilation on all architectures even if direct hardware access
+primitives are missing, if all you need is userspace access to the
+serial port (serprog, buspirate) or no access at all (dummy).
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1115 | hailfinger | 2010-07-29 15:09:18 +0200 (Thu, 29 Jul 2010) | 13 lines
+
+Add detailed status register printing and unlocking for all ATMEL AT25*
+chips.
+
+Add support for Atmel AT25DF081A and AT25DQ161.
+
+Some chips require EWSR before WRSR, others require WREN before WRSR,
+and some support both variants. Add feature_bits to select the correct
+SPI command, and default to EWSR.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Tested-by: Steven Rosario
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1114 | hailfinger | 2010-07-29 00:20:20 +0200 (Thu, 29 Jul 2010) | 7 lines
+
+Cosmetics.
+Fix alphabetic sort order for manufacturers in flashchips.c.
+Rename a few EON chips to Eon.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1113 | hailfinger | 2010-07-28 17:08:35 +0200 (Wed, 28 Jul 2010) | 28 lines
+
+Add Nvidia nForce MCP61/MCP65/MCP67/MCP78S/MCP73/MCP79 SPI flashing
+support.
+
+Huge thanks go to Michael Karcher for reverse engineering the interface
+and to Johannes Sj?\195?\182lund for testing the first iterations of my patch on
+his hardware until it worked.
+
+Thanks to the following testers of the patch:
+* MCP61, 10de:03e0, LPC OK, ECS Geforce6100SM-M, Andrew Cleveland
+* MCP61, 10de:03e0, LPC OK, Biostar NF520-A2 NF61D-A2, Vitaliy Buchynskyy
+* MCP65, 10de:0441, SPI OK, MSI MS-7369 K9N Neo-F v2, Kjell Braden
+* MCP65, 10de:0441, SPI OK, MSI MS-7369, Wolfgang Schnitker
+* MCP65, 10de:0441, SPI OK, MSI MS-7369, Johannes Sj?\195?\182lund
+* MCP65, 10de:0441, SPI OK, MSI MS-7369, Melchior Franz
+* MCP78S, 10de:075c, SPI OK, Asus M3N78 PRO, Brad Rogers
+* MCP78S, 10de:075c, SPI OK, Asus M3N78-VM, Marcel Partap
+* MCP78S, 10de:075c, SPI OK, Asus M4N78 PRO, Kimmo Vuorinen
+* MCP78S, 10de:075c, SPI OK, Asus M4N78 PRO, Vikram Ambrose
+* MCP79, 10de:0aad, SPI OK, Acer Aspire R3600, Andrew Morgan
+* MCP79, 10de:0aae, LPC ??, Lenovo Ideapad S12 laptop, Christian Schmitt
+* MCP79, 10de:0aae, SPI OK, Apple iMac9,1 Mac-F2218EA9, David "dledson"
+
+flashrom will refuse to write/erase for safety reasons if MCP6x/MCP7x
+SPI is detected.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1112 | hailfinger | 2010-07-28 00:41:39 +0200 (Wed, 28 Jul 2010) | 18 lines
+
+Split off programmer.h from flash.h.
+Programmer specific functions are of absolutely no interest to any file
+except those dealing with programmer specific actions (special SPI
+commands and the generic core).
+
+The new header structure is as follows (and yes, improvements are
+possible):
+flashchips.h  flash chip IDs
+chipdrivers.h  chip-specific read/write/... functions
+flash.h  common header for all stuff that doesn't fit elsewhere
+hwaccess.h hardware access functions
+programmer.h  programmer specific functions
+coreboot_tables.h  header from coreboot, internal programmer only
+spi.h SPI command definitions
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1111 | hailfinger | 2010-07-28 00:03:46 +0200 (Wed, 28 Jul 2010) | 27 lines
+
+Convert all PCI-based external programmers to use special little-endian
+accessors for all MMIO regions of PCI devices.
+This patch does _not_ touch the internal programmer (which is PCI-based
+as well).
+
+Huge thanks go to Misha Manulis who worked with me to create a first
+version of this patch for the satasii programmer based on modification
+of generic code.
+
+Huge thanks also go to Segher Boessenkool for suggesting the pci_mmio_
+prefix for the abstraction layer.
+
+NOTE to package maintainers:
+With this patch, compilation and usage of flashrom should be safe on
+x86, x86_64, MIPS (little and big endian) and PowerPC (big endian).
+
+The internal programmer is disabled on non-x86/x86_64 (but it compiles).
+The atahpt, nic3com, nicnatsemi, nicrealtek and rayer_spi can not be
+compiled on non-x86/x86_64 because port space I/O is not (yet)
+supported. Please compile with default settings on x86/x86_64 and with
+the following settings on all other architectures:
+make CONFIG_NIC3COM=no CONFIG_NICREALTEK=no CONFIG_NICNATSEMI=no
+     CONFIG_RAYER_SPI=no
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Misha Manulis <misha@manulis.com>
+
+------------------------------------------------------------------------
+r1110 | uwe | 2010-07-28 00:00:42 +0200 (Wed, 28 Jul 2010) | 22 lines
+
+Add a udev rules file for flashrom.
+
+This allows USB-based external programmers to be used by non-root users
+(which are in the 'plugdev' group). The file is to be installed by the
+distros into the proper place (not sure if this is distro-specific). On
+Debian the file will end up in /etc/udev/rules.d/z60_flashrom.rules.
+
+On some systems the 'plugdev' group might have to adapted to whatever
+the respective distro uses.
+
+The following devices are listed so far:
+
+ - Amontec JTAGkey(2)
+ - Buspirate
+ - Dediprog SF100
+ - DLP Design DLP-USB1232H
+ - FTDI FT4232H Mini-Module
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r1109 | mkarcher | 2010-07-25 00:50:54 +0200 (Sun, 25 Jul 2010) | 13 lines
+
+Board enable for abit NF-M2 nView
+
+To be safe, the onboard video of the nView edition of this board has
+been included in the match. If other NF-M2 editions have the same board
+enable, the match should be broadened
+
+lspci/superiotool
+  http://www.coreboot.org/pipermail/flashrom/2010-April/002909.html
+
+No success report, thus committed as untested.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1108 | mkarcher | 2010-07-25 00:43:12 +0200 (Sun, 25 Jul 2010) | 14 lines
+
+Detect IP35 by the SMBus bridge instead of the SATA controller
+
+The SATA controller matched in the board enable is not always present
+with that ID (that's the 2-port ICH9 SATA IDE controller), but (depending
+on board revision/edition or BIOS settings an ICH9 SATA RAID controller
+appears instead. This patches matches on the SMBus function in the
+south bridge instead of the SATA controller.
+
+Non-working board reported by: Gunter Keilholz <gunter.keilholz@googlemail.com>
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-June/003591.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1107 | mkarcher | 2010-07-25 00:36:01 +0200 (Sun, 25 Jul 2010) | 8 lines
+
+Board enable for Samsung Polaris 32
+
+lspci/superiotool:
+http://www.coreboot.org/pipermail/flashrom/2010-July/003889.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Tested-by: Alex Loktionoff <oxy-loktionoff@mail.ru>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1106 | mkarcher | 2010-07-25 00:27:29 +0200 (Sun, 25 Jul 2010) | 9 lines
+
+Board enable for GA-8IRML
+
+Non-working board reported by idlogin / Putlinuxonit <putlinuxonit@gmail.com>
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-May/003330.html
+No success report, so committed as untested.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1105 | mkarcher | 2010-07-25 00:18:14 +0200 (Sun, 25 Jul 2010) | 10 lines
+
+board enable for Abit IC7
+
+Non-working board reported by: Anders Jenbo <anders@jenbo.dk>
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-June/003346.html
+
+no success report, so committed as untested.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1104 | mkarcher | 2010-07-25 00:07:52 +0200 (Sun, 25 Jul 2010) | 6 lines
+
+Fix compilation for CONFIG_INTERNAL=no
+
+broken by r1098
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1103 | hailfinger | 2010-07-24 20:47:45 +0200 (Sat, 24 Jul 2010) | 5 lines
+
+Fix compilation which was broken by r1101.
+
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1102 | mkarcher | 2010-07-24 13:14:37 +0200 (Sat, 24 Jul 2010) | 7 lines
+
+Board enable for HP Puffer2-UL8E
+
+lspci/superiotool:
+  http://www.coreboot.org/pipermail/flashrom/2010-July/003869.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Mattias Mattsson <vitplister@gmail.com>
+------------------------------------------------------------------------
+r1101 | mkarcher | 2010-07-24 13:03:48 +0200 (Sat, 24 Jul 2010) | 6 lines
+
+Board enable for ASUS P4SD-LA (HP OEM)
+
+No response from reporter - committed as "untested".
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1100 | mkarcher | 2010-07-24 12:41:42 +0200 (Sat, 24 Jul 2010) | 5 lines
+
+Board enable for ASUS P5PE-VM
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Tested-by: Franti?\197?\161ek Ku?\196?\141era <linux@frantovo.cz>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1099 | mkarcher | 2010-07-22 20:04:19 +0200 (Thu, 22 Jul 2010) | 4 lines
+
+Move SB600 SPI initialization to sb600spi.c
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1098 | mkarcher | 2010-07-22 20:04:15 +0200 (Thu, 22 Jul 2010) | 8 lines
+
+Move Intel SPI initialisation to ichspi.c
+
+Smarter version could decide whether SPI is vital or not depending on
+straps. Straps are currently implemented for ICH7. EP80579 is in the comment,
+PCH of 5 Series/3400 Series has "LPC, reserved, PCI, SPI".
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1097 | hailfinger | 2010-07-22 17:20:43 +0200 (Thu, 22 Jul 2010) | 5 lines
+
+Add support for the Intel 28F002BC-T.
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1096 | hailfinger | 2010-07-22 13:44:38 +0200 (Thu, 22 Jul 2010) | 23 lines
+
+Add support for the following AMIC SPI chips:
+http://www.amictechnology.com/pdf/A25L20P.pdf covers:
+AMIC A25L05PT
+AMIC A25L05PU
+AMIC A25L10PT
+AMIC A25L10PU
+AMIC A25L20PT
+AMIC A25L20PU
+http://www.amictechnology.com/pdf/A25L16P.pdf covers:
+AMIC A25L16PT
+AMIC A25L16PU
+
+Clarify the situation surrounding the A25L40PT and A25L40PU chips which
+share the same RDID values, despite the fact that their erase block
+layouts are different.  Rudolf Marek tested and confirmed the distinct
+erase block layouts of these chips.
+
+Add a pretty-printer for the AMIC SPI chip status register
+Add a generic AMIC chip type.
+
+Signed-off-by: Daniel Lenski <dlenski@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1095 | hailfinger | 2010-07-21 17:12:07 +0200 (Wed, 21 Jul 2010) | 7 lines
+
+Add nicnatsemi to print.c and print_wiki.c.
+Change the nicnatsemi address mask to use MA0-MA16 and set the maximum
+decode size to 128KB.
+
+Signed-off-by: Andrew Morgan <ziltro@ziltro.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1094 | hailfinger | 2010-07-21 17:02:22 +0200 (Wed, 21 Jul 2010) | 5 lines
+
+Add support for the SST25VF064C SPI flash chip.
+
+Signed-off-by: Ed Swierk <eswierk@aristanetworks.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1093 | hailfinger | 2010-07-21 12:26:01 +0200 (Wed, 21 Jul 2010) | 30 lines
+
+Add support for RayeR SPIPGM hardware as described in
+http://rayer.ic.cz/elektro/spipgm.htm
+
+To use the RayeR driver, run
+flashrom -p rayer_spi -V
+
+Known bugs/limitations:
+- Won't compile/work on non-x86 architectures.
+- Will always use direct port I/O access.
+
+Log follows:
+
+flashrom v0.9.2-r1039 on MS-DOS 7 (i686), built with libpci 3.1.5, GCC 
+4.3.2, little endian
+Calibrating delay loop... OK.
+Initializing rayer_bitbang_spi programmer
+Using port 0x378 as I/O base for parallel port access.
+...
+Probing for Macronix MX25L1605, 2048 KB: probe_spi_rdid_generic: id1 
+0xc2, id2 0x2015
+...
+Found chip "Macronix MX25L1605" (2048 KB, SPI) at physical address 
+0xffe00000.
+...
+No operations were specified.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Martin Rehak <rayer@seznam.cz>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1092 | hailfinger | 2010-07-18 16:42:28 +0200 (Sun, 18 Jul 2010) | 6 lines
+
+Check during SPI bitbang init that SPI bitbang master configuration is
+correct.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1091 | mkarcher | 2010-07-18 01:27:47 +0200 (Sun, 18 Jul 2010) | 4 lines
+
+Use struct pointer instead of enum to set bitbang adapter
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1090 | hailfinger | 2010-07-18 01:21:12 +0200 (Sun, 18 Jul 2010) | 9 lines
+
+Print supported flash chips as narrow as possible.
+Fix a bug where 4 GB of spaces would be printed per line if a vendor
+name was longer than 10 chars.
+
+This patch is needed to commit MoselVitelic chip support.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1089 | hailfinger | 2010-07-18 00:42:33 +0200 (Sun, 18 Jul 2010) | 10 lines
+
+Use the BAR value returned by pcidev_init which automatically applies
+the correct BAR mask for the drkaiser driver.
+Truncate flash chip addresses to fit into the 128 kB memory window for
+drkaiser and pick the same window size for gfxnvidia.
+
+Uwe tested all operations successfully on a Dr. Kaiser card.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1088 | hailfinger | 2010-07-18 00:28:05 +0200 (Sun, 18 Jul 2010) | 6 lines
+
+Add support for pciutils/libpci older than 2.2. Needed on the original
+Xbox running Xebian and a few other ancient systems.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Alec Wright <alecjw@member.fsf.org>
+
+------------------------------------------------------------------------
+r1087 | hailfinger | 2010-07-17 16:49:30 +0200 (Sat, 17 Jul 2010) | 10 lines
+
+Newer llvm/clang versions (since r102686) have a __clang_version__ macro
+which can be used to print the exact clang version.
+
+Fix a case where chip_to_probe was referenced twice via extern, once at
+the function level and once in a global include file. Found by latest
+clang.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1086 | hailfinger | 2010-07-17 15:45:42 +0200 (Sat, 17 Jul 2010) | 5 lines
+
+Add Winbond W49F020 support. This chip is used on some Xbox versions.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Alec Wright <alecjw@member.fsf.org>
+
+------------------------------------------------------------------------
+r1085 | hailfinger | 2010-07-17 14:54:09 +0200 (Sat, 17 Jul 2010) | 12 lines
+
+Change the SPI bitbanging core to fix a subtle bug (which had no effect
+so far) and to make integration of the RayeR SPIPGM and Nvidia
+MCP6x/MCP7x SPI patches easier.
+Kill a few global variables and require explicit initialization of
+bitbanging delay.
+
+A big thank you to Johannes Sj?\195?\182lund for testing an earlier version of
+the code as part of the Nvidia MCP6x/MCP7x SPI bitbanging patch.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1084 | mkarcher | 2010-07-17 12:42:34 +0200 (Sat, 17 Jul 2010) | 10 lines
+
+remove temporary buffers from bitbanging
+
+This removes the need of allocating an extra buffer, but also removes
+the possibility of having the data read back during the initial write
+phase for debugging purposes.
+
+Compile tested, no functional testing.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1083 | hailfinger | 2010-07-17 00:07:20 +0200 (Sat, 17 Jul 2010) | 8 lines
+
+Mark Fujitsu MBM29F400BC write as broken (implicit eraseblock layout in
+write).
+Use full-chip write function on Fujitsu MBM29F400TC and ST M29F400BT.
+Add support for ST M29F400BB.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1082 | hailfinger | 2010-07-14 22:21:22 +0200 (Wed, 14 Jul 2010) | 6 lines
+
+We have a generic unlocking infrastructure. Use it for SPI chips.
+Actually check if the unlock worked instead of just assuming it worked.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1081 | hailfinger | 2010-07-14 21:57:52 +0200 (Wed, 14 Jul 2010) | 6 lines
+
+Use the max_rom_decode infrastructure for wbsio_spi instead of
+open-coding a variant which only aborts after it is too late.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1080 | hailfinger | 2010-07-14 18:19:05 +0200 (Wed, 14 Jul 2010) | 10 lines
+
+Convert SPI chips to partial write, but wrap the write functions in a
+compat layer to allow converting the rest of flashrom later.
+I actually have patches for most of the remaining conversion, but I
+wanted to get this out and reviewed first.
+
+Tested on Intel NM10 by David Hendricks.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1079 | hailfinger | 2010-07-14 01:56:13 +0200 (Wed, 14 Jul 2010) | 16 lines
+
+Print an error message on read errors and abort instead of proceeding
+anyway.
+Improve error checking in file write, chip read and chip verify.
+Refactor the read routines a bit to split reading from file writing.
+
+Log for a failed read:
+[...]
+Found chip "Winbond W25x16" (2048 KB, SPI) at physical address
+0xffe00000.
+Reading flash... Invalid OPCODE 0x03
+Read operation failed!
+FAILED.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-By: Stephen Kou <stephen@hyarros.com>
+
+------------------------------------------------------------------------
+r1078 | hailfinger | 2010-07-13 02:42:00 +0200 (Tue, 13 Jul 2010) | 5 lines
+
+Wrap a line which was 156 columns wide.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1077 | hailfinger | 2010-07-13 02:37:19 +0200 (Tue, 13 Jul 2010) | 7 lines
+
+Split erase region walking out of erase_flash.
+That allows us to use erase region walking for a combined erase/write
+action, and is a prerequisite for partial flashing,
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1076 | hailfinger | 2010-07-13 02:04:52 +0200 (Tue, 13 Jul 2010) | 11 lines
+
+Fix out-of-bounds ICH FREG permission printing. A bit was masked, but
+not shifted, and that led to worst-case accesses of index 24 in an array
+with 4 members.
+
+I've improved readability in the variable declaration block as well.
+
+Thanks to Stephen Kou for reporting the bug.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stephen Kou <stephen@hyarros.com>
+
+------------------------------------------------------------------------
+r1075 | mkarcher | 2010-07-11 23:33:31 +0200 (Sun, 11 Jul 2010) | 12 lines
+
+Add support for the AMIC A25L80P.  This is a 1 MB SPI
+chip that seems to be straightforwardly related to the AMIC A25L40PU, which
+has half the capacity but is otherwise identical.
+
+Datasheet is at http://www.amictechnology.com/pdf/A25L80P.pdf
+
+flashrom -VE, -Vr, and -Vw has been tested using the AMD SB7x0 interface.
+Everything works fine...  at least, I used it to upgrade my BIOS and I've
+been able to reboot.
+
+Signed-off-by: Daniel Lenski <dlenski@gmail.com>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1074 | mkarcher | 2010-07-10 21:34:15 +0200 (Sat, 10 Jul 2010) | 8 lines
+
+Fix read function for EMST F25L008A
+
+SPI chips never should use read_memmapped. The SPI master code might
+decide that read_memmapped is fine for this chip, though, in a lower
+layer.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1073 | hailfinger | 2010-07-10 18:56:32 +0200 (Sat, 10 Jul 2010) | 14 lines
+
+Autodetect the ITE IT8705 Super I/O and enable flash writes if it
+performs LPC->Parallel translation.
+Remove board enables which triggered the IT8705 write enable manually.
+Change the IT87 SPI special case to cover IT87 LPC->SPI and
+LPC->Parallel translation.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+Tested on Syntax SV266A.
+Acked-by: Paul Menzel <paulepanter@users.sourceforge.net>
+
+Tested on Shuttle AK38N, all operations work fine.
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1072 | hailfinger | 2010-07-08 12:13:37 +0200 (Thu, 08 Jul 2010) | 8 lines
+
+Make programmer_param static by converting all users to
+extract_programmer_param.
+Programmer parameters can no longer be separated with a
+colon, they have to be separated with a comma.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1071 | mkarcher | 2010-07-08 11:32:18 +0200 (Thu, 08 Jul 2010) | 9 lines
+
+Fix ASUS A8N-VM CSM board enable entry
+
+r1063 had several issues: The PCI IDs for this board are copy/pasted from
+the A8N and plain wrong for this board and the board enable is marked as
+tested although it isn't. Finally the board description was slightly
+wrong and the URL missing.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1070 | hailfinger | 2010-07-06 11:55:48 +0200 (Tue, 06 Jul 2010) | 16 lines
+
+Various places in the flashrom source feature custom parameter
+extraction from programmer_param. This led to wildly differing syntax
+for programmer parameters, and it also voids pretty much every
+assumption you could make about programmer_param. The latter is a
+problem for libflashrom.
+
+Use extract_param everywhere, clean up related code and make it more
+foolproof.
+Add two instances of exit(1) where we have no option to return an error.
+Remove six instances of exit(1) where returning an error was possible.
+
+WARNING: This changes programmer parameter syntax for a few programmers!
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1069 | hailfinger | 2010-07-03 14:14:25 +0200 (Sat, 03 Jul 2010) | 9 lines
+
+If a programmer has untested or non-working write/erase code, but
+probing/reading works, it makes sense to protect the user against
+write/erase accidents.
+This feature will be used by the Nvidia MCP SPI code, and it also might
+make sense for the gfxnvidia driver which has non-working write/erase.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1068 | hailfinger | 2010-07-03 13:02:10 +0200 (Sat, 03 Jul 2010) | 20 lines
+
+Kill global variables, constants and functions if local scope suffices.
+Constify variables where possible.
+Initialize programmer-related variables explicitly in programmer_init to
+allow running programmer_init from a clean state after
+programmer_shutdown.
+Prohibit registering programmer shutdown functions before init or after
+shutdown.
+Kill some dead code.
+Rename global variables with namespace-polluting names.
+Use a previously unused locking helper function in sst49lfxxxc.c.
+
+This is needed for libflashrom.
+
+Effects on the binary size of flashrom are minimal (300 bytes
+shrinkage), but the data section shrinks by 4384 bytes, and that's a
+good thing if flashrom is operating in constrained envionments.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r1067 | hailfinger | 2010-07-02 19:12:50 +0200 (Fri, 02 Jul 2010) | 11 lines
+
+Add OpenBSD support.
+Add a requirements section to the man page which lists the needed access
+permissions for each programmer.
+
+This feature needs my pciutils/libpci 8/16-bit write emulation patch at
+http://marc.info/?l=openbsd-ports&m=127780030728045 titled
+[PATCH] Fix pciutils non-32bit PCI write on OpenBSD
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stuart Henderson <sthen@openbsd.org>
+
+------------------------------------------------------------------------
+r1066 | hailfinger | 2010-07-01 19:45:54 +0200 (Thu, 01 Jul 2010) | 5 lines
+
+ICH9/10: display FRAP/FREGx access controls
+
+Signed-off-by: Joshua Roys <roysjosh@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1065 | hailfinger | 2010-07-01 13:16:28 +0200 (Thu, 01 Jul 2010) | 6 lines
+
+Add support for the HP DL165 G6.
+Change the match for the HP DL145 G3 to avoid matching on the DL165 G6.
+
+Signed-off-by: Arne Georg Gleditsch <arne.gleditsch@numascale.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1064 | mkarcher | 2010-06-29 16:44:40 +0200 (Tue, 29 Jun 2010) | 4 lines
+
+Check that the expected winbond Super I/O was found
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1063 | mkarcher | 2010-06-27 17:07:52 +0200 (Sun, 27 Jun 2010) | 4 lines
+
+Board enable for Asus A8N-VM CSM
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r1062 | mkarcher | 2010-06-27 17:07:49 +0200 (Sun, 27 Jun 2010) | 10 lines
+
+W83627x code unification
+
+This patch unifies the code for different Winbond W83627-family chips,
+to be applied before I add another W83627 GPIO raise function.
+
+After the Ack I added the check for unimplemented GPIO ports, but still
+dared to reuse the ack.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r1061 | hailfinger | 2010-06-25 15:18:48 +0200 (Fri, 25 Jun 2010) | 7 lines
+
+Work around shadowing warnings in libpci headers. This is needed for
+warning-free compilation on older gcc versions (3.x and probably older).
+Such a gcc version is the default on i386 OpenBSD.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stuart Henderson <sthen@openbsd.org>
+
+------------------------------------------------------------------------
+r1060 | hailfinger | 2010-06-24 13:51:12 +0200 (Thu, 24 Jun 2010) | 5 lines
+
+SST39VF010 tested, works.
+
+Signed-off-by: Guenter Knauf <lists@gknw.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1059 | hailfinger | 2010-06-24 13:39:57 +0200 (Thu, 24 Jun 2010) | 5 lines
+
+Add Winbond W25Q64 support. Tested.
+
+Signed-off-by: David Hendricks <dhendrix@google.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1058 | hailfinger | 2010-06-24 01:14:44 +0200 (Thu, 24 Jun 2010) | 9 lines
+
+If flashrom is standalone and has no OS below, it can't call dmidecode.
+Provide empty DMI stubs for that case until someone implements our own
+dmidecode subset.
+
+Tested by Patrick Georgi on top of libpayload.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Patrick Georgi <patrick.georgi@coresystems.de>
+
+------------------------------------------------------------------------
+r1057 | hailfinger | 2010-06-22 01:20:15 +0200 (Tue, 22 Jun 2010) | 8 lines
+
+Kill unneeded #include wherever possible.
+
+Tested on Linux, FreeBSD, NetBSD, OpenBSD, DOS.
+Thanks to Jonathan A. Kollasch and Idwer Vollering for testing.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer+lists.flashrom@gmail.com>
+
+------------------------------------------------------------------------
+r1056 | hailfinger | 2010-06-21 18:12:22 +0200 (Mon, 21 Jun 2010) | 5 lines
+
+Add support for Hyundai HY29F002 and HY29F002B.
+
+Signed-off-by: David Borg <borg.db@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1055 | hailfinger | 2010-06-20 13:04:26 +0200 (Sun, 20 Jun 2010) | 6 lines
+
+Fill in buses_supported for remaining Intel chipsets (ICH0-ICH5,
+Poulsbo).
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1054 | hailfinger | 2010-06-20 13:02:33 +0200 (Sun, 20 Jun 2010) | 9 lines
+
+The SPI opcode 0xd8 is not a chip erase opcode on any chip out there.
+Besides that, the function as implemented just walks the chip and
+ignores sector sizes.
+Sector erase with SPI opcode 0xd8 is of course still supported.
+Kill a declaration for a nonexisting function while we're at it.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1053 | hailfinger | 2010-06-20 12:58:32 +0200 (Sun, 20 Jun 2010) | 6 lines
+
+Add SPI chip read support to the dummy flasher. This allows using the
+dummy flasher for SPI read debugging.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1052 | hailfinger | 2010-06-20 12:41:35 +0200 (Sun, 20 Jun 2010) | 7 lines
+
+Modernize SPI AAI code, blacklist IT87 SPI for AAI, allow AAI to run
+without warnings on ICH/VIA SPI.
+Add some code to make conversion to partial write possible for AAI.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1051 | hailfinger | 2010-06-20 12:39:33 +0200 (Sun, 20 Jun 2010) | 7 lines
+
+Fix message printing for SPI RES on spew level.
+Use a blacklist instead of a whitelist for 4-byte SPI RDID.
+Tell users where to report bugs.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1050 | mkarcher | 2010-06-20 00:06:35 +0200 (Sun, 20 Jun 2010) | 4 lines
+
+Add EMST F25L008A SPI chip
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r1049 | stuge | 2010-06-17 02:01:56 +0200 (Thu, 17 Jun 2010) | 7 lines
+
+Set maximum flash size for 3Com NICs to 128kb = 1Mbit
+
+This fact was already documented on http://flashrom.org/NIC3Com
+
+Signed-off-by: Peter Stuge <peter@stuge.se>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1048 | hailfinger | 2010-06-14 20:40:59 +0200 (Mon, 14 Jun 2010) | 10 lines
+
+Detect incompatible CONFIG_FOO=yes for the specified target and refuse
+to compile with a meaningful error message.
+Set the default for incompatible CONFIG_FOO to no.
+
+Just running "make" should result in a a build which compiles the common
+subset of available and working features.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer+lists.flashrom@gmail.com>
+
+------------------------------------------------------------------------
+r1047 | hailfinger | 2010-06-14 16:44:08 +0200 (Mon, 14 Jun 2010) | 7 lines
+
+Handle OS where executables have a hardcoded suffix, e.g. DOS with .exe
+This ensures that any temp files in the configure/check step of the
+Makefile are removed correctly.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer+flashrom@gmail.com>
+
+------------------------------------------------------------------------
+r1046 | hailfinger | 2010-06-14 16:18:37 +0200 (Mon, 14 Jun 2010) | 11 lines
+
+The nicrealtek code uses magic constants, but they are not explained.
+That's OK if you know the datasheet well, but for casual readers some
+comments are really helpful.
+
+I'm not sure whether we want to disable hardware flash access forever
+without enabling it again on shutdown. A few other places made me wonder
+as well. I've added FIXME comments in those places.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Andrew Morgan <ziltro@ziltro.com>
+
+------------------------------------------------------------------------
+r1045 | hailfinger | 2010-06-14 14:58:06 +0200 (Mon, 14 Jun 2010) | 7 lines
+
+Add SST25LF040A support.
+Checked against datasheets, should work.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1044 | hailfinger | 2010-06-14 14:42:05 +0200 (Mon, 14 Jun 2010) | 9 lines
+
+We already have NEED_PCI in the Makefile to link in PCI support. Add
+NEED_SERIAL and NEED_NET to decouple individual drivers from compilation
+and linking decisions.
+Move libgetopt from a DOS+PCI dependency to a DOS dependency to fix
+linking on DOS if no driver requiring PCI is enabled.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1043 | mkarcher | 2010-06-13 12:16:12 +0200 (Sun, 13 Jun 2010) | 13 lines
+
+VIA: disable byte merging
+
+All mentioned north bridges have been checked against data sheet. That's
+all north bridges google found a datasheet for with "byte merge" included.
+
+Runs multiple chipset enables if the first one requests further enables to
+be run.
+
+VIA byte-merging logic tested: works.
+multiple chipset logic: completely untested
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1042 | mkarcher | 2010-06-13 01:14:03 +0200 (Sun, 13 Jun 2010) | 6 lines
+
+Unbreak flashrom - fix compiler error (trivial)
+
+Fix compiler error (bad forward port in r1040).
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r1041 | mkarcher | 2010-06-13 01:07:26 +0200 (Sun, 13 Jun 2010) | 8 lines
+
+Board-enable for MS-7025 (K8N Neo2 Platinum)
+
+test report is
+http://www.coreboot.org/pipermail/flashrom/2010-April/002967.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Tested-by: Valentine "Pegasus rider" Yatsenko <mr.qweo@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1040 | mkarcher | 2010-06-12 19:27:44 +0200 (Sat, 12 Jun 2010) | 7 lines
+
+Board enable for EPIA EK (untested)
+
+Reporter/owner of that board: oscar <oshikore@gmail.com>
+http://www.coreboot.org/pipermail/flashrom/2010-April/002910.html
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1039 | hailfinger | 2010-06-08 00:37:54 +0200 (Tue, 08 Jun 2010) | 8 lines
+
+National Semiconductor DP83815/DP83816 and DP83820 NIC programmer
+support.
+Some instability remains, but that may be due to hardware problems in
+the specific card (Netgear FA311) used for testing.
+
+Signed-off-by: Andrew Morgan <ziltro@ziltro.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1038 | uwe | 2010-06-07 21:41:25 +0200 (Mon, 07 Jun 2010) | 21 lines
+
+Various manpage fixes and improvements.
+
+ - Use [<vendor>:]<board>], not [<vendor>:]<part>], which is more clear.
+
+ - Mention TSOP48 chips in the description.
+
+ - Highlight various additional parts in the manpage which were missing
+   so far (i.e., make them bold), including cmdline switches and others.
+
+ - Mention that you can use -VV.
+
+ - Fix name of the now-renamed 'Supported mainboards' section in -L output.
+
+ - Mention that ft2232_spi and buspirate_spi only support SPI chips.
+
+ - Readability and cosmetic improvements, add missing escapes, fix typos.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r1037 | uwe | 2010-06-07 21:06:26 +0200 (Mon, 07 Jun 2010) | 11 lines
+
+board_enable.c: Remove useless 'name' parameter.
+
+Every board-enable function is passed a 'const char *name' (board name)
+which is totally useless as the board name was already printed by flashrom
+at that point. Also, 95% or so of the board-enables don't use the
+parameter anyway. So, drop it.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r1036 | hailfinger | 2010-06-07 16:10:55 +0200 (Mon, 07 Jun 2010) | 5 lines
+
+Support Atmel AT49F020 256kB parallel flash.
+
+Signed-off-by: Andrew Morgan <ziltro@ziltro.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1035 | hailfinger | 2010-06-07 13:10:43 +0200 (Mon, 07 Jun 2010) | 7 lines
+
+Fix wiki board enable parameter printing. The logic was incorrect in one
+place which had && instead of ||.
+Move the board info #define B to the file where it is used.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1034 | hailfinger | 2010-06-07 13:08:07 +0200 (Mon, 07 Jun 2010) | 5 lines
+
+Create dependencies on the fly rather than in a separate step.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r1033 | hailfinger | 2010-06-05 01:24:57 +0200 (Sat, 05 Jun 2010) | 10 lines
+
+NetBSD needs libpciutils (which is called libpci on pretty much every
+other platform and lives in the pciutils package) and apparently the
+libpciutils on NetBSD needs the NetBSD-native libpci (no equivalent on
+other platforms).
+
+Thanks to Jonathan A. Kollasch for reporting.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Jonathan A. Kollasch <jakllsch@kollasch.net>
+
+------------------------------------------------------------------------
+r1032 | hailfinger | 2010-06-05 01:20:21 +0200 (Sat, 05 Jun 2010) | 9 lines
+
+gcc and clang can check format strings of printf-like functions. Since
+we don't support any other compilers right now, enable that extension
+unconditionally.
+
+Fix the bugs found by format string checking.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r1031 | hailfinger | 2010-06-04 21:05:39 +0200 (Fri, 04 Jun 2010) | 10 lines
+
+The internal programmer needs correct information about flash_base and
+chip window top/bottom alignment on non-x86 before it can be used.
+Abort any internal programmer action for now until the code is fixed.
+
+Add the concept of a processor enable for systems where flashing is
+impacted by processor settings or processor model.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r1030 | uwe | 2010-06-04 19:07:39 +0200 (Fri, 04 Jun 2010) | 17 lines
+
+Make the 'flashrom --help' output look a bit nicer.
+
+Only print "flashrom" as the program name unconditionally, not the full path
+and program name (e.g. "/home/foo/bar/baz/flashrom" or on Windows
+"C:\Foo\Bar\Whatever\flashrom.exe"). The path or exact executable name is
+not really useful to print here, if you managed to run --help you already
+know it, and it just makes the output look ugly.
+
+Also, add a missing newline to make the output look nicer.
+
+Finally, revert the "CONFIG_PRINT_WIKI ?= yes" change which accidentally
+slipped into r1029.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r1029 | uwe | 2010-06-04 18:39:35 +0200 (Fri, 04 Jun 2010) | 6 lines
+
+Fix URLs for GIGABYTE motherboards.
+
+Signed-off-by: Peter Lemenkov <lemenkov@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
 r1028 | hailfinger | 2010-06-03 23:48:13 +0200 (Thu, 03 Jun 2010) | 15 lines
 
 Do not trust the OS at all and measure timer precision before

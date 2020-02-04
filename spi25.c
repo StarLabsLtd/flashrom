@@ -26,6 +26,7 @@
 #include "flash.h"
 #include "flashchips.h"
 #include "chipdrivers.h"
+#include "programmer.h"
 #include "spi.h"
 
 void spi_prettyprint_status_register(struct flashchip *flash);
@@ -72,6 +73,7 @@ static int spi_res(unsigned char *readarr, int bytes)
 	unsigned char cmd[JEDEC_RES_OUTSIZE] = { JEDEC_RES, 0, 0, 0 };
 	uint32_t readaddr;
 	int ret;
+	int i;
 
 	ret = spi_send_command(sizeof(cmd), bytes, cmd, readarr);
 	if (ret == SPI_INVALID_ADDRESS) {
@@ -84,7 +86,10 @@ static int spi_res(unsigned char *readarr, int bytes)
 	}
 	if (ret)
 		return ret;
-	msg_cspew("RES returned %02x. ", readarr[0]);
+	msg_cspew("RES returned");
+	for (i = 0; i < bytes; i++)
+		msg_cspew(" 0x%02x", readarr[i]);
+	msg_cspew(". ");
 	return 0;
 }
 
@@ -122,7 +127,9 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 	if (!oddparity(readarr[0]))
 		msg_cdbg("RDID byte 0 parity violation. ");
 
-	/* Check if this is a continuation vendor ID */
+	/* Check if this is a continuation vendor ID.
+	 * FIXME: Handle continuation device IDs.
+	 */
 	if (readarr[0] == 0x7f) {
 		if (!oddparity(readarr[1]))
 			msg_cdbg("RDID byte 1 parity violation. ");
@@ -166,35 +173,23 @@ int probe_spi_rdid(struct flashchip *flash)
 	return probe_spi_rdid_generic(flash, 3);
 }
 
-/* support 4 bytes flash ID */
 int probe_spi_rdid4(struct flashchip *flash)
 {
-	/* only some SPI chipsets support 4 bytes commands */
+	/* Some SPI controllers do not support commands with writecnt=1 and
+	 * readcnt=4.
+	 */
 	switch (spi_controller) {
 #if CONFIG_INTERNAL == 1
 #if defined(__i386__) || defined(__x86_64__)
-	case SPI_CONTROLLER_ICH7:
-	case SPI_CONTROLLER_ICH9:
-	case SPI_CONTROLLER_VIA:
-	case SPI_CONTROLLER_SB600:
+	case SPI_CONTROLLER_IT87XX:
 	case SPI_CONTROLLER_WBSIO:
+		msg_cinfo("4 byte RDID not supported on this SPI controller\n");
+		return 0;
+		break;
 #endif
 #endif
-#if CONFIG_FT2232_SPI == 1
-	case SPI_CONTROLLER_FT2232:
-#endif
-#if CONFIG_DUMMY == 1
-	case SPI_CONTROLLER_DUMMY:
-#endif
-#if CONFIG_BUSPIRATE_SPI == 1
-	case SPI_CONTROLLER_BUSPIRATE:
-#endif
-#if CONFIG_DEDIPROG == 1
-	case SPI_CONTROLLER_DEDIPROG:
-#endif
-		return probe_spi_rdid_generic(flash, 4);
 	default:
-		msg_cinfo("4b ID not supported on this SPI controller\n");
+		return probe_spi_rdid_generic(flash, 4);
 	}
 
 	return 0;
@@ -317,7 +312,16 @@ uint8_t spi_read_status_register(void)
 }
 
 /* Prettyprint the status register. Common definitions. */
-void spi_prettyprint_status_register_common(uint8_t status)
+static void spi_prettyprint_status_register_welwip(uint8_t status)
+{
+	msg_cdbg("Chip status register: Write Enable Latch (WEL) is "
+		     "%sset\n", (status & (1 << 1)) ? "" : "not ");
+	msg_cdbg("Chip status register: Write In Progress (WIP/BUSY) is "
+		     "%sset\n", (status & (1 << 0)) ? "" : "not ");
+}
+
+/* Prettyprint the status register. Common definitions. */
+static void spi_prettyprint_status_register_common(uint8_t status)
 {
 	msg_cdbg("Chip status register: Bit 5 / Block Protect 3 (BP3) is "
 		     "%sset\n", (status & (1 << 5)) ? "" : "not ");
@@ -327,10 +331,132 @@ void spi_prettyprint_status_register_common(uint8_t status)
 		     "%sset\n", (status & (1 << 3)) ? "" : "not ");
 	msg_cdbg("Chip status register: Bit 2 / Block Protect 0 (BP0) is "
 		     "%sset\n", (status & (1 << 2)) ? "" : "not ");
-	msg_cdbg("Chip status register: Write Enable Latch (WEL) is "
-		     "%sset\n", (status & (1 << 1)) ? "" : "not ");
-	msg_cdbg("Chip status register: Write In Progress (WIP/BUSY) is "
-		     "%sset\n", (status & (1 << 0)) ? "" : "not ");
+	spi_prettyprint_status_register_welwip(status);
+}
+
+/* Prettyprint the status register. Works for
+ * AMIC A25L series
+ */
+void spi_prettyprint_status_register_amic_a25l(uint8_t status)
+{
+	msg_cdbg("Chip status register: Status Register Write Disable "
+		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	spi_prettyprint_status_register_common(status);
+}
+
+/* Prettyprint the status register. Common definitions. */
+static void spi_prettyprint_status_register_at25_srplepewpp(uint8_t status)
+{
+	msg_cdbg("Chip status register: Sector Protection Register Lock (SRPL) "
+		 "is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 6 "
+		 "is %sset\n", (status & (1 << 6)) ? "" : "not ");
+	msg_cdbg("Chip status register: Erase/Program Error (EPE) "
+		 "is %sset\n", (status & (1 << 5)) ? "" : "not ");
+	msg_cdbg("Chip status register: WP# pin (WPP) "
+		 "is %sactive\n", (status & (1 << 4)) ? "not " : "");
+}
+
+int spi_prettyprint_status_register_at25df(struct flashchip *flash)
+{
+	uint8_t status;
+
+	status = spi_read_status_register();
+	msg_cdbg("Chip status register is %02x\n", status);
+
+	spi_prettyprint_status_register_at25_srplepewpp(status);
+	msg_cdbg("Chip status register: Software Protection Status (SWP): ");
+	switch (status & (3 << 2)) {
+	case 0x0 << 2:
+		msg_cdbg("no sectors are protected\n");
+		break;
+	case 0x1 << 2:
+		msg_cdbg("some sectors are protected\n");
+		/* FIXME: Read individual Sector Protection Registers. */
+		break;
+	case 0x3 << 2:
+		msg_cdbg("all sectors are protected\n");
+		break;
+	default:
+		msg_cdbg("reserved for future use\n");
+		break;
+	}
+	spi_prettyprint_status_register_welwip(status);
+	return 0;
+}
+
+int spi_prettyprint_status_register_at25df_sec(struct flashchip *flash)
+{
+	/* FIXME: We should check the security lockdown. */
+	msg_cdbg("Ignoring security lockdown (if present)\n");
+	msg_cdbg("Ignoring status register byte 2\n");
+	return spi_prettyprint_status_register_at25df(flash);
+}
+
+int spi_prettyprint_status_register_at25f(struct flashchip *flash)
+{
+	uint8_t status;
+
+	status = spi_read_status_register();
+	msg_cdbg("Chip status register is %02x\n", status);
+
+	spi_prettyprint_status_register_at25_srplepewpp(status);
+	msg_cdbg("Chip status register: Bit 3 "
+		 "is %sset\n", (status & (1 << 3)) ? "" : "not ");
+	msg_cdbg("Chip status register: Block Protect 0 (BP0) is "
+		 "%sset, %s sectors are protected\n",
+		 (status & (1 << 2)) ? "" : "not ",
+		 (status & (1 << 2)) ? "all" : "no");
+	spi_prettyprint_status_register_welwip(status);
+	return 0;
+}
+
+int spi_prettyprint_status_register_at25fs010(struct flashchip *flash)
+{
+	uint8_t status;
+
+	status = spi_read_status_register();
+	msg_cdbg("Chip status register is %02x\n", status);
+
+	msg_cdbg("Chip status register: Status Register Write Protect (WPEN) "
+		 "is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 6 / Block Protect 4 (BP4) is "
+		 "%sset\n", (status & (1 << 6)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 5 / Block Protect 3 (BP3) is "
+		 "%sset\n", (status & (1 << 5)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 4 is "
+		 "%sset\n", (status & (1 << 4)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 3 / Block Protect 1 (BP1) is "
+		 "%sset\n", (status & (1 << 3)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 2 / Block Protect 0 (BP0) is "
+		 "%sset\n", (status & (1 << 2)) ? "" : "not ");
+	/* FIXME: Pretty-print detailed sector protection status. */
+	spi_prettyprint_status_register_welwip(status);
+	return 0;
+}
+
+int spi_prettyprint_status_register_at25fs040(struct flashchip *flash)
+{
+	uint8_t status;
+
+	status = spi_read_status_register();
+	msg_cdbg("Chip status register is %02x\n", status);
+
+	msg_cdbg("Chip status register: Status Register Write Protect (WPEN) "
+		 "is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 6 / Block Protect 4 (BP4) is "
+		 "%sset\n", (status & (1 << 6)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 5 / Block Protect 3 (BP3) is "
+		 "%sset\n", (status & (1 << 5)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 4 / Block Protect 2 (BP2) is "
+		 "%sset\n", (status & (1 << 4)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 3 / Block Protect 1 (BP1) is "
+		 "%sset\n", (status & (1 << 3)) ? "" : "not ");
+	msg_cdbg("Chip status register: Bit 2 / Block Protect 0 (BP0) is "
+		 "%sset\n", (status & (1 << 2)) ? "" : "not ");
+	/* FIXME: Pretty-print detailed sector protection status. */
+	spi_prettyprint_status_register_welwip(status);
+	return 0;
 }
 
 /* Prettyprint the status register. Works for
@@ -395,6 +521,10 @@ void spi_prettyprint_status_register(struct flashchip *flash)
 	status = spi_read_status_register();
 	msg_cdbg("Chip status register is %02x\n", status);
 	switch (flash->manufacture_id) {
+	case AMIC_ID:
+		if ((flash->model_id & 0xff00) == 0x2000)
+		    spi_prettyprint_status_register_amic_a25l(status);
+		break;
 	case ST_ID:
 		if (((flash->model_id & 0xff00) == 0x2000) ||
 		    ((flash->model_id & 0xff00) == 0x2500))
@@ -442,12 +572,6 @@ int spi_chip_erase_60(struct flashchip *flash)
 		.readarr	= NULL,
 	}};
 	
-	result = spi_disable_blockprotect();
-	if (result) {
-		msg_cerr("spi_disable_blockprotect failed\n");
-		return result;
-	}
-	
 	result = spi_send_multicommand(cmds);
 	if (result) {
 		msg_cerr("%s failed during command execution\n",
@@ -487,12 +611,6 @@ int spi_chip_erase_c7(struct flashchip *flash)
 		.readcnt	= 0,
 		.readarr	= NULL,
 	}};
-
-	result = spi_disable_blockprotect();
-	if (result) {
-		msg_cerr("spi_disable_blockprotect failed\n");
-		return result;
-	}
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
@@ -652,29 +770,6 @@ int spi_block_erase_d7(struct flashchip *flash, unsigned int addr, unsigned int 
 	return 0;
 }
 
-int spi_chip_erase_d8(struct flashchip *flash)
-{
-	int i, rc = 0;
-	int total_size = flash->total_size * 1024;
-	int erase_size = 64 * 1024;
-
-	spi_disable_blockprotect();
-
-	msg_cinfo("Erasing chip: \n");
-
-	for (i = 0; i < total_size / erase_size; i++) {
-		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
-		if (rc) {
-			msg_cerr("Error erasing block at 0x%x\n", i);
-			break;
-		}
-	}
-
-	msg_cinfo("\n");
-
-	return rc;
-}
-
 /* Sector size is usually 4k, though Macronix eliteflash has 64k */
 int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
 {
@@ -758,12 +853,12 @@ int spi_write_status_enable(void)
  * This is according the SST25VF016 datasheet, who knows it is more
  * generic that this...
  */
-int spi_write_status_register(int status)
+static int spi_write_status_register_ewsr(struct flashchip *flash, int status)
 {
 	int result;
 	struct spi_command cmds[] = {
 	{
-	/* FIXME: WRSR requires either EWSR or WREN depending on chip type. */
+	/* WRSR requires either EWSR or WREN depending on chip type. */
 		.writecnt	= JEDEC_EWSR_OUTSIZE,
 		.writearr	= (const unsigned char[]){ JEDEC_EWSR },
 		.readcnt	= 0,
@@ -785,7 +880,57 @@ int spi_write_status_register(int status)
 		msg_cerr("%s failed during command execution\n",
 			__func__);
 	}
+	/* WRSR performs a self-timed erase before the changes take effect. */
+	programmer_delay(100 * 1000);
 	return result;
+}
+
+static int spi_write_status_register_wren(struct flashchip *flash, int status)
+{
+	int result;
+	struct spi_command cmds[] = {
+	{
+	/* WRSR requires either EWSR or WREN depending on chip type. */
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_WRSR_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WRSR, (unsigned char) status },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
+
+	result = spi_send_multicommand(cmds);
+	if (result) {
+		msg_cerr("%s failed during command execution\n",
+			__func__);
+	}
+	/* WRSR performs a self-timed erase before the changes take effect. */
+	programmer_delay(100 * 1000);
+	return result;
+}
+
+static int spi_write_status_register(struct flashchip *flash, int status)
+{
+	int ret = 1;
+
+	if (!(flash->feature_bits & (FEATURE_WRSR_WREN | FEATURE_WRSR_EWSR))) {
+		msg_cdbg("Missing status register write definition, assuming "
+			 "EWSR is needed\n");
+		flash->feature_bits |= FEATURE_WRSR_EWSR;
+	}
+	if (flash->feature_bits & FEATURE_WRSR_WREN)
+		ret = spi_write_status_register_wren(flash, status);
+	if (ret && (flash->feature_bits & FEATURE_WRSR_EWSR))
+		ret = spi_write_status_register_ewsr(flash, status);
+	return ret;
 }
 
 int spi_byte_program(int addr, uint8_t databyte)
@@ -870,20 +1015,152 @@ int spi_nbyte_program(int addr, uint8_t *bytes, int len)
 	return result;
 }
 
-int spi_disable_blockprotect(void)
+/* A generic brute-force block protection disable works like this:
+ * Write 0x00 to the status register. Check if any locks are still set (that
+ * part is chip specific). Repeat once.
+ */
+int spi_disable_blockprotect(struct flashchip *flash)
 {
 	uint8_t status;
 	int result;
 
 	status = spi_read_status_register();
-	/* If there is block protection in effect, unprotect it first. */
+	/* If block protection is disabled, stop here. */
+	if ((status & 0x3c) == 0)
+		return 0;
+
+	msg_cdbg("Some block protection in effect, disabling\n");
+	result = spi_write_status_register(flash, status & ~0x3c);
+	if (result) {
+		msg_cerr("spi_write_status_register failed\n");
+		return result;
+	}
+	status = spi_read_status_register();
 	if ((status & 0x3c) != 0) {
-		msg_cdbg("Some block protection in effect, disabling\n");
-		result = spi_write_status_register(status & ~0x3c);
+		msg_cerr("Block protection could not be disabled!\n");
+		return 1;
+	}
+	return 0;
+}
+
+int spi_disable_blockprotect_at25df(struct flashchip *flash)
+{
+	uint8_t status;
+	int result;
+
+	status = spi_read_status_register();
+	/* If block protection is disabled, stop here. */
+	if ((status & (3 << 2)) == 0)
+		return 0;
+
+	msg_cdbg("Some block protection in effect, disabling\n");
+	if (status & (1 << 7)) {
+		msg_cdbg("Need to disable Sector Protection Register Lock\n");
+		if ((status & (1 << 4)) == 0) {
+			msg_cerr("WP# pin is active, disabling "
+				 "write protection is impossible.\n");
+			return 1;
+		}
+		/* All bits except bit 7 (SPRL) are readonly. */
+		result = spi_write_status_register(flash, status & ~(1 << 7));
 		if (result) {
 			msg_cerr("spi_write_status_register failed\n");
 			return result;
 		}
+		
+	}
+	/* Global unprotect. Make sure to mask SPRL as well. */
+	result = spi_write_status_register(flash, status & ~0xbc);
+	if (result) {
+		msg_cerr("spi_write_status_register failed\n");
+		return result;
+	}
+	status = spi_read_status_register();
+	if ((status & (3 << 2)) != 0) {
+		msg_cerr("Block protection could not be disabled!\n");
+		return 1;
+	}
+	return 0;
+}
+
+int spi_disable_blockprotect_at25df_sec(struct flashchip *flash)
+{
+	/* FIXME: We should check the security lockdown. */
+	msg_cinfo("Ignoring security lockdown (if present)\n");
+	return spi_disable_blockprotect_at25df(flash);
+}
+
+int spi_disable_blockprotect_at25f(struct flashchip *flash)
+{
+	/* spi_disable_blockprotect_at25df is not really the right way to do
+	 * this, but the side effects of said function work here as well.
+	 */
+	return spi_disable_blockprotect_at25df(flash);
+}
+
+int spi_disable_blockprotect_at25fs010(struct flashchip *flash)
+{
+	uint8_t status;
+	int result;
+
+	status = spi_read_status_register();
+	/* If block protection is disabled, stop here. */
+	if ((status & 0x6c) == 0)
+		return 0;
+
+	msg_cdbg("Some block protection in effect, disabling\n");
+	if (status & (1 << 7)) {
+		msg_cdbg("Need to disable Status Register Write Protect\n");
+		/* Clear bit 7 (WPEN). */
+		result = spi_write_status_register(flash, status & ~(1 << 7));
+		if (result) {
+			msg_cerr("spi_write_status_register failed\n");
+			return result;
+		}
+	}
+	/* Global unprotect. Make sure to mask WPEN as well. */
+	result = spi_write_status_register(flash, status & ~0xec);
+	if (result) {
+		msg_cerr("spi_write_status_register failed\n");
+		return result;
+	}
+	status = spi_read_status_register();
+	if ((status & 0x6c) != 0) {
+		msg_cerr("Block protection could not be disabled!\n");
+		return 1;
+	}
+	return 0;
+}
+int spi_disable_blockprotect_at25fs040(struct flashchip *flash)
+{
+	uint8_t status;
+	int result;
+
+	status = spi_read_status_register();
+	/* If block protection is disabled, stop here. */
+	if ((status & 0x7c) == 0)
+		return 0;
+
+	msg_cdbg("Some block protection in effect, disabling\n");
+	if (status & (1 << 7)) {
+		msg_cdbg("Need to disable Status Register Write Protect\n");
+		/* Clear bit 7 (WPEN). */
+		result = spi_write_status_register(flash, status & ~(1 << 7));
+		if (result) {
+			msg_cerr("spi_write_status_register failed\n");
+			return result;
+		}
+	}
+	/* Global unprotect. Make sure to mask WPEN as well. */
+	result = spi_write_status_register(flash, status & ~0xfc);
+	if (result) {
+		msg_cerr("spi_write_status_register failed\n");
+		return result;
+	}
+	status = spi_read_status_register();
+	if ((status & 0x7c) != 0) {
+		msg_cerr("Block protection could not be disabled!\n");
+		return 1;
 	}
 	return 0;
 }
@@ -903,6 +1180,7 @@ int spi_nbyte_read(int address, uint8_t *bytes, int len)
 
 /*
  * Read a part of the flash chip.
+ * FIXME: Use the chunk code from Michael Karcher instead.
  * Each page is read separately in chunks with a maximum size of chunksize.
  */
 int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize)
@@ -942,6 +1220,7 @@ int spi_read_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, 
 
 /*
  * Write a part of the flash chip.
+ * FIXME: Use the chunk code from Michael Karcher instead.
  * Each page is written separately in chunks with a maximum size of chunksize.
  */
 int spi_write_chunked(struct flashchip *flash, uint8_t *buf, int start, int len, int chunksize)
@@ -992,20 +1271,12 @@ int spi_write_chunked(struct flashchip *flash, uint8_t *buf, int start, int len,
  * and for chips where memory mapped programming is impossible
  * (e.g. due to size constraints in IT87* for over 512 kB)
  */
-int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
+/* real chunksize is 1, logical chunksize is 1 */
+int spi_chip_write_1_new(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
-	int total_size = 1024 * flash->total_size;
 	int i, result = 0;
 
-	spi_disable_blockprotect();
-	/* Erase first */
-	msg_cinfo("Erasing flash before programming... ");
-	if (erase_flash(flash)) {
-		msg_cerr("ERASE FAILED!\n");
-		return -1;
-	}
-	msg_cinfo("done.\n");
-	for (i = 0; i < total_size; i++) {
+	for (i = start; i < start + len; i++) {
 		result = spi_byte_program(i, buf[i]);
 		if (result)
 			return 1;
@@ -1016,42 +1287,107 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 	return 0;
 }
 
-int spi_aai_write(struct flashchip *flash, uint8_t *buf)
+int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 {
-	uint32_t pos = 2, size = flash->total_size * 1024;
-	unsigned char w[6] = {0xad, 0, 0, 0, buf[0], buf[1]};
+	/* Erase first */
+	msg_cinfo("Erasing flash before programming... ");
+	if (erase_flash(flash)) {
+		msg_cerr("ERASE FAILED!\n");
+		return -1;
+	}
+	msg_cinfo("done.\n");
+
+	return spi_chip_write_1_new(flash, buf, 0, flash->total_size * 1024);
+}
+
+int spi_aai_write(struct flashchip *flash, uint8_t *buf, int start, int len)
+{
+	uint32_t pos = start;
 	int result;
+	unsigned char cmd[JEDEC_AAI_WORD_PROGRAM_CONT_OUTSIZE] = {
+		JEDEC_AAI_WORD_PROGRAM,
+	};
+	struct spi_command cmds[] = {
+	{
+		.writecnt	= JEDEC_WREN_OUTSIZE,
+		.writearr	= (const unsigned char[]){ JEDEC_WREN },
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= JEDEC_AAI_WORD_PROGRAM_OUTSIZE,
+		.writearr	= (const unsigned char[]){
+					JEDEC_AAI_WORD_PROGRAM,
+					(start >> 16) & 0xff,
+					(start >> 8) & 0xff,
+					(start & 0xff),
+					buf[0],
+					buf[1]
+				},
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}, {
+		.writecnt	= 0,
+		.writearr	= NULL,
+		.readcnt	= 0,
+		.readarr	= NULL,
+	}};
 
 	switch (spi_controller) {
 #if CONFIG_INTERNAL == 1
 #if defined(__i386__) || defined(__x86_64__)
+	case SPI_CONTROLLER_IT87XX:
 	case SPI_CONTROLLER_WBSIO:
-		msg_cerr("%s: impossible with Winbond SPI masters,"
+		msg_perr("%s: impossible with this SPI controller,"
 				" degrading to byte program\n", __func__);
-		return spi_chip_write_1(flash, buf);
+		return spi_chip_write_1_new(flash, buf, start, len);
 #endif
 #endif
 	default:
 		break;
 	}
-	if (erase_flash(flash)) {
-		msg_cerr("ERASE FAILED!\n");
-		return -1;
+
+	/* The even start address and even length requirements can be either
+	 * honored outside this function, or we can call spi_byte_program
+	 * for the first and/or last byte and use AAI for the rest.
+	 */
+	/* The data sheet requires a start address with the low bit cleared. */
+	if (start % 2) {
+		msg_cerr("%s: start address not even! Please report a bug at "
+			 "flashrom@flashrom.org\n", __func__);
+		return SPI_GENERIC_ERROR;
 	}
-	/* FIXME: This will fail on ICH/VIA SPI. */
-	result = spi_write_enable();
-	if (result)
+	/* The data sheet requires total AAI write length to be even. */
+	if (len % 2) {
+		msg_cerr("%s: total write length not even! Please report a "
+			 "bug at flashrom@flashrom.org\n", __func__);
+		return SPI_GENERIC_ERROR;
+	}
+
+
+	result = spi_send_multicommand(cmds);
+	if (result) {
+		msg_cerr("%s failed during start command execution\n",
+			 __func__);
+		/* FIXME: Should we send WRDI here as well to make sure the chip
+		 * is not in AAI mode?
+		 */
 		return result;
-	spi_send_command(6, 0, w, NULL);
-	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-		programmer_delay(5); /* SST25VF040B Tbp is max 10us */
-	while (pos < size) {
-		w[1] = buf[pos++];
-		w[2] = buf[pos++];
-		spi_send_command(3, 0, w, NULL);
-		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
-			programmer_delay(5); /* SST25VF040B Tbp is max 10us */
 	}
+	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+		programmer_delay(10);
+
+	/* We already wrote 2 bytes in the multicommand step. */
+	pos += 2;
+
+	while (pos < start + len) {
+		cmd[1] = buf[pos++];
+		cmd[2] = buf[pos++];
+		spi_send_command(JEDEC_AAI_WORD_PROGRAM_CONT_OUTSIZE, 0, cmd, NULL);
+		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
+			programmer_delay(10);
+	}
+
+	/* Use WRDI to exit AAI mode. */
 	spi_write_disable();
 	return 0;
 }

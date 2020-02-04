@@ -25,12 +25,10 @@
 #include "flash.h"
 #include "flashchips.h"
 #include "chipdrivers.h"
+#include "programmer.h"
 #include "spi.h"
 
 enum spi_controller spi_controller = SPI_CONTROLLER_NONE;
-void *spibar = NULL;
-
-void spi_prettyprint_status_register(struct flashchip *flash);
 
 const struct spi_programmer spi_programmer[] = {
 	{ /* SPI_CONTROLLER_NONE */
@@ -67,7 +65,7 @@ const struct spi_programmer spi_programmer[] = {
 		.command = sb600_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
 		.read = sb600_spi_read,
-		.write_256 = sb600_spi_write_1,
+		.write_256 = sb600_spi_write_256,
 	},
 
 	{ /* SPI_CONTROLLER_VIA */
@@ -81,7 +79,14 @@ const struct spi_programmer spi_programmer[] = {
 		.command = wbsio_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
 		.read = wbsio_spi_read,
-		.write_256 = wbsio_spi_write_1,
+		.write_256 = spi_chip_write_1_new,
+	},
+
+	{ /* SPI_CONTROLLER_MCP6X_BITBANG */
+		.command = bitbang_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = bitbang_spi_read,
+		.write_256 = bitbang_spi_write_256,
 	},
 #endif
 #endif
@@ -99,8 +104,8 @@ const struct spi_programmer spi_programmer[] = {
 	{ /* SPI_CONTROLLER_DUMMY */
 		.command = dummy_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
-		.read = NULL,
-		.write_256 = NULL,
+		.read = dummy_spi_read,
+		.write_256 = dummy_spi_write_256,
 	},
 #endif
 
@@ -118,7 +123,16 @@ const struct spi_programmer spi_programmer[] = {
 		.command = dediprog_spi_send_command,
 		.multicommand = default_spi_send_multicommand,
 		.read = dediprog_spi_read,
-		.write_256 = spi_chip_write_1,
+		.write_256 = spi_chip_write_1_new,
+	},
+#endif
+
+#if CONFIG_RAYER_SPI == 1
+	{ /* SPI_CONTROLLER_RAYER */
+		.command = bitbang_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = bitbang_spi_read,
+		.write_256 = bitbang_spi_write_256,
 	},
 #endif
 
@@ -132,7 +146,8 @@ int spi_send_command(unsigned int writecnt, unsigned int readcnt,
 {
 	if (!spi_programmer[spi_controller].command) {
 		msg_perr("%s called, but SPI is unsupported on this "
-			"hardware. Please report a bug.\n", __func__);
+			 "hardware. Please report a bug at "
+			 "flashrom@flashrom.org\n", __func__);
 		return 1;
 	}
 
@@ -144,7 +159,8 @@ int spi_send_multicommand(struct spi_command *cmds)
 {
 	if (!spi_programmer[spi_controller].multicommand) {
 		msg_perr("%s called, but SPI is unsupported on this "
-			"hardware. Please report a bug.\n", __func__);
+			 "hardware. Please report a bug at "
+			 "flashrom@flashrom.org\n", __func__);
 		return 1;
 	}
 
@@ -183,8 +199,9 @@ int default_spi_send_multicommand(struct spi_command *cmds)
 int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
 	if (!spi_programmer[spi_controller].read) {
-		msg_perr("%s called, but SPI read is unsupported on this"
-			" hardware. Please report a bug.\n", __func__);
+		msg_perr("%s called, but SPI read is unsupported on this "
+			 "hardware. Please report a bug at "
+			 "flashrom@flashrom.org\n", __func__);
 		return 1;
 	}
 
@@ -194,16 +211,40 @@ int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 /*
  * Program chip using page (256 bytes) programming.
  * Some SPI masters can't do this, they use single byte programming instead.
+ * The redirect to single byte programming is achieved by setting
+ * .write_256 = spi_chip_write_1
  */
-int spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
+/* real chunksize is up to 256, logical chunksize is 256 */
+int spi_chip_write_256_new(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
 	if (!spi_programmer[spi_controller].write_256) {
-		msg_perr("%s called, but SPI page write is unsupported "
-			" on this hardware. Please report a bug.\n", __func__);
+		msg_perr("%s called, but SPI page write is unsupported on this "
+			 "hardware. Please report a bug at "
+			 "flashrom@flashrom.org\n", __func__);
 		return 1;
 	}
 
-	return spi_programmer[spi_controller].write_256(flash, buf);
+	return spi_programmer[spi_controller].write_256(flash, buf, start, len);
+}
+
+/* Wrapper function until the generic code is converted to partial writes. */
+int spi_chip_write_256(struct flashchip *flash, uint8_t *buf)
+{
+	int ret;
+
+	msg_pinfo("Erasing flash before programming... ");
+	if (erase_flash(flash)) {
+		msg_perr("ERASE FAILED!\n");
+		return -1;
+	}
+	msg_pinfo("done.\n");
+	msg_pinfo("Programming flash... ");
+	ret = spi_chip_write_256_new(flash, buf, 0, flash->total_size * 1024);
+	if (!ret)
+		msg_pinfo("done.\n");
+	else
+		msg_pinfo("\n");
+	return ret;
 }
 
 /*
