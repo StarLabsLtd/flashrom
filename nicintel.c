@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /* Datasheet: http://download.intel.com/design/network/datashts/82559_Fast_Ethernet_Multifunction_PCI_Cardbus_Controller_Datasheet.pdf */
@@ -40,7 +36,7 @@ const struct dev_entry nics_intel[] = {
 #define NICINTEL_MEMMAP_SIZE (128 * 1024)
 #define NICINTEL_MEMMAP_MASK (NICINTEL_MEMMAP_SIZE - 1)
 
-#define NICINTEL_CONTROL_MEMMAP_SIZE	0x10 
+#define NICINTEL_CONTROL_MEMMAP_SIZE	0x10
 
 #define CSR_FCR 0x0c
 

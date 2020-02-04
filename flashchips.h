@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __FLASHCHIPS_H__
@@ -132,6 +128,7 @@
 
 #define ATMEL_ID		0x1F	/* Atmel (now used by Adesto) */
 #define ATMEL_AT25DF021		0x4300
+#define ATMEL_AT25DF021A	0x4301
 #define ATMEL_AT25DF041A	0x4401
 #define ATMEL_AT25DF081		0x4502	/* EDI 0x00. AT25DL081 has same ID + EDI 0x0100 */
 #define ATMEL_AT25DF081A	0x4501	/* Yes, 81A has a lower number than 81 */
@@ -150,6 +147,10 @@
 #define ATMEL_AT25F4096		0x64	/* Needs AT25F_RDID */
 #define ATMEL_AT25FS010		0x6601
 #define ATMEL_AT25FS040		0x6604
+#define ATMEL_AT25SF041		0x8401
+#define ATMEL_AT25SF081		0x8501
+#define ATMEL_AT25SF161		0x8601
+#define ATMEL_AT25SL128A	0x4218
 #define ATMEL_AT26DF041		0x4400
 #define ATMEL_AT26DF081		0x4500	/* guessed, no datasheet available */
 #define ATMEL_AT26DF081A	0x4501
@@ -452,6 +453,14 @@
 #define SHARP_LH28F008SC	0xA6	/* Sharp chip, Intel Vendor ID */
 
 #define ISSI_ID			0xD5	/* ISSI Integrated Silicon Solutions, see also PMC. */
+#define ISSI_ID_SPI		0x9D	/* ISSI ID used for SPI flash, see also PMC_ID_NOPREFIX */
+#define ISSI_IS25LP064		0x6017
+#define ISSI_IS25LP128		0x6018
+#define ISSI_IS25LP256		0x6019
+#define ISSI_IS25WP032		0x7016
+#define ISSI_IS25WP064		0x7017
+#define ISSI_IS25WP128		0x7018
+#define ISSI_IS25WP256		0x7019
 #define ISSI_PMC_IS29GL032B	0xF9
 #define ISSI_PMC_IS29GL032T	0xF6
 #define ISSI_PMC_IS29GL064B	0x7E1000
@@ -482,13 +491,18 @@
 #define MACRONIX_MX25L25635F	0x2019	/* Same as MX25L25639F, but the latter seems to not support REMS */
 #define MACRONIX_MX25L1635D	0x2415
 #define MACRONIX_MX25L1635E	0x2515	/* MX25L1635{E} */
+#define MACRONIX_MX66L51235F	0x201a	/* MX66L51235F */
+#define MACRONIX_MX25U8032E	0x2534
 #define MACRONIX_MX25U1635E	0x2535
 #define MACRONIX_MX25U3235E	0x2536	/* Same as MX25U6435F */
 #define MACRONIX_MX25U6435E	0x2537	/* Same as MX25U6435F */
 #define MACRONIX_MX25U12835E	0x2538	/* Same as MX25U12835F */
 #define MACRONIX_MX25U25635F	0x2539
+#define MACRONIX_MX25U51245G	0x253a
 #define MACRONIX_MX25L3235D	0x5E16	/* MX25L3225D/MX25L3235D/MX25L3237D */
 #define MACRONIX_MX25L6495F	0x9517
+
+#define MACRONIX_MX25R6435F	0x2817
 
 #define MACRONIX_MX29F001B	0x19
 #define MACRONIX_MX29F001T	0x18
@@ -586,7 +600,7 @@
 #define PMC_PM49FL002		0x6D
 #define PMC_PM49FL004		0x6E
 
-/* 
+/*
  * The Sanyo chip found so far uses SPI, first byte is manufacture code,
  * second byte is the device code,
  * third byte is a dummy byte.
@@ -598,6 +612,9 @@
 #define SANYO_LE25FW406		0x07	/* RES2 */
 #define SANYO_LE25FW418A	0x10	/* RES2 and some weird 1 byte RDID variant */
 #define SANYO_LE25FW406A	0x1A	/* RES2, no datasheet */
+#define SANYO_LE25FU106B	0x1D
+#define SANYO_LE25FU206		0x44
+#define SANYO_LE25FU206A	0x0612
 #define SANYO_LE25FU406B	0x1E	/* LE25FW418A without HD_READ mode option variant */
 #define SANYO_LE25FU406C	0x0613	/* Also known as LE25U40CMC apparently */
 #define SANYO_LE25FW806		0x26	/* RES2 and some weird 1 byte RDID variant */
@@ -697,6 +714,8 @@
 #define SST_SST25VF064C		0x254B
 #define SST_SST26VF016		0x2601
 #define SST_SST26VF032		0x2602
+#define SST_SST26VF016B		0x2641
+#define SST_SST26VF032B		0x2642
 #define SST_SST26VF064B		0x2643
 #define SST_SST27SF512		0xA4
 #define SST_SST27SF010		0xA5
@@ -886,6 +905,9 @@
  * byte of device ID is related to log(bitsize).
  */
 #define WINBOND_NEX_ID		0xEF	/* Winbond (ex Nexcom) serial flashes */
+#define WINBOND_NEX_W25P80	0x2014
+#define WINBOND_NEX_W25P16	0x2015
+#define WINBOND_NEX_W25P32	0x2016
 #define WINBOND_NEX_W25X10	0x3011
 #define WINBOND_NEX_W25X20	0x3012
 #define WINBOND_NEX_W25X40	0x3013
@@ -899,14 +921,18 @@
 #define WINBOND_NEX_W25Q32_V	0x4016	/* W25Q32BV; W25Q32FV in SPI mode (default) */
 #define WINBOND_NEX_W25Q64_V	0x4017	/* W25Q64BV, W25Q64CV; W25Q64FV in SPI mode (default) */
 #define WINBOND_NEX_W25Q128_V	0x4018	/* W25Q128BV; W25Q128FV in SPI mode (default) */
-#define WINBOND_NEX_W25Q256_V	0x4019	/* W25Q256FV */
+#define WINBOND_NEX_W25Q256_V	0x4019	/* W25Q256FV or W25Q256JV_Q (QE=1) */
 #define WINBOND_NEX_W25Q20_W	0x5012	/* W25Q20BW */
-#define WINBOND_NEX_W25Q40_W	0x5013	/* W25Q40BW */
-#define WINBOND_NEX_W25Q80_W	0x5014	/* W25Q80BW */
+#define WINBOND_NEX_W25Q40BW	0x5013	/* W25Q40BW */
+#define WINBOND_NEX_W25Q80BW	0x5014	/* W25Q80BW */
+#define WINBOND_NEX_W25Q40EW	0x6013	/* W25Q40EW */
+#define WINBOND_NEX_W25Q80EW	0x6014	/* W25Q80EW */
 #define WINBOND_NEX_W25Q16_W	0x6015	/* W25Q16DW */
 #define WINBOND_NEX_W25Q32_W	0x6016	/* W25Q32DW; W25Q32FV in QPI mode */
 #define WINBOND_NEX_W25Q64_W	0x6017	/* W25Q64DW; W25Q64FV in QPI mode */
 #define WINBOND_NEX_W25Q128_W	0x6018	/* W25Q128FW; W25Q128FV in QPI mode */
+#define WINBOND_NEX_W25Q128_V_M	0x7018	/* W25Q128JVSM */
+#define WINBOND_NEX_W25Q256JV_M	0x7019	/* W25Q256JV_M (QE=0) */
 
 #define WINBOND_ID		0xDA	/* Winbond */
 #define WINBOND_W19B160BB	0x49
@@ -949,5 +975,9 @@
 #define WINBOND_W49F020		0x8C
 #define WINBOND_W49V002A	0xB0
 #define WINBOND_W49V002FA	0x32
+
+#define ZETTADEVICE_ID          0xBA	/* Zetta Device */
+#define ZETTADEVICE_ZD25D20     0x2012
+#define ZETTADEVICE_ZD25D40     0x2013
 
 #endif /* !FLASHCHIPS_H */

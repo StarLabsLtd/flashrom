@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /* strnlen is in POSIX but was a GNU extension up to glibc 2.10 */
@@ -34,10 +30,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "platform.h"
 #include "flash.h"
 #include "programmer.h"
-
-#if defined(__i386__) || defined(__x86_64__)
 
 /* Enable SMBIOS decoding. Currently legacy DMI decoding is enough. */
 #define SM_SUPPORT 0
@@ -63,9 +58,9 @@ static struct {
 
 /* This list is used to identify supposed laptops. The is_laptop field has the
  * following meaning:
- * 	- 0: in all likelihood not a laptop
- * 	- 1: in all likelihood a laptop
- * 	- 2: chassis-type is not specific enough
+ *	- 0: in all likelihood not a laptop
+ *	- 1: in all likelihood a laptop
+ *	- 2: chassis-type is not specific enough
  * A full list of chassis types can be found in the System Management BIOS
  * (SMBIOS) Reference Specification 2.7.0 section 7.4.1 "Chassis Types" at
  * http://www.dmtf.org/sites/default/files/standards/documents/DSP0134_2.7.0.pdf
@@ -292,7 +287,11 @@ out:
 #else /* CONFIG_INTERNAL_DMI */
 
 #define DMI_COMMAND_LEN_MAX 300
-static const char *dmidecode_command = "dmidecode";
+#if IS_WINDOWS
+static const char *dmidecode_command = "dmidecode.exe 2>NUL";
+#else
+static const char *dmidecode_command = "dmidecode 2>/dev/null";
+#endif
 
 static char *get_dmi_string(const char *string_name)
 {
@@ -480,5 +479,3 @@ int dmi_match(const char *pattern)
 
 	return 0;
 }
-
-#endif // defined(__i386__) || defined(__x86_64__)

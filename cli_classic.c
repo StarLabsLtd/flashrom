@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
@@ -29,6 +25,7 @@
 #include <getopt.h>
 #include "flash.h"
 #include "flashchips.h"
+#include "fmap.h"
 #include "programmer.h"
 #include "libflashrom.h"
 
@@ -57,9 +54,12 @@ static void cli_classic_usage(const char *name)
 	       " -n | --noverify                    don't auto-verify\n"
 	       " -N | --noverify-all                verify included regions only (cf. -i)\n"
 	       " -l | --layout <layoutfile>         read ROM layout from <layoutfile>\n"
+	       "      --fmap                        read ROM layout from fmap embedded in ROM\n"
+	       "      --fmap-file <fmapfile>        read ROM layout from fmap in <fmapfile>\n"
 	       "      --ifd                         read layout from an Intel Firmware Descriptor\n"
 	       " -i | --image <name>                only flash image <name> from flash layout\n"
 	       " -o | --output <logfile>            log output to <logfile>\n"
+	       "      --flash-contents <ref-file>   assume flash contents to be <ref-file>\n"
 	       " -L | --list-supported              print supported devices\n"
 #if CONFIG_PRINT_WIKI == 1
 	       " -z | --list-supported-wiki         print supported devices in wiki syntax\n"
@@ -100,7 +100,7 @@ int main(int argc, char *argv[])
 	struct flashctx *fill_flash;
 	const char *name;
 	int namelen, opt, i, j;
-	int startchip = -1, chipcount = 0, option_index = 0, force = 0, ifd = 0;
+	int startchip = -1, chipcount = 0, option_index = 0, force = 0, ifd = 0, fmap = 0;
 #if CONFIG_PRINT_WIKI == 1
 	int list_supported_wiki = 0;
 #endif
@@ -108,6 +108,12 @@ int main(int argc, char *argv[])
 	int dont_verify_it = 0, dont_verify_all = 0, list_supported = 0, operation_specified = 0;
 	struct flashrom_layout *layout = NULL;
 	enum programmer prog = PROGRAMMER_INVALID;
+	enum {
+		OPTION_IFD = 0x0100,
+		OPTION_FMAP,
+		OPTION_FMAP_FILE,
+		OPTION_FLASH_CONTENTS,
+	};
 	int ret = 0;
 
 	static const char optstring[] = "r:Rw:v:nNVEfc:l:i:p:Lzho:";
@@ -122,8 +128,11 @@ int main(int argc, char *argv[])
 		{"verbose",		0, NULL, 'V'},
 		{"force",		0, NULL, 'f'},
 		{"layout",		1, NULL, 'l'},
-		{"ifd",			0, NULL, 0x0100},
+		{"ifd",			0, NULL, OPTION_IFD},
+		{"fmap",		0, NULL, OPTION_FMAP},
+		{"fmap-file",		1, NULL, OPTION_FMAP_FILE},
 		{"image",		1, NULL, 'i'},
+		{"flash-contents",	1, NULL, OPTION_FLASH_CONTENTS},
 		{"list-supported",	0, NULL, 'L'},
 		{"list-supported-wiki",	0, NULL, 'z'},
 		{"programmer",		1, NULL, 'p'},
@@ -134,7 +143,9 @@ int main(int argc, char *argv[])
 	};
 
 	char *filename = NULL;
+	char *referencefile = NULL;
 	char *layoutfile = NULL;
+	char *fmapfile = NULL;
 #ifndef STANDALONE
 	char *logfile = NULL;
 #endif /* !STANDALONE */
@@ -227,14 +238,55 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "Error: --layout and --ifd both specified. Aborting.\n");
 				cli_classic_abort_usage();
 			}
+			if (fmap) {
+				fprintf(stderr, "Error: --layout and --fmap-file both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
 			layoutfile = strdup(optarg);
 			break;
-		case 0x0100:
+		case OPTION_IFD:
 			if (layoutfile) {
 				fprintf(stderr, "Error: --layout and --ifd both specified. Aborting.\n");
 				cli_classic_abort_usage();
 			}
+			if (fmap) {
+				fprintf(stderr, "Error: --fmap-file and --ifd both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
 			ifd = 1;
+			break;
+		case OPTION_FMAP_FILE:
+			if (fmap) {
+				fprintf(stderr, "Error: --fmap or --fmap-file specified "
+					"more than once. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			if (ifd) {
+				fprintf(stderr, "Error: --fmap-file and --ifd both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			if (layoutfile) {
+				fprintf(stderr, "Error: --fmap-file and --layout both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			fmapfile = strdup(optarg);
+			fmap = 1;
+			break;
+		case OPTION_FMAP:
+			if (fmap) {
+				fprintf(stderr, "Error: --fmap or --fmap-file specified "
+					"more than once. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			if (ifd) {
+				fprintf(stderr, "Error: --fmap and --ifd both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			if (layoutfile) {
+				fprintf(stderr, "Error: --layout and --fmap both specified. Aborting.\n");
+				cli_classic_abort_usage();
+			}
+			fmap = 1;
 			break;
 		case 'i':
 			tempstr = strdup(optarg);
@@ -242,6 +294,9 @@ int main(int argc, char *argv[])
 				free(tempstr);
 				cli_classic_abort_usage();
 			}
+			break;
+		case OPTION_FLASH_CONTENTS:
+			referencefile = strdup(optarg);
 			break;
 		case 'L':
 			if (++operation_specified > 1) {
@@ -354,6 +409,12 @@ int main(int argc, char *argv[])
 	if (layoutfile && check_filename(layoutfile, "layout")) {
 		cli_classic_abort_usage();
 	}
+	if (fmapfile && check_filename(fmapfile, "fmap")) {
+		cli_classic_abort_usage();
+	}
+	if (referencefile && check_filename(referencefile, "reference")) {
+		cli_classic_abort_usage();
+	}
 
 #ifndef STANDALONE
 	if (logfile && check_filename(logfile, "log"))
@@ -390,7 +451,8 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto out;
 	}
-	if (!ifd && process_include_args(get_global_layout())) {
+
+	if (!ifd && !fmap && process_include_args(get_global_layout())) {
 		ret = 1;
 		goto out;
 	}
@@ -549,6 +611,38 @@ int main(int argc, char *argv[])
 			   process_include_args(layout))) {
 		ret = 1;
 		goto out_shutdown;
+	} else if (fmap && fmapfile) {
+		struct stat s;
+		if (stat(fmapfile, &s) != 0) {
+			msg_gerr("Failed to stat fmapfile \"%s\"\n", fmapfile);
+			ret = 1;
+			goto out_shutdown;
+		}
+
+		size_t fmapfile_size = s.st_size;
+		uint8_t *fmapfile_buffer = malloc(fmapfile_size);
+		if (!fmapfile_buffer) {
+			ret = 1;
+			goto out_shutdown;
+		}
+
+		if (read_buf_from_file(fmapfile_buffer, fmapfile_size, fmapfile)) {
+			ret = 1;
+			free(fmapfile_buffer);
+			goto out_shutdown;
+		}
+
+		if (flashrom_layout_read_fmap_from_buffer(&layout, fill_flash, fmapfile_buffer, fmapfile_size) ||
+				process_include_args(layout)) {
+			ret = 1;
+			free(fmapfile_buffer);
+			goto out_shutdown;
+		}
+		free(fmapfile_buffer);
+	} else if (fmap && (flashrom_layout_read_fmap_from_rom(&layout, fill_flash, 0,
+				fill_flash->chip->total_size * 1024) || process_include_args(layout))) {
+		ret = 1;
+		goto out_shutdown;
 	}
 
 	flashrom_layout_set(fill_flash, layout);
@@ -569,7 +663,7 @@ int main(int argc, char *argv[])
 	else if (erase_it)
 		ret = do_erase(fill_flash);
 	else if (write_it)
-		ret = do_write(fill_flash, filename);
+		ret = do_write(fill_flash, filename, referencefile);
 	else if (verify_it)
 		ret = do_verify(fill_flash, filename);
 
@@ -583,6 +677,8 @@ out:
 
 	layout_cleanup();
 	free(filename);
+	free(fmapfile);
+	free(referencefile);
 	free(layoutfile);
 	free(pparam);
 	/* clean up global variables */

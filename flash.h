@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __FLASH_H__
@@ -98,9 +94,9 @@ enum write_granularity {
 
 /*
  * How many different erase functions do we have per chip?
- * Atmel AT25FS010 has 6 different functions.
+ * Macronix MX25L25635F has 8 different functions.
  */
-#define NUM_ERASEFUNCTIONS 6
+#define NUM_ERASEFUNCTIONS 8
 
 /* Feature bits used for non-SPI only */
 #define FEATURE_REGISTERMAP	(1 << 0)
@@ -119,6 +115,27 @@ enum write_granularity {
 #define FEATURE_WRSR_EITHER	(FEATURE_WRSR_EWSR | FEATURE_WRSR_WREN)
 #define FEATURE_OTP		(1 << 8)
 #define FEATURE_QPI		(1 << 9)
+#define FEATURE_4BA_ENTER	(1 << 10) /**< Can enter/exit 4BA mode with instructions 0xb7/0xe9 w/o WREN */
+#define FEATURE_4BA_ENTER_WREN	(1 << 11) /**< Can enter/exit 4BA mode with instructions 0xb7/0xe9 after WREN */
+#define FEATURE_4BA_ENTER_EAR7	(1 << 12) /**< Can enter/exit 4BA mode by setting bit7 of the ext addr reg */
+#define FEATURE_4BA_EXT_ADDR	(1 << 13) /**< Regular 3-byte operations can be used by writing the most
+					       significant address byte into an extended address register. */
+#define FEATURE_4BA_READ	(1 << 14) /**< Native 4BA read instruction (0x13) is supported. */
+#define FEATURE_4BA_FAST_READ	(1 << 15) /**< Native 4BA fast read instruction (0x0c) is supported. */
+#define FEATURE_4BA_WRITE	(1 << 16) /**< Native 4BA byte program (0x12) is supported. */
+/* 4BA Shorthands */
+#define FEATURE_4BA_NATIVE	(FEATURE_4BA_READ | FEATURE_4BA_FAST_READ | FEATURE_4BA_WRITE)
+#define FEATURE_4BA		(FEATURE_4BA_ENTER | FEATURE_4BA_EXT_ADDR | FEATURE_4BA_NATIVE)
+#define FEATURE_4BA_WREN	(FEATURE_4BA_ENTER_WREN | FEATURE_4BA_EXT_ADDR | FEATURE_4BA_NATIVE)
+#define FEATURE_4BA_EAR7	(FEATURE_4BA_ENTER_EAR7 | FEATURE_4BA_EXT_ADDR | FEATURE_4BA_NATIVE)
+/*
+ * Most flash chips are erased to ones and programmed to zeros. However, some
+ * other flash chips, such as the ENE KB9012 internal flash, work the opposite way.
+ */
+#define FEATURE_ERASED_ZERO	(1 << 17)
+#define FEATURE_NO_ERASE	(1 << 18)
+
+#define ERASED_VALUE(flash)	(((flash)->chip->feature_bits & FEATURE_ERASED_ZERO) ? 0x00 : 0xff)
 
 enum test_state {
 	OK = 0,
@@ -172,6 +189,18 @@ struct flashchip {
 		enum test_state write;
 	} tested;
 
+	/*
+	 * Group chips that have common command sets. This should ensure that
+	 * no chip gets confused by a probing command for a very different class
+	 * of chips.
+	 */
+	enum {
+		/* SPI25 is very common. Keep it at zero so we don't have
+		   to specify it for each and every chip in the database.*/
+		SPI25 = 0,
+		SPI_EDI = 1,
+	} spi_cmd_set;
+
 	int (*probe) (struct flashctx *flash);
 
 	/* Delay after "enter/exit ID mode" commands in microseconds.
@@ -205,6 +234,9 @@ struct flashchip {
 		uint16_t max;
 	} voltage;
 	enum write_granularity gran;
+
+	/* SPI specific options (TODO: Make it a union in case other bustypes get specific options.) */
+	uint8_t wrea_override; /**< override opcode for write extended address register */
 };
 
 struct flashrom_flashctx {
@@ -227,11 +259,17 @@ struct flashrom_flashctx {
 		bool verify_after_write;
 		bool verify_whole_chip;
 	} flags;
+	/* We cache the state of the extended address register (highest byte
+           of a 4BA for 3BA instructions) and the state of the 4BA mode here.
+           If possible, we enter 4BA mode early. If that fails, we make use
+           of the extended address register. */
+	int address_high_byte;
+	bool in_4ba_mode;
 };
 
 /* Timing used in probe routines. ZERO is -2 to differentiate between an unset
  * field and zero delay.
- * 
+ *
  * SPI devices will always have zero delay and ignore this field.
  */
 #define TIMING_FIXME	-1
@@ -262,6 +300,8 @@ int max(int a, int b);
 int min(int a, int b);
 char *strcat_realloc(char *dest, const char *src);
 void tolower_string(char *str);
+uint8_t reverse_byte(uint8_t x);
+void reverse_bytes(uint8_t *dst, const uint8_t *src, size_t length);
 #ifdef __MINGW32__
 char* strtok_r(char *str, const char *delim, char **nextp);
 #endif
@@ -281,7 +321,7 @@ int probe_flash(struct registered_master *mst, int startchip, struct flashctx *f
 int read_flash_to_file(struct flashctx *flash, const char *filename);
 char *extract_param(const char *const *haystack, const char *needle, const char *delim);
 int verify_range(struct flashctx *flash, const uint8_t *cmpbuf, unsigned int start, unsigned int len);
-int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len, enum write_granularity gran);
+int need_erase(const uint8_t *have, const uint8_t *want, unsigned int len, enum write_granularity gran, const uint8_t erased_value);
 void print_version(void);
 void print_buildinfo(void);
 void print_banner(void);
@@ -293,7 +333,7 @@ int prepare_flash_access(struct flashctx *, bool read_it, bool write_it, bool er
 void finalize_flash_access(struct flashctx *);
 int do_read(struct flashctx *, const char *filename);
 int do_erase(struct flashctx *);
-int do_write(struct flashctx *, const char *const filename);
+int do_write(struct flashctx *, const char *const filename, const char *const referencefile);
 int do_verify(struct flashctx *, const char *const filename);
 
 /* Something happened that shouldn't happen, but we can go on. */
@@ -324,6 +364,9 @@ int flashrom_print_cb(enum flashrom_log_level level, const char *fmt, va_list ap
 /* Let gcc and clang check for correct printf-style format strings. */
 int print(enum flashrom_log_level level, const char *fmt, ...)
 #ifdef __MINGW32__
+#  ifndef __MINGW_PRINTF_FORMAT
+#    define __MINGW_PRINTF_FORMAT gnu_printf
+#  endif
 __attribute__((format(__MINGW_PRINTF_FORMAT, 2, 3)));
 #else
 __attribute__((format(printf, 2, 3)));
@@ -360,9 +403,9 @@ struct spi_command {
 	const unsigned char *writearr;
 	unsigned char *readarr;
 };
+#define NULL_SPI_CMD { 0, 0, NULL, NULL, }
 int spi_send_command(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
 int spi_send_multicommand(struct flashctx *flash, struct spi_command *cmds);
-uint32_t spi_get_valid_read_addr(struct flashctx *flash);
 
 enum chipbustype get_buses_supported(void);
 #endif				/* !__FLASH_H__ */

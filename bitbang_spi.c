@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <stdio.h>
@@ -36,16 +32,6 @@ static void bitbang_spi_set_sck(const struct bitbang_spi_master * const master, 
 	master->set_sck(val);
 }
 
-static void bitbang_spi_set_mosi(const struct bitbang_spi_master * const master, int val)
-{
-	master->set_mosi(val);
-}
-
-static int bitbang_spi_get_miso(const struct bitbang_spi_master * const master)
-{
-	return master->get_miso();
-}
-
 static void bitbang_spi_request_bus(const struct bitbang_spi_master * const master)
 {
 	if (master->request_bus)
@@ -58,6 +44,26 @@ static void bitbang_spi_release_bus(const struct bitbang_spi_master * const mast
 		master->release_bus();
 }
 
+static void bitbang_spi_set_sck_set_mosi(const struct bitbang_spi_master * const master, int sck, int mosi)
+{
+	if (master->set_sck_set_mosi) {
+		master->set_sck_set_mosi(sck, mosi);
+		return;
+	}
+
+	master->set_sck(sck);
+	master->set_mosi(mosi);
+}
+
+static int bitbang_spi_set_sck_get_miso(const struct bitbang_spi_master * const master, int sck)
+{
+	if (master->set_sck_get_miso)
+		return master->set_sck_get_miso(sck);
+
+	master->set_sck(sck);
+	return master->get_miso();
+}
+
 static int bitbang_spi_send_command(struct flashctx *flash,
 				    unsigned int writecnt, unsigned int readcnt,
 				    const unsigned char *writearr,
@@ -65,6 +71,7 @@ static int bitbang_spi_send_command(struct flashctx *flash,
 
 static const struct spi_master spi_master_bitbang = {
 	.type		= SPI_CONTROLLER_BITBANG,
+	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_READ_UNLIMITED,
 	.max_data_write	= MAX_DATA_WRITE_UNLIMITED,
 	.command	= bitbang_spi_send_command,
@@ -104,8 +111,7 @@ int register_spi_bitbang_master(const struct bitbang_spi_master *master)
 	/* Only mess with the bus if we're sure nobody else uses it. */
 	bitbang_spi_request_bus(master);
 	bitbang_spi_set_cs(master, 1);
-	bitbang_spi_set_sck(master, 0);
-	bitbang_spi_set_mosi(master, 0);
+	bitbang_spi_set_sck_set_mosi(master, 0, 0);
 	/* FIXME: Release SPI bus here and request it again for each command or
 	 * don't release it now and only release it on programmer shutdown?
 	 */
@@ -113,22 +119,34 @@ int register_spi_bitbang_master(const struct bitbang_spi_master *master)
 	return 0;
 }
 
-static uint8_t bitbang_spi_rw_byte(const struct bitbang_spi_master *master,
-				   uint8_t val)
+static uint8_t bitbang_spi_read_byte(const struct bitbang_spi_master *master)
 {
 	uint8_t ret = 0;
 	int i;
 
 	for (i = 7; i >= 0; i--) {
-		bitbang_spi_set_mosi(master, (val >> i) & 1);
+		if (i == 0)
+			bitbang_spi_set_sck_set_mosi(master, 0, 0);
+		else
+			bitbang_spi_set_sck(master, 0);
 		programmer_delay(master->half_period);
-		bitbang_spi_set_sck(master, 1);
 		ret <<= 1;
-		ret |= bitbang_spi_get_miso(master);
+		ret |= bitbang_spi_set_sck_get_miso(master, 1);
 		programmer_delay(master->half_period);
-		bitbang_spi_set_sck(master, 0);
 	}
 	return ret;
+}
+
+static void bitbang_spi_write_byte(const struct bitbang_spi_master *master, uint8_t val)
+{
+	int i;
+
+	for (i = 7; i >= 0; i--) {
+		bitbang_spi_set_sck_set_mosi(master, 0, (val >> i) & 1);
+		programmer_delay(master->half_period);
+		bitbang_spi_set_sck(master, 1);
+		programmer_delay(master->half_period);
+	}
 }
 
 static int bitbang_spi_send_command(struct flashctx *flash,
@@ -146,10 +164,11 @@ static int bitbang_spi_send_command(struct flashctx *flash,
 	bitbang_spi_request_bus(master);
 	bitbang_spi_set_cs(master, 0);
 	for (i = 0; i < writecnt; i++)
-		bitbang_spi_rw_byte(master, writearr[i]);
+		bitbang_spi_write_byte(master, writearr[i]);
 	for (i = 0; i < readcnt; i++)
-		readarr[i] = bitbang_spi_rw_byte(master, 0);
+		readarr[i] = bitbang_spi_read_byte(master);
 
+	bitbang_spi_set_sck(master, 0);
 	programmer_delay(master->half_period);
 	bitbang_spi_set_cs(master, 1);
 	programmer_delay(master->half_period);

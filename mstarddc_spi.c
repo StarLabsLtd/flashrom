@@ -11,10 +11,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #if CONFIG_MSTARDDC_SPI == 1
@@ -61,7 +57,7 @@ static int mstarddc_spi_shutdown(void *data)
 	} else {
 		msg_pinfo("Info: Reset command was not sent. "
 			  "Either the noreset=1 option was used, "
-			  "or an error occured.\n");
+			  "or an error occurred.\n");
 	}
 
 	if (close(mstarddc_fd) < 0) {

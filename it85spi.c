@@ -14,10 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 /*
@@ -54,11 +50,11 @@
 
 /* The 8042 keyboard controller uses an input buffer and an output buffer to
  * communicate with the host CPU. Both buffers are 1-byte depth. That means
- * IBF is set to 1 when the host CPU sends a command to the input buffer 
+ * IBF is set to 1 when the host CPU sends a command to the input buffer
  * of the EC. IBF is cleared to 0 once the command is read by the EC.
  */
-#define KB_IBF 			(1 << 1)  /* Input Buffer Full */
-#define KB_OBF 			(1 << 0)  /* Output Buffer Full */
+#define KB_IBF			(1 << 1)  /* Input Buffer Full */
+#define KB_OBF			(1 << 0)  /* Output Buffer Full */
 
 /* IT8502 supports two access modes:
  *   LPC_MEMORY: through the memory window in 0xFFFFFxxx (follow mode)

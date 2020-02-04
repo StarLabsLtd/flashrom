@@ -16,10 +16,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #ifndef __LAYOUT_H__
@@ -27,6 +23,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Types and macros regarding the maximum flash space size supported by generic code. */
 typedef uint32_t chipoff_t; /* Able to store any addressable offset within a supported flash memory. */
@@ -58,6 +55,8 @@ struct single_layout {
 };
 
 struct flashrom_layout *get_global_layout(void);
+struct flashrom_flashctx;
+const struct flashrom_layout *get_layout(const struct flashrom_flashctx *const flashctx);
 
 int process_include_args(struct flashrom_layout *);
 const struct romentry *layout_next_included_region(const struct flashrom_layout *, chipoff_t);

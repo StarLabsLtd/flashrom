@@ -15,10 +15,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
 #include <string.h>
@@ -278,18 +274,9 @@ static int32_t config_stream(uint32_t speed)
 	return ret;
 }
 
-/* ch341 requires LSB first, swap the bit order before send and after receive */
-static uint8_t swap_byte(uint8_t x)
-{
-	x = ((x >> 1) & 0x55) | ((x << 1) & 0xaa);
-	x = ((x >> 2) & 0x33) | ((x << 2) & 0xcc);
-	x = ((x >> 4) & 0x0f) | ((x << 4) & 0xf0);
-	return x;
-}
-
 /* The assumed map between UIO command bits, pins on CH341A chip and pins on SPI chip:
  * UIO	CH341A	SPI	CH341A SPI name
- * 0	D0/15	CS/1 	(CS0)
+ * 0	D0/15	CS/1	(CS0)
  * 1	D1/16	unused	(CS1)
  * 2	D2/17	unused	(CS2)
  * 3	D3/18	SCK/6	(DCK)
@@ -319,7 +306,7 @@ static int32_t enable_pins(bool enable)
 /* De-assert and assert CS in one operation. */
 static void pluck_cs(uint8_t *ptr)
 {
-	/* This was measured to give a minumum deassertion time of 2.25 us,
+	/* This was measured to give a minimum deassertion time of 2.25 us,
 	 * >20x more than needed for most SPI chips (100ns). */
 	int delay_cnt = 2;
 	if (stored_delay_us) {
@@ -376,7 +363,7 @@ static int ch341a_spi_spi_send_command(struct flashctx *flash, unsigned int writ
 		*ptr++ = CH341A_CMD_SPI_STREAM;
 		unsigned int i;
 		for (i = 0; i < write_now; ++i)
-			*ptr++ = swap_byte(*writearr++);
+			*ptr++ = reverse_byte(*writearr++);
 		if (read_now) {
 			memset(ptr, 0xFF, read_now);
 			read_left -= read_now;
@@ -391,7 +378,7 @@ static int ch341a_spi_spi_send_command(struct flashctx *flash, unsigned int writ
 
 	unsigned int i;
 	for (i = 0; i < readcnt; i++) {
-		*readarr++ = swap_byte(rbuf[writecnt + i]);
+		*readarr++ = reverse_byte(rbuf[writecnt + i]);
 	}
 
 	return 0;
@@ -399,6 +386,7 @@ static int ch341a_spi_spi_send_command(struct flashctx *flash, unsigned int writ
 
 static const struct spi_master spi_master_ch341a_spi = {
 	.type		= SPI_CONTROLLER_CH341A_SPI,
+	.features	= SPI_MASTER_4BA,
 	/* flashrom's current maximum is 256 B. CH341A was tested on Linux and Windows to accept atleast
 	 * 128 kB. Basically there should be no hard limit because transfers are broken up into USB packets
 	 * sent to the device and most of their payload streamed via SPI. */
@@ -444,7 +432,12 @@ int ch341a_spi_init(void)
 		return -1;
 	}
 
-	libusb_set_debug(NULL, 3); // Enable information, warning and error messages (only).
+	/* Enable information, warning, and error messages (only). */
+#if LIBUSB_API_VERSION < 0x01000106
+	libusb_set_debug(NULL, 3);
+#else
+	libusb_set_option(NULL, LIBUSB_OPTION_LOG_LEVEL, LIBUSB_LOG_LEVEL_INFO);
+#endif
 
 	uint16_t vid = devs_ch341a_spi[0].vendor_id;
 	uint16_t pid = devs_ch341a_spi[0].device_id;
