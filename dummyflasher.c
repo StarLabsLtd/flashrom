@@ -19,6 +19,8 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <ctype.h>
 #include "flash.h"
 #include "chipdrivers.h"
 #include "programmer.h"
@@ -46,33 +48,69 @@ enum emu_chip {
 };
 static enum emu_chip emu_chip = EMULATE_NONE;
 static char *emu_persistent_image = NULL;
-static int emu_chip_size = 0;
+static unsigned int emu_chip_size = 0;
 #if EMULATE_SPI_CHIP
-static int emu_max_byteprogram_size = 0;
-static int emu_max_aai_size = 0;
-static int emu_jedec_se_size = 0;
-static int emu_jedec_be_52_size = 0;
-static int emu_jedec_be_d8_size = 0;
-static int emu_jedec_ce_60_size = 0;
-static int emu_jedec_ce_c7_size = 0;
+static unsigned int emu_max_byteprogram_size = 0;
+static unsigned int emu_max_aai_size = 0;
+static unsigned int emu_jedec_se_size = 0;
+static unsigned int emu_jedec_be_52_size = 0;
+static unsigned int emu_jedec_be_d8_size = 0;
+static unsigned int emu_jedec_ce_60_size = 0;
+static unsigned int emu_jedec_ce_c7_size = 0;
+unsigned char spi_blacklist[256];
+unsigned char spi_ignorelist[256];
+int spi_blacklist_size = 0;
+int spi_ignorelist_size = 0;
 #endif
 #endif
 
-static int spi_write_256_chunksize = 256;
+static unsigned int spi_write_256_chunksize = 256;
 
-static int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		      const unsigned char *writearr, unsigned char *readarr);
-static int dummy_spi_write_256(struct flashchip *flash, uint8_t *buf, int start, int len);
+static int dummy_spi_send_command(struct flashctx *flash, unsigned int writecnt,
+				  unsigned int readcnt,
+				  const unsigned char *writearr,
+				  unsigned char *readarr);
+static int dummy_spi_write_256(struct flashctx *flash, uint8_t *buf,
+			       unsigned int start, unsigned int len);
+static void dummy_chip_writeb(const struct flashctx *flash, uint8_t val,
+			      chipaddr addr);
+static void dummy_chip_writew(const struct flashctx *flash, uint16_t val,
+			      chipaddr addr);
+static void dummy_chip_writel(const struct flashctx *flash, uint32_t val,
+			      chipaddr addr);
+static void dummy_chip_writen(const struct flashctx *flash, uint8_t *buf,
+			      chipaddr addr, size_t len);
+static uint8_t dummy_chip_readb(const struct flashctx *flash,
+				const chipaddr addr);
+static uint16_t dummy_chip_readw(const struct flashctx *flash,
+				 const chipaddr addr);
+static uint32_t dummy_chip_readl(const struct flashctx *flash,
+				 const chipaddr addr);
+static void dummy_chip_readn(const struct flashctx *flash, uint8_t *buf,
+			     const chipaddr addr, size_t len);
 
 static const struct spi_programmer spi_programmer_dummyflasher = {
-	.type = SPI_CONTROLLER_DUMMY,
-	.max_data_read = MAX_DATA_READ_UNLIMITED,
-	.max_data_write = MAX_DATA_UNSPECIFIED,
-	.command = dummy_spi_send_command,
-	.multicommand = default_spi_send_multicommand,
-	.read = default_spi_read,
-	.write_256 = dummy_spi_write_256,
+	.type		= SPI_CONTROLLER_DUMMY,
+	.max_data_read	= MAX_DATA_READ_UNLIMITED,
+	.max_data_write	= MAX_DATA_UNSPECIFIED,
+	.command	= dummy_spi_send_command,
+	.multicommand	= default_spi_send_multicommand,
+	.read		= default_spi_read,
+	.write_256	= dummy_spi_write_256,
 };
+
+static const struct par_programmer par_programmer_dummy = {
+		.chip_readb		= dummy_chip_readb,
+		.chip_readw		= dummy_chip_readw,
+		.chip_readl		= dummy_chip_readl,
+		.chip_readn		= dummy_chip_readn,
+		.chip_writeb		= dummy_chip_writeb,
+		.chip_writew		= dummy_chip_writew,
+		.chip_writel		= dummy_chip_writel,
+		.chip_writen		= dummy_chip_writen,
+};
+
+enum chipbustype dummy_buses_supported = BUS_NONE;
 
 static int dummy_shutdown(void *data)
 {
@@ -94,6 +132,7 @@ int dummy_init(void)
 {
 	char *bustext = NULL;
 	char *tmp = NULL;
+	int i;
 #if EMULATE_CHIP
 	struct stat image_stat;
 #endif
@@ -107,24 +146,24 @@ int dummy_init(void)
 	/* Convert the parameters to lowercase. */
 	tolower_string(bustext);
 
-	buses_supported = CHIP_BUSTYPE_NONE;
+	dummy_buses_supported = BUS_NONE;
 	if (strstr(bustext, "parallel")) {
-		buses_supported |= CHIP_BUSTYPE_PARALLEL;
+		dummy_buses_supported |= BUS_PARALLEL;
 		msg_pdbg("Enabling support for %s flash.\n", "parallel");
 	}
 	if (strstr(bustext, "lpc")) {
-		buses_supported |= CHIP_BUSTYPE_LPC;
+		dummy_buses_supported |= BUS_LPC;
 		msg_pdbg("Enabling support for %s flash.\n", "LPC");
 	}
 	if (strstr(bustext, "fwh")) {
-		buses_supported |= CHIP_BUSTYPE_FWH;
+		dummy_buses_supported |= BUS_FWH;
 		msg_pdbg("Enabling support for %s flash.\n", "FWH");
 	}
 	if (strstr(bustext, "spi")) {
-		register_spi_programmer(&spi_programmer_dummyflasher);
+		dummy_buses_supported |= BUS_SPI;
 		msg_pdbg("Enabling support for %s flash.\n", "SPI");
 	}
-	if (buses_supported == CHIP_BUSTYPE_NONE)
+	if (dummy_buses_supported == BUS_NONE)
 		msg_pdbg("Support for all flash bus types disabled.\n");
 	free(bustext);
 
@@ -137,6 +176,78 @@ int dummy_init(void)
 			return 1;
 		}
 	}
+
+	tmp = extract_programmer_param("spi_blacklist");
+	if (tmp) {
+		i = strlen(tmp);
+		if (!strncmp(tmp, "0x", 2)) {
+			i -= 2;
+			memmove(tmp, tmp + 2, i + 1);
+		}
+		if ((i > 512) || (i % 2)) {
+			msg_perr("Invalid SPI command blacklist length\n");
+			free(tmp);
+			return 1;
+		}
+		spi_blacklist_size = i / 2;
+		for (i = 0; i < spi_blacklist_size * 2; i++) {
+			if (!isxdigit((unsigned char)tmp[i])) {
+				msg_perr("Invalid char \"%c\" in SPI command "
+					 "blacklist\n", tmp[i]);
+				free(tmp);
+				return 1;
+			}
+		}
+		for (i = 0; i < spi_blacklist_size; i++) {
+			unsigned int tmp2;
+			/* SCNx8 is apparently not supported by MSVC (and thus
+			 * MinGW), so work around it with an extra variable
+			 */
+			sscanf(tmp + i * 2, "%2x", &tmp2);
+			spi_blacklist[i] = (uint8_t)tmp2;
+		}
+		msg_pdbg("SPI blacklist is ");
+		for (i = 0; i < spi_blacklist_size; i++)
+			msg_pdbg("%02x ", spi_blacklist[i]);
+		msg_pdbg(", size %i\n", spi_blacklist_size);
+	}
+	free(tmp);
+
+	tmp = extract_programmer_param("spi_ignorelist");
+	if (tmp) {
+		i = strlen(tmp);
+		if (!strncmp(tmp, "0x", 2)) {
+			i -= 2;
+			memmove(tmp, tmp + 2, i + 1);
+		}
+		if ((i > 512) || (i % 2)) {
+			msg_perr("Invalid SPI command ignorelist length\n");
+			free(tmp);
+			return 1;
+		}
+		spi_ignorelist_size = i / 2;
+		for (i = 0; i < spi_ignorelist_size * 2; i++) {
+			if (!isxdigit((unsigned char)tmp[i])) {
+				msg_perr("Invalid char \"%c\" in SPI command "
+					 "ignorelist\n", tmp[i]);
+				free(tmp);
+				return 1;
+			}
+		}
+		for (i = 0; i < spi_ignorelist_size; i++) {
+			unsigned int tmp2;
+			/* SCNx8 is apparently not supported by MSVC (and thus
+			 * MinGW), so work around it with an extra variable
+			 */
+			sscanf(tmp + i * 2, "%2x", &tmp2);
+			spi_ignorelist[i] = (uint8_t)tmp2;
+		}
+		msg_pdbg("SPI ignorelist is ");
+		for (i = 0; i < spi_ignorelist_size; i++)
+			msg_pdbg("%02x ", spi_ignorelist[i]);
+		msg_pdbg(", size %i\n", spi_ignorelist_size);
+	}
+	free(tmp);
 
 #if EMULATE_CHIP
 	tmp = extract_programmer_param("emulate");
@@ -225,6 +336,14 @@ dummy_init_out:
 		free(flashchip_contents);
 		return 1;
 	}
+	if (dummy_buses_supported & (BUS_PARALLEL | BUS_LPC | BUS_FWH))
+		register_par_programmer(&par_programmer_dummy,
+					dummy_buses_supported &
+						(BUS_PARALLEL | BUS_LPC |
+						 BUS_FWH));
+	if (dummy_buses_supported & BUS_SPI)
+		register_spi_programmer(&spi_programmer_dummyflasher);
+
 	return 0;
 }
 
@@ -241,22 +360,26 @@ void dummy_unmap(void *virt_addr, size_t len)
 		  __func__, (unsigned long)len, virt_addr);
 }
 
-void dummy_chip_writeb(uint8_t val, chipaddr addr)
+static void dummy_chip_writeb(const struct flashctx *flash, uint8_t val,
+			      chipaddr addr)
 {
 	msg_pspew("%s: addr=0x%lx, val=0x%02x\n", __func__, addr, val);
 }
 
-void dummy_chip_writew(uint16_t val, chipaddr addr)
+static void dummy_chip_writew(const struct flashctx *flash, uint16_t val,
+			      chipaddr addr)
 {
 	msg_pspew("%s: addr=0x%lx, val=0x%04x\n", __func__, addr, val);
 }
 
-void dummy_chip_writel(uint32_t val, chipaddr addr)
+static void dummy_chip_writel(const struct flashctx *flash, uint32_t val,
+			      chipaddr addr)
 {
 	msg_pspew("%s: addr=0x%lx, val=0x%08x\n", __func__, addr, val);
 }
 
-void dummy_chip_writen(uint8_t *buf, chipaddr addr, size_t len)
+static void dummy_chip_writen(const struct flashctx *flash, uint8_t *buf,
+			      chipaddr addr, size_t len)
 {
 	size_t i;
 	msg_pspew("%s: addr=0x%lx, len=0x%08lx, writing data (hex):",
@@ -268,25 +391,29 @@ void dummy_chip_writen(uint8_t *buf, chipaddr addr, size_t len)
 	}
 }
 
-uint8_t dummy_chip_readb(const chipaddr addr)
+static uint8_t dummy_chip_readb(const struct flashctx *flash,
+				const chipaddr addr)
 {
 	msg_pspew("%s:  addr=0x%lx, returning 0xff\n", __func__, addr);
 	return 0xff;
 }
 
-uint16_t dummy_chip_readw(const chipaddr addr)
+static uint16_t dummy_chip_readw(const struct flashctx *flash,
+				 const chipaddr addr)
 {
 	msg_pspew("%s:  addr=0x%lx, returning 0xffff\n", __func__, addr);
 	return 0xffff;
 }
 
-uint32_t dummy_chip_readl(const chipaddr addr)
+static uint32_t dummy_chip_readl(const struct flashctx *flash,
+				 const chipaddr addr)
 {
 	msg_pspew("%s:  addr=0x%lx, returning 0xffffffff\n", __func__, addr);
 	return 0xffffffff;
 }
 
-void dummy_chip_readn(uint8_t *buf, const chipaddr addr, size_t len)
+static void dummy_chip_readn(const struct flashctx *flash, uint8_t *buf,
+			     const chipaddr addr, size_t len)
 {
 	msg_pspew("%s:  addr=0x%lx, len=0x%lx, returning array of 0xff\n",
 		  __func__, addr, (unsigned long)len);
@@ -295,18 +422,37 @@ void dummy_chip_readn(uint8_t *buf, const chipaddr addr, size_t len)
 }
 
 #if EMULATE_SPI_CHIP
-static int emulate_spi_chip_response(unsigned int writecnt, unsigned int readcnt,
-		      const unsigned char *writearr, unsigned char *readarr)
+static int emulate_spi_chip_response(unsigned int writecnt,
+				     unsigned int readcnt,
+				     const unsigned char *writearr,
+				     unsigned char *readarr)
 {
-	int offs;
-	static int aai_offs;
+	unsigned int offs, i;
+	static int unsigned aai_offs;
 	static int aai_active = 0;
 
 	if (writecnt == 0) {
 		msg_perr("No command sent to the chip!\n");
 		return 1;
 	}
-	/* TODO: Implement command blacklists here. */
+	/* spi_blacklist has precedence over spi_ignorelist. */
+	for (i = 0; i < spi_blacklist_size; i++) {
+		if (writearr[0] == spi_blacklist[i]) {
+			msg_pdbg("Refusing blacklisted SPI command 0x%02x\n",
+				 spi_blacklist[i]);
+			return SPI_INVALID_OPCODE;
+		}
+	}
+	for (i = 0; i < spi_ignorelist_size; i++) {
+		if (writearr[0] == spi_ignorelist[i]) {
+			msg_cdbg("Ignoring ignorelisted SPI command 0x%02x\n",
+				 spi_ignorelist[i]);
+			/* Return success because the command does not fail,
+			 * it is simply ignored.
+			 */
+			return 0;
+		}
+	}
 	switch (writearr[0]) {
 	case JEDEC_RES:
 		if (emu_chip != EMULATE_ST_M25P10_RES)
@@ -491,8 +637,10 @@ static int emulate_spi_chip_response(unsigned int writecnt, unsigned int readcnt
 }
 #endif
 
-static int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		      const unsigned char *writearr, unsigned char *readarr)
+static int dummy_spi_send_command(struct flashctx *flash, unsigned int writecnt,
+				  unsigned int readcnt,
+				  const unsigned char *writearr,
+				  unsigned char *readarr)
 {
 	int i;
 
@@ -511,7 +659,7 @@ static int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	case EMULATE_SST_SST25VF032B:
 		if (emulate_spi_chip_response(writecnt, readcnt, writearr,
 					      readarr)) {
-			msg_perr("Invalid command sent to flash chip!\n");
+			msg_pdbg("Invalid command sent to flash chip!\n");
 			return 1;
 		}
 		break;
@@ -520,14 +668,14 @@ static int dummy_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	}
 #endif
 	msg_pspew(" reading %u bytes:", readcnt);
-	for (i = 0; i < readcnt; i++) {
+	for (i = 0; i < readcnt; i++)
 		msg_pspew(" 0x%02x", readarr[i]);
-	}
 	msg_pspew("\n");
 	return 0;
 }
 
-static int dummy_spi_write_256(struct flashchip *flash, uint8_t *buf, int start, int len)
+static int dummy_spi_write_256(struct flashctx *flash, uint8_t *buf,
+			       unsigned int start, unsigned int len)
 {
 	return spi_write_chunked(flash, buf, start, len,
 				 spi_write_256_chunksize);

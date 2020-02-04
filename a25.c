@@ -23,15 +23,20 @@
 
 /* Prettyprint the status register. Works for AMIC A25L series. */
 
-int spi_prettyprint_status_register_amic_a25l05p(struct flashchip *flash)
+static void spi_prettyprint_status_register_amic_a25_srwd(uint8_t status)
+{
+	msg_cdbg("Chip status register: Status Register Write Disable "
+		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+}
+
+int spi_prettyprint_status_register_amic_a25l05p(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
-	msg_cdbg("Chip status register: Status Register Write Disable "
-		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	spi_prettyprint_status_register_amic_a25_srwd(status);
 	spi_prettyprint_status_register_bit(status, 6);
 	spi_prettyprint_status_register_bit(status, 5);
 	spi_prettyprint_status_register_bit(status, 4);
@@ -40,15 +45,14 @@ int spi_prettyprint_status_register_amic_a25l05p(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_amic_a25l40p(struct flashchip *flash)
+int spi_prettyprint_status_register_amic_a25l40p(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
-	msg_cdbg("Chip status register: Status Register Write Disable "
-		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	spi_prettyprint_status_register_amic_a25_srwd(status);
 	spi_prettyprint_status_register_bit(status, 6);
 	spi_prettyprint_status_register_bit(status, 5);
 	spi_prettyprint_status_register_bp3210(status, 2);
@@ -56,15 +60,14 @@ int spi_prettyprint_status_register_amic_a25l40p(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_amic_a25l032(struct flashchip *flash)
+int spi_prettyprint_status_register_amic_a25l032(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
-	msg_cdbg("Chip status register: Status Register Write Disable "
-		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	spi_prettyprint_status_register_amic_a25_srwd(status);
 	msg_cdbg("Chip status register: Sector Protect Size (SEC) "
 		 "is %i KB\n", (status & (1 << 6)) ? 4 : 64);
 	msg_cdbg("Chip status register: Top/Bottom (TB) "
@@ -75,15 +78,14 @@ int spi_prettyprint_status_register_amic_a25l032(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_amic_a25lq032(struct flashchip *flash)
+int spi_prettyprint_status_register_amic_a25lq032(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
-	msg_cdbg("Chip status register: Status Register Write Disable "
-		     "(SRWD) is %sset\n", (status & (1 << 7)) ? "" : "not ");
+	spi_prettyprint_status_register_amic_a25_srwd(status);
 	msg_cdbg("Chip status register: Sector Protect Size (SEC) "
 		 "is %i KB\n", (status & (1 << 6)) ? 4 : 64);
 	msg_cdbg("Chip status register: Top/Bottom (TB) "

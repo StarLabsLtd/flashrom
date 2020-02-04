@@ -42,75 +42,9 @@ const char flashrom_version[] = FLASHROM_VERSION;
 char *chip_to_probe = NULL;
 int verbose = 0;
 
-#if CONFIG_INTERNAL == 1
-enum programmer programmer = PROGRAMMER_INTERNAL;
-#elif CONFIG_DUMMY == 1
-enum programmer programmer = PROGRAMMER_DUMMY;
-#else
-/* If neither internal nor dummy are selected, we must pick a sensible default.
- * Since there is no reason to prefer a particular external programmer, we fail
- * if more than one of them is selected. If only one is selected, it is clear
- * that the user wants that one to become the default.
- */
-#if CONFIG_NIC3COM+CONFIG_NICREALTEK+CONFIG_NICNATSEMI+CONFIG_GFXNVIDIA+CONFIG_DRKAISER+CONFIG_SATASII+CONFIG_ATAHPT+CONFIG_FT2232_SPI+CONFIG_SERPROG+CONFIG_BUSPIRATE_SPI+CONFIG_DEDIPROG+CONFIG_RAYER_SPI+CONFIG_NICINTEL+CONFIG_NICINTEL_SPI+CONFIG_OGP_SPI+CONFIG_SATAMV > 1
-#error Please enable either CONFIG_DUMMY or CONFIG_INTERNAL or disable support for all programmers except one.
-#endif
-enum programmer programmer =
-#if CONFIG_NIC3COM == 1
-	PROGRAMMER_NIC3COM
-#endif
-#if CONFIG_NICREALTEK == 1
-	PROGRAMMER_NICREALTEK
-#endif
-#if CONFIG_NICNATSEMI == 1
-	PROGRAMMER_NICNATSEMI
-#endif
-#if CONFIG_GFXNVIDIA == 1
-	PROGRAMMER_GFXNVIDIA
-#endif
-#if CONFIG_DRKAISER == 1
-	PROGRAMMER_DRKAISER
-#endif
-#if CONFIG_SATASII == 1
-	PROGRAMMER_SATASII
-#endif
-#if CONFIG_ATAHPT == 1
-	PROGRAMMER_ATAHPT
-#endif
-#if CONFIG_FT2232_SPI == 1
-	PROGRAMMER_FT2232_SPI
-#endif
-#if CONFIG_SERPROG == 1
-	PROGRAMMER_SERPROG
-#endif
-#if CONFIG_BUSPIRATE_SPI == 1
-	PROGRAMMER_BUSPIRATE_SPI
-#endif
-#if CONFIG_DEDIPROG == 1
-	PROGRAMMER_DEDIPROG
-#endif
-#if CONFIG_RAYER_SPI == 1
-	PROGRAMMER_RAYER_SPI
-#endif
-#if CONFIG_NICINTEL == 1
-	PROGRAMMER_NICINTEL
-#endif
-#if CONFIG_NICINTEL_SPI == 1
-	PROGRAMMER_NICINTEL_SPI
-#endif
-#if CONFIG_OGP_SPI == 1
-	PROGRAMMER_OGP_SPI
-#endif
-#if CONFIG_SATAMV == 1
-	PROGRAMMER_SATAMV
-#endif
-;
-#endif
+static enum programmer programmer = PROGRAMMER_INVALID;
 
 static char *programmer_param = NULL;
-
-/* Supported buses for the current programmer. */
-enum chipbustype buses_supported;
 
 /*
  * Programmers supporting multiple buses can have differing size limits on
@@ -131,14 +65,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= internal_init,
 		.map_flash_region	= physmap,
 		.unmap_flash_region	= physunmap,
-		.chip_readb		= internal_chip_readb,
-		.chip_readw		= internal_chip_readw,
-		.chip_readl		= internal_chip_readl,
-		.chip_readn		= internal_chip_readn,
-		.chip_writeb		= internal_chip_writeb,
-		.chip_writew		= internal_chip_writew,
-		.chip_writel		= internal_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -149,14 +75,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= dummy_init,
 		.map_flash_region	= dummy_map,
 		.unmap_flash_region	= dummy_unmap,
-		.chip_readb		= dummy_chip_readb,
-		.chip_readw		= dummy_chip_readw,
-		.chip_readl		= dummy_chip_readl,
-		.chip_readn		= dummy_chip_readn,
-		.chip_writeb		= dummy_chip_writeb,
-		.chip_writew		= dummy_chip_writew,
-		.chip_writel		= dummy_chip_writel,
-		.chip_writen		= dummy_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -167,14 +85,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= nic3com_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= nic3com_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= nic3com_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -182,38 +92,22 @@ const struct programmer_entry programmer_table[] = {
 #if CONFIG_NICREALTEK == 1
 	{
 		/* This programmer works for Realtek RTL8139 and SMC 1211. */
-		.name                   = "nicrealtek",
-		//.name                   = "nicsmc1211",
-		.init                   = nicrealtek_init,
-		.map_flash_region       = fallback_map,
-		.unmap_flash_region     = fallback_unmap,
-		.chip_readb             = nicrealtek_chip_readb,
-		.chip_readw             = fallback_chip_readw,
-		.chip_readl             = fallback_chip_readl,
-		.chip_readn             = fallback_chip_readn,
-		.chip_writeb            = nicrealtek_chip_writeb,
-		.chip_writew            = fallback_chip_writew,
-		.chip_writel            = fallback_chip_writel,
-		.chip_writen            = fallback_chip_writen,
-		.delay                  = internal_delay,
+		.name			= "nicrealtek",
+		//.name			= "nicsmc1211",
+		.init			= nicrealtek_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
 	},
 #endif
 
 #if CONFIG_NICNATSEMI == 1
 	{
-		.name                   = "nicnatsemi",
-		.init                   = nicnatsemi_init,
-		.map_flash_region       = fallback_map,
-		.unmap_flash_region     = fallback_unmap,
-		.chip_readb             = nicnatsemi_chip_readb,
-		.chip_readw             = fallback_chip_readw,
-		.chip_readl             = fallback_chip_readl,
-		.chip_readn             = fallback_chip_readn,
-		.chip_writeb            = nicnatsemi_chip_writeb,
-		.chip_writew            = fallback_chip_writew,
-		.chip_writel            = fallback_chip_writel,
-		.chip_writen            = fallback_chip_writen,
-		.delay                  = internal_delay,
+		.name			= "nicnatsemi",
+		.init			= nicnatsemi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
 	},
 #endif
 
@@ -223,14 +117,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= gfxnvidia_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= gfxnvidia_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= gfxnvidia_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -241,14 +127,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= drkaiser_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= drkaiser_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= drkaiser_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -259,14 +137,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= satasii_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= satasii_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= satasii_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -277,14 +147,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= atahpt_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= atahpt_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= atahpt_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -295,14 +157,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= ft2232_spi_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= noop_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= noop_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -313,14 +167,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= serprog_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= serprog_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= serprog_chip_readn,
-		.chip_writeb		= serprog_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= serprog_delay,
 	},
 #endif
@@ -331,14 +177,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= buspirate_spi_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= noop_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= noop_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -349,14 +187,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= dediprog_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= noop_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= noop_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -367,14 +197,6 @@ const struct programmer_entry programmer_table[] = {
 		.init			= rayer_spi_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= noop_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= noop_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
@@ -385,51 +207,27 @@ const struct programmer_entry programmer_table[] = {
 		.init			= nicintel_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= nicintel_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= nicintel_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
 #endif
 
 #if CONFIG_NICINTEL_SPI == 1
 	{
-		.name = "nicintel_spi",
-		.init = nicintel_spi_init,
-		.map_flash_region = fallback_map,
-		.unmap_flash_region = fallback_unmap,
-		.chip_readb = noop_chip_readb,
-		.chip_readw = fallback_chip_readw,
-		.chip_readl = fallback_chip_readl,
-		.chip_readn = fallback_chip_readn,
-		.chip_writeb = noop_chip_writeb,
-		.chip_writew = fallback_chip_writew,
-		.chip_writel = fallback_chip_writel,
-		.chip_writen = fallback_chip_writen,
-		.delay = internal_delay,
+		.name			= "nicintel_spi",
+		.init			= nicintel_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
 	},
 #endif
 
 #if CONFIG_OGP_SPI == 1
 	{
-		.name = "ogp_spi",
-		.init = ogp_spi_init,
-		.map_flash_region = fallback_map,
-		.unmap_flash_region = fallback_unmap,
-		.chip_readb = noop_chip_readb,
-		.chip_readw = fallback_chip_readw,
-		.chip_readl = fallback_chip_readl,
-		.chip_readn = fallback_chip_readn,
-		.chip_writeb = noop_chip_writeb,
-		.chip_writew = fallback_chip_writew,
-		.chip_writel = fallback_chip_writel,
-		.chip_writen = fallback_chip_writen,
-		.delay = internal_delay,
+		.name			= "ogp_spi",
+		.init			= ogp_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
 	},
 #endif
 
@@ -439,14 +237,16 @@ const struct programmer_entry programmer_table[] = {
 		.init			= satamv_init,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
-		.chip_readb		= satamv_chip_readb,
-		.chip_readw		= fallback_chip_readw,
-		.chip_readl		= fallback_chip_readl,
-		.chip_readn		= fallback_chip_readn,
-		.chip_writeb		= satamv_chip_writeb,
-		.chip_writew		= fallback_chip_writew,
-		.chip_writel		= fallback_chip_writel,
-		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_LINUX_SPI == 1
+	{
+		.name			= "linux_spi",
+		.init			= linux_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
 		.delay			= internal_delay,
 	},
 #endif
@@ -465,7 +265,7 @@ struct shutdown_func_data {
  */
 static int may_register_shutdown = 0;
 
-static int check_block_eraser(const struct flashchip *flash, int k, int log);
+static int check_block_eraser(const struct flashctx *flash, int k, int log);
 
 /* Register a function to be executed on programmer shutdown.
  * The advantage over atexit() is that you can supply a void pointer which will
@@ -494,18 +294,23 @@ int register_shutdown(int (*function) (void *data), void *data)
 	return 0;
 }
 
-int programmer_init(char *param)
+int programmer_init(enum programmer prog, char *param)
 {
 	int ret;
+
+	if (prog >= PROGRAMMER_INVALID) {
+		msg_perr("Invalid programmer specified!\n");
+		return -1;
+	}
+	programmer = prog;
 	/* Initialize all programmer specific data. */
 	/* Default to unlimited decode sizes. */
 	max_rom_decode = (const struct decode_sizes) {
 		.parallel	= 0xffffffff,
 		.lpc		= 0xffffffff,
 		.fwh		= 0xffffffff,
-		.spi		= 0xffffffff
+		.spi		= 0xffffffff,
 	};
-	buses_supported = CHIP_BUSTYPE_NONE;
 	/* Default to top aligned flash at 4 GB. */
 	flashbase = 0;
 	/* Registering shutdown functions is now allowed. */
@@ -550,44 +355,46 @@ void programmer_unmap_flash_region(void *virt_addr, size_t len)
 	programmer_table[programmer].unmap_flash_region(virt_addr, len);
 }
 
-void chip_writeb(uint8_t val, chipaddr addr)
+void chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr)
 {
-	programmer_table[programmer].chip_writeb(val, addr);
+	flash->pgm->par.chip_writeb(flash, val, addr);
 }
 
-void chip_writew(uint16_t val, chipaddr addr)
+void chip_writew(const struct flashctx *flash, uint16_t val, chipaddr addr)
 {
-	programmer_table[programmer].chip_writew(val, addr);
+	flash->pgm->par.chip_writew(flash, val, addr);
 }
 
-void chip_writel(uint32_t val, chipaddr addr)
+void chip_writel(const struct flashctx *flash, uint32_t val, chipaddr addr)
 {
-	programmer_table[programmer].chip_writel(val, addr);
+	flash->pgm->par.chip_writel(flash, val, addr);
 }
 
-void chip_writen(uint8_t *buf, chipaddr addr, size_t len)
+void chip_writen(const struct flashctx *flash, uint8_t *buf, chipaddr addr,
+		 size_t len)
 {
-	programmer_table[programmer].chip_writen(buf, addr, len);
+	flash->pgm->par.chip_writen(flash, buf, addr, len);
 }
 
-uint8_t chip_readb(const chipaddr addr)
+uint8_t chip_readb(const struct flashctx *flash, const chipaddr addr)
 {
-	return programmer_table[programmer].chip_readb(addr);
+	return flash->pgm->par.chip_readb(flash, addr);
 }
 
-uint16_t chip_readw(const chipaddr addr)
+uint16_t chip_readw(const struct flashctx *flash, const chipaddr addr)
 {
-	return programmer_table[programmer].chip_readw(addr);
+	return flash->pgm->par.chip_readw(flash, addr);
 }
 
-uint32_t chip_readl(const chipaddr addr)
+uint32_t chip_readl(const struct flashctx *flash, const chipaddr addr)
 {
-	return programmer_table[programmer].chip_readl(addr);
+	return flash->pgm->par.chip_readl(flash, addr);
 }
 
-void chip_readn(uint8_t *buf, chipaddr addr, size_t len)
+void chip_readn(const struct flashctx *flash, uint8_t *buf, chipaddr addr,
+		size_t len)
 {
-	programmer_table[programmer].chip_readn(buf, addr, len);
+	flash->pgm->par.chip_readn(flash, buf, addr, len);
 }
 
 void programmer_delay(int usecs)
@@ -595,7 +402,7 @@ void programmer_delay(int usecs)
 	programmer_table[programmer].delay(usecs);
 }
 
-void map_flash_registers(struct flashchip *flash)
+void map_flash_registers(struct flashctx *flash)
 {
 	size_t size = flash->total_size * 1024;
 	/* Flash registers live 4 MByte below the flash. */
@@ -603,10 +410,11 @@ void map_flash_registers(struct flashchip *flash)
 	flash->virtual_registers = (chipaddr)programmer_map_flash_region("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
 }
 
-int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len)
+int read_memmapped(struct flashctx *flash, uint8_t *buf, unsigned int start,
+		   int unsigned len)
 {
-	chip_readn(buf, flash->virtual_memory + start, len);
-		
+	chip_readn(flash, buf, flash->virtual_memory + start, len);
+
 	return 0;
 }
 
@@ -685,7 +493,7 @@ char *extract_param(char **haystack, const char *needle, const char *delim)
 		param_pos++;
 		param_pos = strstr(param_pos, needle);
 	} while (1);
-	
+
 	if (param_pos) {
 		/* Get the string after needle and '='. */
 		opt_pos = param_pos + needlelen + 1;
@@ -714,7 +522,7 @@ char *extract_programmer_param(const char *param_name)
 }
 
 /* Returns the number of well-defined erasers for a chip. */
-static unsigned int count_usable_erasers(const struct flashchip *flash)
+static unsigned int count_usable_erasers(const struct flashctx *flash)
 {
 	unsigned int usable_erasefunctions = 0;
 	int k;
@@ -726,7 +534,8 @@ static unsigned int count_usable_erasers(const struct flashchip *flash)
 }
 
 /* start is an offset to the base address of the flash chip */
-int check_erased_range(struct flashchip *flash, int start, int len)
+int check_erased_range(struct flashctx *flash, unsigned int start,
+		       unsigned int len)
 {
 	int ret;
 	uint8_t *cmpbuf = malloc(len);
@@ -743,17 +552,18 @@ int check_erased_range(struct flashchip *flash, int start, int len)
 
 /*
  * @cmpbuf	buffer to compare against, cmpbuf[0] is expected to match the
-		flash content at location start
+ *		flash content at location start
  * @start	offset to the base address of the flash chip
  * @len		length of the verified area
  * @message	string to print in the "FAILED" message
  * @return	0 for success, -1 for failure
  */
-int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, const char *message)
+int verify_range(struct flashctx *flash, uint8_t *cmpbuf, unsigned int start,
+		 unsigned int len, const char *message)
 {
-	int i, ret = 0;
+	unsigned int i;
 	uint8_t *readbuf = malloc(len);
-	int failcount = 0;
+	int ret = 0, failcount = 0;
 
 	if (!len)
 		goto out_free;
@@ -776,7 +586,7 @@ int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, c
 	}
 	if (!message)
 		message = "VERIFY";
-	
+
 	ret = flash->read(flash, readbuf, start, len);
 	if (ret) {
 		msg_gerr("Verification impossible because read failed "
@@ -796,7 +606,7 @@ int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, c
 	}
 	if (failcount) {
 		msg_cerr(" failed byte count from 0x%08x-0x%08x: 0x%x\n",
-			start, start + len - 1, failcount);
+			 start, start + len - 1, failcount);
 		ret = -1;
 	}
 
@@ -829,10 +639,10 @@ out_free:
  * @gran	write granularity (enum, not count)
  * @return      0 if no erase is needed, 1 otherwise
  */
-int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gran)
+int need_erase(uint8_t *have, uint8_t *want, unsigned int len, enum write_granularity gran)
 {
 	int result = 0;
-	int i, j, limit;
+	unsigned int i, j, limit;
 
 	switch (gran) {
 	case write_gran_1bit:
@@ -895,11 +705,13 @@ int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gra
  * in relation to the max write length of the programmer and the max write
  * length of the chip.
  */
-static int get_next_write(uint8_t *have, uint8_t *want, int len,
-			  int *first_start, enum write_granularity gran)
+static unsigned int get_next_write(uint8_t *have, uint8_t *want, unsigned int len,
+			  unsigned int *first_start,
+			  enum write_granularity gran)
 {
-	int need_write = 0, rel_start = 0, first_len = 0;
-	int i, limit, stride;
+	int need_write = 0;
+	unsigned int rel_start = 0, first_len = 0;
+	unsigned int i, limit, stride;
 
 	switch (gran) {
 	case write_gran_1bit:
@@ -1080,38 +892,38 @@ int generate_testpattern(uint8_t *buf, uint32_t size, int variant)
 int check_max_decode(enum chipbustype buses, uint32_t size)
 {
 	int limitexceeded = 0;
-	if ((buses & CHIP_BUSTYPE_PARALLEL) &&
-	    (max_rom_decode.parallel < size)) {
+
+	if ((buses & BUS_PARALLEL) && (max_rom_decode.parallel < size)) {
 		limitexceeded++;
 		msg_pdbg("Chip size %u kB is bigger than supported "
-			     "size %u kB of chipset/board/programmer "
-			     "for %s interface, "
-			     "probe/read/erase/write may fail. ", size / 1024,
-			     max_rom_decode.parallel / 1024, "Parallel");
+			 "size %u kB of chipset/board/programmer "
+			 "for %s interface, "
+			 "probe/read/erase/write may fail. ", size / 1024,
+			 max_rom_decode.parallel / 1024, "Parallel");
 	}
-	if ((buses & CHIP_BUSTYPE_LPC) && (max_rom_decode.lpc < size)) {
+	if ((buses & BUS_LPC) && (max_rom_decode.lpc < size)) {
 		limitexceeded++;
 		msg_pdbg("Chip size %u kB is bigger than supported "
-			     "size %u kB of chipset/board/programmer "
-			     "for %s interface, "
-			     "probe/read/erase/write may fail. ", size / 1024,
-			     max_rom_decode.lpc / 1024, "LPC");
+			 "size %u kB of chipset/board/programmer "
+			 "for %s interface, "
+			 "probe/read/erase/write may fail. ", size / 1024,
+			 max_rom_decode.lpc / 1024, "LPC");
 	}
-	if ((buses & CHIP_BUSTYPE_FWH) && (max_rom_decode.fwh < size)) {
+	if ((buses & BUS_FWH) && (max_rom_decode.fwh < size)) {
 		limitexceeded++;
 		msg_pdbg("Chip size %u kB is bigger than supported "
-			     "size %u kB of chipset/board/programmer "
-			     "for %s interface, "
-			     "probe/read/erase/write may fail. ", size / 1024,
-			     max_rom_decode.fwh / 1024, "FWH");
+			 "size %u kB of chipset/board/programmer "
+			 "for %s interface, "
+			 "probe/read/erase/write may fail. ", size / 1024,
+			 max_rom_decode.fwh / 1024, "FWH");
 	}
-	if ((buses & CHIP_BUSTYPE_SPI) && (max_rom_decode.spi < size)) {
+	if ((buses & BUS_SPI) && (max_rom_decode.spi < size)) {
 		limitexceeded++;
 		msg_pdbg("Chip size %u kB is bigger than supported "
-			     "size %u kB of chipset/board/programmer "
-			     "for %s interface, "
-			     "probe/read/erase/write may fail. ", size / 1024,
-			     max_rom_decode.spi / 1024, "SPI");
+			 "size %u kB of chipset/board/programmer "
+			 "for %s interface, "
+			 "probe/read/erase/write may fail. ", size / 1024,
+			 max_rom_decode.spi / 1024, "SPI");
 	}
 	if (!limitexceeded)
 		return 0;
@@ -1121,12 +933,13 @@ int check_max_decode(enum chipbustype buses, uint32_t size)
 	if (bitcount(buses) > limitexceeded)
 		/* FIXME: This message is designed towards CLI users. */
 		msg_pdbg("There is at least one common chip/programmer "
-			     "interface which can support a chip of this size. "
-			     "You can try --force at your own risk.\n");
+			 "interface which can support a chip of this size. "
+			 "You can try --force at your own risk.\n");
 	return 1;
 }
 
-int probe_flash(int startchip, struct flashchip *fill_flash, int force)
+int probe_flash(struct registered_programmer *pgm, int startchip,
+		struct flashctx *fill_flash, int force)
 {
 	const struct flashchip *flash;
 	unsigned long base = 0;
@@ -1138,20 +951,9 @@ int probe_flash(int startchip, struct flashchip *fill_flash, int force)
 	for (flash = flashchips + startchip; flash && flash->name; flash++) {
 		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0)
 			continue;
-		buses_common = buses_supported & flash->bustype;
-		if (!buses_common) {
-			msg_gspew("Probing for %s %s, %d kB: skipped. ",
-			         flash->vendor, flash->name, flash->total_size);
-			tmp = flashbuses_to_text(buses_supported);
-			msg_gspew("Host bus type %s ", tmp);
-			free(tmp);
-			tmp = flashbuses_to_text(flash->bustype);
-			msg_gspew("and chip bus type %s are incompatible.",
-				  tmp);
-			free(tmp);
-			msg_gspew("\n");
+		buses_common = pgm->buses_supported & flash->bustype;
+		if (!buses_common)
 			continue;
-		}
 		msg_gdbg("Probing for %s %s, %d kB: ",
 			     flash->vendor, flash->name, flash->total_size);
 		if (!flash->probe && !force) {
@@ -1164,7 +966,8 @@ int probe_flash(int startchip, struct flashchip *fill_flash, int force)
 		check_max_decode(buses_common, size);
 
 		/* Start filling in the dynamic data. */
-		*fill_flash = *flash;
+		memcpy(fill_flash, flash, sizeof(struct flashchip));
+		fill_flash->pgm = pgm;
 
 		base = flashbase ? flashbase : (0xffffffff - size + 1);
 		fill_flash->virtual_memory = (chipaddr)programmer_map_flash_region("flash chip", base, size);
@@ -1177,13 +980,38 @@ int probe_flash(int startchip, struct flashchip *fill_flash, int force)
 
 		/* If this is the first chip found, accept it.
 		 * If this is not the first chip found, accept it only if it is
-		 * a non-generic match.
-		 * We could either make chipcount global or provide it as
-		 * parameter, or we assume that startchip==0 means this call to
-		 * probe_flash() is the first one and thus no chip has been
-		 * found before.
+		 * a non-generic match. SFDP and CFI are generic matches.
+		 * startchip==0 means this call to probe_flash() is the first
+		 * one for this programmer interface and thus no other chip has
+		 * been found on this interface.
 		 */
-		if (startchip == 0 || fill_flash->model_id != GENERIC_DEVICE_ID)
+		if (startchip == 0 && fill_flash->model_id == SFDP_DEVICE_ID) {
+			msg_cinfo("===\n"
+				  "SFDP has autodetected a flash chip which is "
+				  "not natively supported by flashrom yet.\n");
+			if (count_usable_erasers(fill_flash) == 0)
+				msg_cinfo("The standard operations read and "
+					  "verify should work, but to support "
+					  "erase, write and all other "
+					  "possible features");
+			else
+				msg_cinfo("All standard operations (read, "
+					  "verify, erase and write) should "
+					  "work, but to support all possible "
+					  "features");
+
+			msg_cinfo(" we need to add them manually.\nYou "
+				  "can help us by mailing us the output of "
+				  "the following command to flashrom@flashrom."
+				  "org: \n'flashrom -VV [plus the "
+				  "-p/--programmer parameter (if needed)]"
+				  "'\nThanks for your help!\n"
+				  "===\n");
+		}
+
+		if (startchip == 0 ||
+		    ((fill_flash->model_id != GENERIC_DEVICE_ID) &&
+		     (fill_flash->model_id != SFDP_DEVICE_ID)))
 			break;
 
 notfound:
@@ -1217,10 +1045,10 @@ notfound:
 	return flash - flashchips;
 }
 
-int verify_flash(struct flashchip *flash, uint8_t *buf)
+int verify_flash(struct flashctx *flash, uint8_t *buf)
 {
 	int ret;
-	int total_size = flash->total_size * 1024;
+	unsigned int total_size = flash->total_size * 1024;
 
 	msg_cinfo("Verifying flash... ");
 
@@ -1232,7 +1060,8 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	return ret;
 }
 
-int read_buf_from_file(unsigned char *buf, unsigned long size, const char *filename)
+int read_buf_from_file(unsigned char *buf, unsigned long size,
+		       const char *filename)
 {
 	unsigned long numbytes;
 	FILE *image;
@@ -1265,7 +1094,8 @@ int read_buf_from_file(unsigned char *buf, unsigned long size, const char *filen
 	return 0;
 }
 
-int write_buf_to_file(unsigned char *buf, unsigned long size, const char *filename)
+int write_buf_to_file(unsigned char *buf, unsigned long size,
+		      const char *filename)
 {
 	unsigned long numbytes;
 	FILE *image;
@@ -1289,7 +1119,7 @@ int write_buf_to_file(unsigned char *buf, unsigned long size, const char *filena
 	return 0;
 }
 
-int read_flash_to_file(struct flashchip *flash, const char *filename)
+int read_flash_to_file(struct flashctx *flash, const char *filename)
 {
 	unsigned long size = flash->total_size * 1024;
 	unsigned char *buf = calloc(size, sizeof(char));
@@ -1357,7 +1187,7 @@ static int selfcheck_eraseblocks(const struct flashchip *flash)
 		/* Empty eraseblock definition with erase function.  */
 		if (!done && eraser.block_erase)
 			msg_gspew("Strange: Empty eraseblock definition with "
-				"non-empty erase function. Not an error.\n");
+				  "non-empty erase function. Not an error.\n");
 		if (!done)
 			continue;
 		if (done != flash->total_size * 1024) {
@@ -1388,19 +1218,16 @@ static int selfcheck_eraseblocks(const struct flashchip *flash)
 	return ret;
 }
 
-static int erase_and_write_block_helper(struct flashchip *flash,
+static int erase_and_write_block_helper(struct flashctx *flash,
 					unsigned int start, unsigned int len,
 					uint8_t *curcontents,
 					uint8_t *newcontents,
-					int (*erasefn) (struct flashchip *flash,
+					int (*erasefn) (struct flashctx *flash,
 							unsigned int addr,
 							unsigned int len))
 {
-	int starthere = 0;
-	int lenhere = 0;
-	int ret = 0;
-	int skip = 1;
-	int writecount = 0;
+	unsigned int starthere = 0, lenhere = 0;
+	int ret = 0, skip = 1, writecount = 0;
 	enum write_granularity gran = write_gran_256bytes; /* FIXME */
 
 	/* curcontents and newcontents are opaque to walk_eraseregions, and
@@ -1442,14 +1269,14 @@ static int erase_and_write_block_helper(struct flashchip *flash,
 	return ret;
 }
 
-static int walk_eraseregions(struct flashchip *flash, int erasefunction,
-			     int (*do_something) (struct flashchip *flash,
+static int walk_eraseregions(struct flashctx *flash, int erasefunction,
+			     int (*do_something) (struct flashctx *flash,
 						  unsigned int addr,
 						  unsigned int len,
 						  uint8_t *param1,
 						  uint8_t *param2,
 						  int (*erasefn) (
-							struct flashchip *flash,
+							struct flashctx *flash,
 							unsigned int addr,
 							unsigned int len)),
 			     void *param1, void *param2)
@@ -1458,6 +1285,7 @@ static int walk_eraseregions(struct flashchip *flash, int erasefunction,
 	unsigned int start = 0;
 	unsigned int len;
 	struct block_eraser eraser = flash->block_erasers[erasefunction];
+
 	for (i = 0; i < NUM_ERASEREGIONS; i++) {
 		/* count==0 for all automatically initialized array
 		 * members so the loop below won't be executed for them.
@@ -1480,7 +1308,7 @@ static int walk_eraseregions(struct flashchip *flash, int erasefunction,
 	return 0;
 }
 
-static int check_block_eraser(const struct flashchip *flash, int k, int log)
+static int check_block_eraser(const struct flashctx *flash, int k, int log)
 {
 	struct block_eraser eraser = flash->block_erasers[k];
 
@@ -1504,7 +1332,8 @@ static int check_block_eraser(const struct flashchip *flash, int k, int log)
 	return 0;
 }
 
-int erase_and_write_flash(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents)
+int erase_and_write_flash(struct flashctx *flash, uint8_t *oldcontents,
+			  uint8_t *newcontents)
 {
 	int k, ret = 1;
 	uint8_t *curcontents;
@@ -1591,7 +1420,7 @@ void emergency_help_message(void)
 		"DO NOT REBOOT OR POWEROFF!\n");
 }
 
-/* The way to go if you want a delimited list of programmers*/
+/* The way to go if you want a delimited list of programmers */
 void list_programmers(const char *delim)
 {
 	enum programmer p;
@@ -1607,8 +1436,7 @@ void list_programmers_linebreak(int startcol, int cols, int paren)
 {
 	const char *pname;
 	int pnamelen;
-	int remaining = 0;
-	int firstline = 1;
+	int remaining = 0, firstline = 1;
 	enum programmer p;
 	int i;
 
@@ -1697,7 +1525,7 @@ void print_version(void)
 void print_banner(void)
 {
 	msg_ginfo("flashrom is free software, get the source code at "
-		    "http://www.flashrom.org\n");
+		  "http://www.flashrom.org\n");
 	msg_ginfo("\n");
 }
 
@@ -1722,6 +1550,14 @@ int selfcheck(void)
 		msg_gerr("Flashchips table miscompilation!\n");
 		ret = 1;
 	}
+	/* Check that virtual_memory in struct flashctx is placed directly
+	 * after the members copied from struct flashchip.
+	 */
+	if (sizeof(struct flashchip) !=
+	    offsetof(struct flashctx, virtual_memory)) {
+		msg_gerr("struct flashctx broken!\n");
+		ret = 1;
+	}
 	for (flash = flashchips; flash && flash->name; flash++)
 		if (selfcheck_eraseblocks(flash))
 			ret = 1;
@@ -1731,7 +1567,7 @@ int selfcheck(void)
 		msg_gerr("Chipset enables table does not exist!\n");
 		ret = 1;
 	}
-	if (board_pciid_enables == NULL) {
+	if (board_matches == NULL) {
 		msg_gerr("Board enables table does not exist!\n");
 		ret = 1;
 	}
@@ -1743,12 +1579,19 @@ int selfcheck(void)
 		msg_gerr("Known laptops table does not exist!\n");
 		ret = 1;
 	}
-#endif // CONFIG_INTERNAL == 1
+#endif
 	return ret;
 }
 
-void check_chip_supported(const struct flashchip *flash)
+void check_chip_supported(const struct flashctx *flash)
 {
+	if (flash->feature_bits & FEATURE_OTP) {
+		msg_cdbg("This chip may contain one-time programmable memory. "
+			 "flashrom cannot read\nand may never be able to write "
+			 "it, hence it may not be able to completely\n"
+			 "clone the contents of this chip (see man page for "
+			 "details).\n");
+	}
 	if (TEST_OK_MASK != (flash->tested & TEST_OK_MASK)) {
 		msg_cinfo("===\n");
 		if (flash->tested & TEST_BAD_MASK) {
@@ -1789,22 +1632,18 @@ void check_chip_supported(const struct flashchip *flash)
 			    "include the flashrom\n"
 			  "output with the additional -V option for all "
 			    "operations you tested (-V, -Vr,\n"
-			  "-Vw, -VE), and mention which mainboard or "
+			  "-VE, -Vw), and mention which mainboard or "
 			    "programmer you tested.\n"
 			  "Please mention your board in the subject line. "
 			    "Thanks for your help!\n");
 	}
 }
 
-int main(int argc, char *argv[])
-{
-	return cli_classic(argc, argv);
-}
-
 /* FIXME: This function signature needs to be improved once doit() has a better
  * function signature.
  */
-int chip_safety_check(struct flashchip *flash, int force, int read_it, int write_it, int erase_it, int verify_it)
+int chip_safety_check(struct flashctx *flash, int force, int read_it,
+		      int write_it, int erase_it, int verify_it)
 {
 	if (!programmer_may_write && (write_it || erase_it)) {
 		msg_perr("Write/erase is not working yet on your programmer in "
@@ -1865,7 +1704,8 @@ int chip_safety_check(struct flashchip *flash, int force, int read_it, int write
  * but right now it allows us to split off the CLI code.
  * Besides that, the function itself is a textbook example of abysmal code flow.
  */
-int doit(struct flashchip *flash, int force, const char *filename, int read_it, int write_it, int erase_it, int verify_it)
+int doit(struct flashctx *flash, int force, const char *filename, int read_it,
+	 int write_it, int erase_it, int verify_it)
 {
 	uint8_t *oldcontents;
 	uint8_t *newcontents;

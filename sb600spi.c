@@ -24,7 +24,6 @@
 #if defined(__i386__) || defined(__x86_64__)
 
 #include "flash.h"
-#include "chipdrivers.h"
 #include "programmer.h"
 #include "spi.h"
 
@@ -89,8 +88,10 @@ static void execute_command(void)
 		;
 }
 
-static int sb600_spi_send_command(unsigned int writecnt, unsigned int readcnt,
-		      const unsigned char *writearr, unsigned char *readarr)
+static int sb600_spi_send_command(struct flashctx *flash, unsigned int writecnt,
+				  unsigned int readcnt,
+				  const unsigned char *writearr,
+				  unsigned char *readarr)
 {
 	int count;
 	/* First byte is cmd which can not being sent through FIFO. */
@@ -260,8 +261,11 @@ int sb600_probe_spi(struct pci_dev *dev)
 	smbus_dev = pci_dev_find(0x1002, 0x4385);
 
 	if (!smbus_dev) {
-		msg_perr("ERROR: SMBus device not found. Not enabling SPI.\n");
-		return ERROR_NONFATAL;
+		smbus_dev = pci_dev_find(0x1022, 0x780b); /* AMD Hudson */
+		if (!smbus_dev) {
+			msg_perr("ERROR: SMBus device not found. Not enabling SPI.\n");
+			return ERROR_NONFATAL;
+		}
 	}
 
 	/* Note about the bit tests below: If a bit is zero, the GPIO is SPI. */

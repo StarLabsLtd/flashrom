@@ -68,6 +68,13 @@
 #error Little-endian PowerPC #defines are unknown
 #endif
 
+#elif defined (__arm__)
+#if defined (__ARMEL__)
+#define __FLASHROM_LITTLE_ENDIAN__ 1
+#else
+#error Big-endian ARM #defines are unknown
+#endif
+
 #endif
 
 #if !defined (__FLASHROM_BIG_ENDIAN__) && !defined (__FLASHROM_LITTLE_ENDIAN__)
@@ -220,7 +227,7 @@ cpu_to_be(64)
   #define INW  inportw
   #define INL  inportl
 
-#else 
+#else
 
   #define OUTB outb
   #define OUTW outw
@@ -325,6 +332,10 @@ int libpayload_wrmsr(int addr, msr_t msr);
 #elif defined (__mips) || defined (__mips__) || defined (_mips) || defined (mips)
 
 /* PCI port I/O is not yet implemented on MIPS. */
+
+#elif defined(__arm__)
+
+/* Non memory mapped I/O is not supported on ARM. */
 
 #else
 

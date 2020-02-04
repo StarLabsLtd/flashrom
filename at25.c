@@ -57,11 +57,11 @@ static void spi_prettyprint_status_register_atmel_at25_swp(uint8_t status)
 	}
 }
 
-int spi_prettyprint_status_register_at25df(struct flashchip *flash)
+int spi_prettyprint_status_register_at25df(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
 	spi_prettyprint_status_register_atmel_at25_srpl(status);
@@ -72,7 +72,7 @@ int spi_prettyprint_status_register_at25df(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_at25df_sec(struct flashchip *flash)
+int spi_prettyprint_status_register_at25df_sec(struct flashctx *flash)
 {
 	/* FIXME: We should check the security lockdown. */
 	msg_cdbg("Ignoring security lockdown (if present)\n");
@@ -80,11 +80,11 @@ int spi_prettyprint_status_register_at25df_sec(struct flashchip *flash)
 	return spi_prettyprint_status_register_at25df(flash);
 }
 
-int spi_prettyprint_status_register_at25f(struct flashchip *flash)
+int spi_prettyprint_status_register_at25f(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
 	spi_prettyprint_status_register_atmel_at25_srpl(status);
@@ -99,11 +99,11 @@ int spi_prettyprint_status_register_at25f(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_at25fs010(struct flashchip *flash)
+int spi_prettyprint_status_register_at25fs010(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
 	msg_cdbg("Chip status register: Status Register Write Protect (WPEN) "
@@ -123,11 +123,11 @@ int spi_prettyprint_status_register_at25fs010(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_at25fs040(struct flashchip *flash)
+int spi_prettyprint_status_register_at25fs040(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
 	msg_cdbg("Chip status register: Status Register Write Protect (WPEN) "
@@ -147,11 +147,11 @@ int spi_prettyprint_status_register_at25fs040(struct flashchip *flash)
 	return 0;
 }
 
-int spi_prettyprint_status_register_atmel_at26df081a(struct flashchip *flash)
+int spi_prettyprint_status_register_atmel_at26df081a(struct flashctx *flash)
 {
 	uint8_t status;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	msg_cdbg("Chip status register is %02x\n", status);
 
 	spi_prettyprint_status_register_atmel_at25_srpl(status);
@@ -163,12 +163,12 @@ int spi_prettyprint_status_register_atmel_at26df081a(struct flashchip *flash)
 	return 0;
 }
 
-int spi_disable_blockprotect_at25df(struct flashchip *flash)
+int spi_disable_blockprotect_at25df(struct flashctx *flash)
 {
 	uint8_t status;
 	int result;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	/* If block protection is disabled, stop here. */
 	if ((status & (3 << 2)) == 0)
 		return 0;
@@ -195,7 +195,7 @@ int spi_disable_blockprotect_at25df(struct flashchip *flash)
 		msg_cerr("spi_write_status_register failed\n");
 		return result;
 	}
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	if ((status & (3 << 2)) != 0) {
 		msg_cerr("Block protection could not be disabled!\n");
 		return 1;
@@ -203,14 +203,14 @@ int spi_disable_blockprotect_at25df(struct flashchip *flash)
 	return 0;
 }
 
-int spi_disable_blockprotect_at25df_sec(struct flashchip *flash)
+int spi_disable_blockprotect_at25df_sec(struct flashctx *flash)
 {
 	/* FIXME: We should check the security lockdown. */
 	msg_cinfo("Ignoring security lockdown (if present)\n");
 	return spi_disable_blockprotect_at25df(flash);
 }
 
-int spi_disable_blockprotect_at25f(struct flashchip *flash)
+int spi_disable_blockprotect_at25f(struct flashctx *flash)
 {
 	/* spi_disable_blockprotect_at25df is not really the right way to do
 	 * this, but the side effects of said function work here as well.
@@ -218,12 +218,12 @@ int spi_disable_blockprotect_at25f(struct flashchip *flash)
 	return spi_disable_blockprotect_at25df(flash);
 }
 
-int spi_disable_blockprotect_at25fs010(struct flashchip *flash)
+int spi_disable_blockprotect_at25fs010(struct flashctx *flash)
 {
 	uint8_t status;
 	int result;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	/* If block protection is disabled, stop here. */
 	if ((status & 0x6c) == 0)
 		return 0;
@@ -244,7 +244,7 @@ int spi_disable_blockprotect_at25fs010(struct flashchip *flash)
 		msg_cerr("spi_write_status_register failed\n");
 		return result;
 	}
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	if ((status & 0x6c) != 0) {
 		msg_cerr("Block protection could not be disabled!\n");
 		return 1;
@@ -252,12 +252,12 @@ int spi_disable_blockprotect_at25fs010(struct flashchip *flash)
 	return 0;
 }
 
-int spi_disable_blockprotect_at25fs040(struct flashchip *flash)
+int spi_disable_blockprotect_at25fs040(struct flashctx *flash)
 {
 	uint8_t status;
 	int result;
 
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	/* If block protection is disabled, stop here. */
 	if ((status & 0x7c) == 0)
 		return 0;
@@ -278,7 +278,7 @@ int spi_disable_blockprotect_at25fs040(struct flashchip *flash)
 		msg_cerr("spi_write_status_register failed\n");
 		return result;
 	}
-	status = spi_read_status_register();
+	status = spi_read_status_register(flash);
 	if ((status & 0x7c) != 0) {
 		msg_cerr("Block protection could not be disabled!\n");
 		return 1;

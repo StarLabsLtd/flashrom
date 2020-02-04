@@ -40,6 +40,21 @@ const struct pcidev_status ata_hpt[] = {
 	{},
 };
 
+static void atahpt_chip_writeb(const struct flashctx *flash, uint8_t val,
+			       chipaddr addr);
+static uint8_t atahpt_chip_readb(const struct flashctx *flash,
+				 const chipaddr addr);
+static const struct par_programmer par_programmer_atahpt = {
+		.chip_readb		= atahpt_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= atahpt_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+};
+
 static int atahpt_shutdown(void *data)
 {
 	/* Flash access is disabled automatically by PCI restore. */
@@ -61,20 +76,23 @@ int atahpt_init(void)
 	reg32 |= (1 << 24);
 	rpci_write_long(pcidev_dev, REG_FLASH_ACCESS, reg32);
 
-	buses_supported = CHIP_BUSTYPE_PARALLEL;
-
 	if (register_shutdown(atahpt_shutdown, NULL))
 		return 1;
+
+	register_par_programmer(&par_programmer_atahpt, BUS_PARALLEL);
+
 	return 0;
 }
 
-void atahpt_chip_writeb(uint8_t val, chipaddr addr)
+static void atahpt_chip_writeb(const struct flashctx *flash, uint8_t val,
+			       chipaddr addr)
 {
 	OUTL((uint32_t)addr, io_base_addr + BIOS_ROM_ADDR);
 	OUTB(val, io_base_addr + BIOS_ROM_DATA);
 }
 
-uint8_t atahpt_chip_readb(const chipaddr addr)
+static uint8_t atahpt_chip_readb(const struct flashctx *flash,
+				 const chipaddr addr)
 {
 	OUTL((uint32_t)addr, io_base_addr + BIOS_ROM_ADDR);
 	return INB(io_base_addr + BIOS_ROM_DATA);

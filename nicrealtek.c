@@ -36,6 +36,21 @@ const struct pcidev_status nics_realtek[] = {
 	{},
 };
 
+static void nicrealtek_chip_writeb(const struct flashctx *flash, uint8_t val,
+				   chipaddr addr);
+static uint8_t nicrealtek_chip_readb(const struct flashctx *flash,
+				     const chipaddr addr);
+static const struct par_programmer par_programmer_nicrealtek = {
+		.chip_readb		= nicrealtek_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= nicrealtek_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+};
+
 static int nicrealtek_shutdown(void *data)
 {
 	/* FIXME: We forgot to disable software access again. */
@@ -50,14 +65,16 @@ int nicrealtek_init(void)
 
 	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_realtek);
 
-	buses_supported = CHIP_BUSTYPE_PARALLEL;
-
 	if (register_shutdown(nicrealtek_shutdown, NULL))
 		return 1;
+
+	register_par_programmer(&par_programmer_nicrealtek, BUS_PARALLEL);
+
 	return 0;
 }
 
-void nicrealtek_chip_writeb(uint8_t val, chipaddr addr)
+static void nicrealtek_chip_writeb(const struct flashctx *flash, uint8_t val,
+				   chipaddr addr)
 {
 	/* Output addr and data, set WE to 0, set OE to 1, set CS to 0,
 	 * enable software access.
@@ -71,7 +88,8 @@ void nicrealtek_chip_writeb(uint8_t val, chipaddr addr)
 	     io_base_addr + BIOS_ROM_ADDR);
 }
 
-uint8_t nicrealtek_chip_readb(const chipaddr addr)
+static uint8_t nicrealtek_chip_readb(const struct flashctx *flash,
+				     const chipaddr addr)
 {
 	uint8_t val;
 

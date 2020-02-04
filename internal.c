@@ -127,6 +127,33 @@ int register_superio(struct superio s)
 int is_laptop = 0;
 int laptop_ok = 0;
 
+static void internal_chip_writeb(const struct flashctx *flash, uint8_t val,
+				 chipaddr addr);
+static void internal_chip_writew(const struct flashctx *flash, uint16_t val,
+				 chipaddr addr);
+static void internal_chip_writel(const struct flashctx *flash, uint32_t val,
+				 chipaddr addr);
+static uint8_t internal_chip_readb(const struct flashctx *flash,
+				   const chipaddr addr);
+static uint16_t internal_chip_readw(const struct flashctx *flash,
+				    const chipaddr addr);
+static uint32_t internal_chip_readl(const struct flashctx *flash,
+				    const chipaddr addr);
+static void internal_chip_readn(const struct flashctx *flash, uint8_t *buf,
+				const chipaddr addr, size_t len);
+static const struct par_programmer par_programmer_internal = {
+		.chip_readb		= internal_chip_readb,
+		.chip_readw		= internal_chip_readw,
+		.chip_readl		= internal_chip_readl,
+		.chip_readn		= internal_chip_readn,
+		.chip_writeb		= internal_chip_writeb,
+		.chip_writew		= internal_chip_writew,
+		.chip_writel		= internal_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+};
+
+enum chipbustype internal_buses_supported = BUS_NONE;
+
 static int internal_shutdown(void *data)
 {
 	release_io_perms();
@@ -139,6 +166,7 @@ int internal_init(void)
 	int ret = 0;
 #endif
 	int force_laptop = 0;
+	int not_a_laptop = 0;
 	char *arg;
 
 	arg = extract_programmer_param("boardenable");
@@ -170,9 +198,11 @@ int internal_init(void)
 	free(arg);
 
 	arg = extract_programmer_param("laptop");
-	if (arg && !strcmp(arg,"force_I_want_a_brick")) {
+	if (arg && !strcmp(arg, "force_I_want_a_brick"))
 		force_laptop = 1;
-	} else if (arg && !strlen(arg)) {
+	else if (arg && !strcmp(arg, "this_is_not_a_laptop"))
+		not_a_laptop = 1;
+	else if (arg && !strlen(arg)) {
 		msg_perr("Missing argument for laptop.\n");
 		free(arg);
 		return 1;
@@ -183,14 +213,25 @@ int internal_init(void)
 	}
 	free(arg);
 
+	arg = extract_programmer_param("mainboard");
+	if (arg && strlen(arg)) {
+		lb_vendor_dev_from_string(arg);
+	} else if (arg && !strlen(arg)) {
+		msg_perr("Missing argument for mainboard.\n");
+		free(arg);
+		return 1;
+	}
+	free(arg);
+
 	get_io_perms();
 	if (register_shutdown(internal_shutdown, NULL))
 		return 1;
 
 	/* Default to Parallel/LPC/FWH flash devices. If a known host controller
-	 * is found, the init routine sets the buses_supported bitfield.
+	 * is found, the host controller init routine sets the
+	 * internal_buses_supported bitfield.
 	 */
-	buses_supported = CHIP_BUSTYPE_NONSPI;
+	internal_buses_supported = BUS_NONSPI;
 
 	/* Initialize PCI access for flash enables */
 	pacc = pci_alloc();	/* Get the pci_access structure */
@@ -237,7 +278,7 @@ int internal_init(void)
 			msg_perr("WARNING! You may be running flashrom on an unsupported laptop. We could\n"
 				 "not detect this for sure because your vendor has not setup the SMBIOS\n"
 				 "tables correctly. You can enforce execution by adding\n"
-				 "'-p internal:laptop=force_I_want_a_brick' to the command line, but\n"
+				 "'-p internal:laptop=this_is_not_a_laptop' to the command line, but\n"
 				 "please read the following warning if you are not sure.\n\n");
 		}
 		msg_perr("Laptops, notebooks and netbooks are difficult to support and we\n"
@@ -251,9 +292,8 @@ int internal_init(void)
 			 "You have been warned.\n"
 			 "========================================================================\n");
 
-		if (force_laptop) {
-			msg_perr("Proceeding anyway because user specified "
-				 "laptop=force_I_want_a_brick\n");
+		if (force_laptop || (not_a_laptop && (is_laptop == 2))) {
+			msg_perr("Proceeding anyway because user forced us to.\n");
 		} else {
 			msg_perr("Aborting.\n");
 			exit(1);
@@ -268,7 +308,8 @@ int internal_init(void)
 	if (ret == -2) {
 		msg_perr("WARNING: No chipset found. Flash detection "
 			 "will most likely fail.\n");
-	}
+	} else if (ret == ERROR_FATAL)
+		return ret;
 
 #if defined(__i386__) || defined(__x86_64__)
 	/* Probe unconditionally for IT87* LPC->SPI translation and for
@@ -284,6 +325,7 @@ int internal_init(void)
 	 * Besides that, we don't check the board enable return code either.
 	 */
 #if defined(__i386__) || defined(__x86_64__) || defined (__mips)
+	register_par_programmer(&par_programmer_internal, internal_buses_supported);
 	return 0;
 #else
 	msg_perr("Your platform is not supported yet for the internal "
@@ -306,37 +348,44 @@ int internal_init(void)
 }
 #endif
 
-void internal_chip_writeb(uint8_t val, chipaddr addr)
+static void internal_chip_writeb(const struct flashctx *flash, uint8_t val,
+				 chipaddr addr)
 {
 	mmio_writeb(val, (void *) addr);
 }
 
-void internal_chip_writew(uint16_t val, chipaddr addr)
+static void internal_chip_writew(const struct flashctx *flash, uint16_t val,
+				 chipaddr addr)
 {
 	mmio_writew(val, (void *) addr);
 }
 
-void internal_chip_writel(uint32_t val, chipaddr addr)
+static void internal_chip_writel(const struct flashctx *flash, uint32_t val,
+				 chipaddr addr)
 {
 	mmio_writel(val, (void *) addr);
 }
 
-uint8_t internal_chip_readb(const chipaddr addr)
+static uint8_t internal_chip_readb(const struct flashctx *flash,
+				   const chipaddr addr)
 {
 	return mmio_readb((void *) addr);
 }
 
-uint16_t internal_chip_readw(const chipaddr addr)
+static uint16_t internal_chip_readw(const struct flashctx *flash,
+				    const chipaddr addr)
 {
 	return mmio_readw((void *) addr);
 }
 
-uint32_t internal_chip_readl(const chipaddr addr)
+static uint32_t internal_chip_readl(const struct flashctx *flash,
+				    const chipaddr addr)
 {
 	return mmio_readl((void *) addr);
 }
 
-void internal_chip_readn(uint8_t *buf, const chipaddr addr, size_t len)
+static void internal_chip_readn(const struct flashctx *flash, uint8_t *buf,
+				const chipaddr addr, size_t len)
 {
 	memcpy(buf, (void *)addr, len);
 	return;

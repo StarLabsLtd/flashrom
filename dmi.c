@@ -71,7 +71,8 @@ static const struct {
 } dmi_chassis_types[] = {
 	{0x01, 2, "Other"},
 	{0x02, 2, "Unknown"},
-	{0x03, 0, "Desktop",},
+	{0x03, 0, "Desktop"},
+	{0x04, 0, "Low Profile Desktop"},
 	{0x06, 0, "Mini Tower"},
 	{0x07, 0, "Tower"},
 	{0x08, 1, "Portable"},
@@ -81,6 +82,7 @@ static const struct {
 	{0x0e, 1, "Sub Notebook"},
 	{0x11, 0, "Main Server Chassis"},
 	{0x17, 0, "Rack Mount Chassis"},
+	{0x18, 0, "Sealed-case PC"}, /* used by Supermicro (X8SIE) */
 };
 
 #define DMI_COMMAND_LEN_MAX 260
@@ -107,13 +109,14 @@ static char *get_dmi_string(const char *string_name)
 	}
 
 	/* Kill lines starting with '#', as recent dmidecode versions
-	   have the quirk to emit a "# SMBIOS implementations newer..."
-	   message even on "-s" if the SMBIOS declares a
-	   newer-than-supported version number, while it *should* only print
-	   the requested string. */
+	 * have the quirk to emit a "# SMBIOS implementations newer..."
+	 * message even on "-s" if the SMBIOS declares a
+	 * newer-than-supported version number, while it *should* only print
+	 * the requested string.
+	 */
 	do {
 		if (!fgets(answerbuf, DMI_MAX_ANSWER_LEN, dmidecode_pipe)) {
-			if(ferror(dmidecode_pipe)) {
+			if (ferror(dmidecode_pipe)) {
 				msg_perr("DMI pipe read error\n");
 				pclose(dmidecode_pipe);
 				return NULL;
@@ -121,7 +124,7 @@ static char *get_dmi_string(const char *string_name)
 				answerbuf[0] = 0;	/* Hit EOF */
 			}
 		}
-	} while(answerbuf[0] == '#');
+	} while (answerbuf[0] == '#');
 
 	/* Toss all output above DMI_MAX_ANSWER_LEN away to prevent
 	   deadlock on pclose. */
@@ -129,13 +132,12 @@ static char *get_dmi_string(const char *string_name)
 		getc(dmidecode_pipe);
 	if (pclose(dmidecode_pipe) != 0) {
 		msg_pinfo("dmidecode execution unsuccessful - continuing "
-			"without DMI info\n");
+			  "without DMI info\n");
 		return NULL;
 	}
 
 	/* Chomp trailing newline. */
-	if (answerbuf[0] != 0 &&
-	    answerbuf[strlen(answerbuf) - 1] == '\n')
+	if (answerbuf[0] != 0 && answerbuf[strlen(answerbuf) - 1] == '\n')
 		answerbuf[strlen(answerbuf) - 1] = 0;
 	msg_pdbg("DMI string %s: \"%s\"\n", string_name, answerbuf);
 
