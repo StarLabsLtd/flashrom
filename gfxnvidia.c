@@ -34,7 +34,7 @@
 
 uint8_t *nvidia_bar;
 
-const struct pcidev_status gfx_nvidia[] = {
+const struct dev_entry gfx_nvidia[] = {
 	{0x10de, 0x0010, NT, "NVIDIA", "Mutara V08 [NV2]" },
 	{0x10de, 0x0018, NT, "NVIDIA", "RIVA 128" },
 	{0x10de, 0x0020, NT, "NVIDIA", "RIVA TNT" },
@@ -59,7 +59,7 @@ const struct pcidev_status gfx_nvidia[] = {
 	{0x10de, 0x0202, NT, "NVIDIA", "GeForce 3 nFX Ultra" },
 	{0x10de, 0x0203, NT, "NVIDIA", "Quadro 3 DDC" },
 
-	{},
+	{0},
 };
 
 static void gfxnvidia_chip_writeb(const struct flashctx *flash, uint8_t val,
@@ -77,38 +77,33 @@ static const struct par_programmer par_programmer_gfxnvidia = {
 		.chip_writen		= fallback_chip_writen,
 };
 
-static int gfxnvidia_shutdown(void *data)
-{
-	physunmap(nvidia_bar, GFXNVIDIA_MEMMAP_SIZE);
-	/* Flash interface access is disabled (and screen enabled) automatically
-	 * by PCI restore.
-	 */
-	pci_cleanup(pacc);
-	return 0;
-}
-
 int gfxnvidia_init(void)
 {
+	struct pci_dev *dev = NULL;
 	uint32_t reg32;
 
 	if (rget_io_perms())
 		return 1;
 
-	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, gfx_nvidia);
+	dev = pcidev_init(gfx_nvidia, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
+
+	io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!io_base_addr)
+		return 1;
 
 	io_base_addr += 0x300000;
 	msg_pinfo("Detected NVIDIA I/O base address: 0x%x.\n", io_base_addr);
 
-	nvidia_bar = physmap("NVIDIA", io_base_addr, GFXNVIDIA_MEMMAP_SIZE);
-
-	/* Must be done before rpci calls. */
-	if (register_shutdown(gfxnvidia_shutdown, NULL))
+	nvidia_bar = rphysmap("NVIDIA", io_base_addr, GFXNVIDIA_MEMMAP_SIZE);
+	if (nvidia_bar == ERROR_PTR)
 		return 1;
 
 	/* Allow access to flash interface (will disable screen). */
-	reg32 = pci_read_long(pcidev_dev, 0x50);
+	reg32 = pci_read_long(dev, 0x50);
 	reg32 &= ~(1 << 0);
-	rpci_write_long(pcidev_dev, 0x50, reg32);
+	rpci_write_long(dev, 0x50, reg32);
 
 	/* Write/erase doesn't work. */
 	programmer_may_write = 0;

@@ -20,23 +20,27 @@
  */
 
 #include <stdio.h>
+#ifndef _WIN32 /* stuff (presumably) needed for sockets only */
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <netdb.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <inttypes.h>
+#endif
+#ifdef _WIN32
+#include <conio.h>
+#else
 #include <termios.h>
+#endif
+#include <string.h>
+#include <errno.h>
 #include "flash.h"
 #include "programmer.h"
 #include "chipdrivers.h"
+#include "serprog.h"
 
 #define MSGHEADER "serprog: "
 
@@ -46,29 +50,6 @@
  * serprog_shutdown() before serprog_init(). It should be removed soon.
  */
 static int serprog_shutdown(void *data);
-
-#define S_ACK 0x06
-#define S_NAK 0x15
-#define S_CMD_NOP		0x00	/* No operation                                 */
-#define S_CMD_Q_IFACE		0x01	/* Query interface version                      */
-#define S_CMD_Q_CMDMAP		0x02	/* Query supported commands bitmap              */
-#define S_CMD_Q_PGMNAME		0x03	/* Query programmer name                        */
-#define S_CMD_Q_SERBUF		0x04	/* Query Serial Buffer Size                     */
-#define S_CMD_Q_BUSTYPE		0x05	/* Query supported bustypes                     */
-#define S_CMD_Q_CHIPSIZE	0x06	/* Query supported chipsize (2^n format)        */
-#define S_CMD_Q_OPBUF		0x07	/* Query operation buffer size                  */
-#define S_CMD_Q_WRNMAXLEN	0x08	/* Query opbuf-write-N maximum length           */
-#define S_CMD_R_BYTE		0x09	/* Read a single byte                           */
-#define S_CMD_R_NBYTES		0x0A	/* Read n bytes                                 */
-#define S_CMD_O_INIT		0x0B	/* Initialize operation buffer                  */
-#define S_CMD_O_WRITEB		0x0C	/* Write opbuf: Write byte with address         */
-#define S_CMD_O_WRITEN		0x0D	/* Write to opbuf: Write-N                      */
-#define S_CMD_O_DELAY		0x0E	/* Write opbuf: udelay                          */
-#define S_CMD_O_EXEC		0x0F	/* Execute operation buffer                     */
-#define S_CMD_SYNCNOP		0x10	/* Special no-operation that returns NAK+ACK    */
-#define S_CMD_Q_RDNMAXLEN	0x11	/* Query read-n maximum length			*/
-#define S_CMD_S_BUSTYPE		0x12	/* Set used bustype(s).				*/
-#define S_CMD_O_SPIOP		0x13	/* Perform SPI operation.			*/
 
 static uint16_t sp_device_serbuf_size = 16;
 static uint16_t sp_device_opbuf_size = 300;
@@ -102,6 +83,7 @@ static int sp_opbuf_usage = 0;
 	whether the command is supported before doing it */
 static int sp_check_avail_automatic = 0;
 
+#ifndef WIN32
 static int sp_opensocket(char *ip, unsigned int port)
 {
 	int flag = 1;
@@ -118,13 +100,14 @@ static int sp_opensocket(char *ip, unsigned int port)
 	if (NULL == hostPtr) {
 		hostPtr = gethostbyaddr(ip, strlen(ip), AF_INET);
 		if (NULL == hostPtr) {
+			close(sock);
 			msg_perr("Error: cannot resolve %s\n", ip);
 			return -1;
 		}
 	}
 	sp.si.sin_family = AF_INET;
 	sp.si.sin_port = htons(port);
-	(void)memcpy(&sp.si.sin_addr, hostPtr->h_addr, hostPtr->h_length);
+	(void)memcpy(&sp.si.sin_addr, hostPtr->h_addr_list[0], hostPtr->h_length);
 	if (connect(sock, &sp.s, sizeof(sp.si)) < 0) {
 		close(sock);
 		msg_perr("Error: serprog cannot connect: %s\n", strerror(errno));
@@ -132,47 +115,34 @@ static int sp_opensocket(char *ip, unsigned int port)
 	}
 	/* We are latency limited, and sometimes do write-write-read    *
 	 * (write-n) - so enable TCP_NODELAY.				*/
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int));
+	if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(int))) {
+		close(sock);
+		msg_perr("Error: serprog cannot set socket options: %s\n", strerror(errno));
+		return -1;
+	}
 	return sock;
 }
-
-static int sp_sync_read_timeout(int loops)
-{
-	int i;
-	unsigned char c;
-	for (i = 0; i < loops; i++) {
-		ssize_t rv;
-		rv = read(sp_fd, &c, 1);
-		if (rv == 1)
-			return c;
-		if ((rv == -1) && (errno != EAGAIN))
-			sp_die("read");
-		usleep(10 * 1000);	/* 10ms units */
-	}
-	return -1;
-}
+#endif
 
 /* Synchronize: a bit tricky algorithm that tries to (and in my tests has *
  * always succeeded in) bring the serial protocol to known waiting-for-   *
- * command state - uses nonblocking read - rest of the driver uses	  *
+ * command state - uses nonblocking I/O - rest of the driver uses         *
  * blocking read - TODO: add an alarm() timer for the rest of the app on  *
  * serial operations, though not such a big issue as the first thing to   *
  * do is synchronize (eg. check that device is alive).			  */
-static void sp_synchronize(void)
+static int sp_synchronize(void)
 {
 	int i;
-	int flags = fcntl(sp_fd, F_GETFL);
 	unsigned char buf[8];
-	flags |= O_NONBLOCK;
-	fcntl(sp_fd, F_SETFL, flags);
 	/* First sends 8 NOPs, then flushes the return data - should cause *
 	 * the device serial parser to get to a sane state, unless if it   *
 	 * is waiting for a real long write-n.                             */
 	memset(buf, S_CMD_NOP, 8);
-	if (write(sp_fd, buf, 8) != 8)
-		sp_die("flush write");
+	if (serialport_write_nonblock(buf, 8, 1, NULL) != 0) {
+		goto err_out;
+	}
 	/* A second should be enough to get all the answers to the buffer */
-	usleep(1000 * 1000);
+	internal_delay(1000 * 1000);
 	sp_flush_incoming();
 
 	/* Then try up to 8 times to send syncnop and get the correct special *
@@ -182,36 +152,43 @@ static void sp_synchronize(void)
 	for (i = 0; i < 8; i++) {
 		int n;
 		unsigned char c = S_CMD_SYNCNOP;
-		if (write(sp_fd, &c, 1) != 1)
-			sp_die("sync write");
+		if (serialport_write_nonblock(&c, 1, 1, NULL) != 0) {
+			goto err_out;
+		}
 		msg_pdbg(".");
 		fflush(stdout);
 		for (n = 0; n < 10; n++) {
-			c = sp_sync_read_timeout(5);	/* wait up to 50ms */
-			if (c != S_NAK)
+			int ret = serialport_read_nonblock(&c, 1, 50, NULL);
+			if (ret < 0)
+				goto err_out;
+			if (ret > 0 || c != S_NAK)
 				continue;
-			c = sp_sync_read_timeout(2);
-			if (c != S_ACK)
+			ret = serialport_read_nonblock(&c, 1, 20, NULL);
+			if (ret < 0)
+				goto err_out;
+			if (ret > 0 || c != S_ACK)
 				continue;
 			c = S_CMD_SYNCNOP;
-			if (write(sp_fd, &c, 1) != 1)
-				sp_die("sync write");
-			c = sp_sync_read_timeout(50);
-			if (c != S_NAK)
+			if (serialport_write_nonblock(&c, 1, 1, NULL) != 0) {
+				goto err_out;
+			}
+			ret = serialport_read_nonblock(&c, 1, 500, NULL);
+			if (ret < 0)
+				goto err_out;
+			if (ret > 0 || c != S_NAK)
 				break;	/* fail */
-			c = sp_sync_read_timeout(10);
+			ret = serialport_read_nonblock(&c, 1, 100, NULL);
+			if (ret > 0 || ret < 0)
+				goto err_out;
 			if (c != S_ACK)
 				break;	/* fail */
-			/* Ok, synchronized; back to blocking reads and return. */
-			flags &= ~O_NONBLOCK;
-			fcntl(sp_fd, F_SETFL, flags);
 			msg_pdbg("\n");
-			return;
+			return 0;
 		}
 	}
-	msg_perr("Error: cannot synchronize protocol "
-		"- check communications and reset device?\n");
-	exit(1);
+err_out:
+	msg_perr("Error: cannot synchronize protocol - check communications and reset device?\n");
+	return 1;
 }
 
 static int sp_check_commandavail(uint8_t command)
@@ -226,7 +203,7 @@ static int sp_automatic_cmdcheck(uint8_t cmd)
 {
 	if ((sp_check_avail_automatic) && (sp_check_commandavail(cmd) == 0)) {
 		msg_pdbg("Warning: Automatic command availability check failed "
-			 "for cmd 0x%x - won't execute cmd\n", cmd);
+			 "for cmd 0x%02x - won't execute cmd\n", cmd);
 		return 1;
 		}
 	return 0;
@@ -238,15 +215,15 @@ static int sp_docommand(uint8_t command, uint32_t parmlen,
 	unsigned char c;
 	if (sp_automatic_cmdcheck(command))
 		return 1;
-	if (write(sp_fd, &command, 1) != 1) {
+	if (serialport_write(&command, 1) != 0) {
 		msg_perr("Error: cannot write op code: %s\n", strerror(errno));
 		return 1;
 	}
-	if (write(sp_fd, params, parmlen) != (parmlen)) {
+	if (serialport_write(params, parmlen) != 0) {
 		msg_perr("Error: cannot write parameters: %s\n", strerror(errno));
 		return 1;
 	}
-	if (read(sp_fd, &c, 1) != 1) {
+	if (serialport_read(&c, 1) != 0) {
 		msg_perr("Error: cannot read from device: %s\n", strerror(errno));
 		return 1;
 	}
@@ -257,58 +234,66 @@ static int sp_docommand(uint8_t command, uint32_t parmlen,
 		return 1;
 	}
 	if (retlen) {
-		int rd_bytes = 0;
-		do {
-			int r;
-			r = read(sp_fd, retparms + rd_bytes,
-				 retlen - rd_bytes);
-			if (r <= 0) {
-				msg_perr("Error: cannot read return parameters: %s\n", strerror(errno));
-				return 1;
-			}
-			rd_bytes += r;
-		} while (rd_bytes != retlen);
+		if (serialport_read(retparms, retlen) != 0) {
+			msg_perr("Error: cannot read return parameters: %s\n", strerror(errno));
+			return 1;
+		}
 	}
 	return 0;
 }
 
-static void sp_flush_stream(void)
+static int sp_flush_stream(void)
 {
 	if (sp_streamed_transmit_ops)
 		do {
 			unsigned char c;
-			if (read(sp_fd, &c, 1) != 1) {
-				sp_die("Error: cannot read from device (flushing stream)");
+			if (serialport_read(&c, 1) != 0) {
+				msg_perr("Error: cannot read from device (flushing stream)");
+				return 1;
 			}
 			if (c == S_NAK) {
 				msg_perr("Error: NAK to a stream buffer operation\n");
-				exit(1);
+				return 1;
 			}
 			if (c != S_ACK) {
 				msg_perr("Error: Invalid reply 0x%02X from device\n", c);
-				exit(1);
+				return 1;
 			}
 		} while (--sp_streamed_transmit_ops);
 	sp_streamed_transmit_ops = 0;
 	sp_streamed_transmit_bytes = 0;
+	return 0;
 }
 
-static int sp_stream_buffer_op(uint8_t cmd, uint32_t parmlen, uint8_t * parms)
+static int sp_stream_buffer_op(uint8_t cmd, uint32_t parmlen, uint8_t *parms)
 {
 	uint8_t *sp;
 	if (sp_automatic_cmdcheck(cmd))
 		return 1;
+
 	sp = malloc(1 + parmlen);
-	if (!sp) sp_die("Error: cannot malloc command buffer");
+	if (!sp) {
+		msg_perr("Error: cannot malloc command buffer\n");
+		return 1;
+	}
 	sp[0] = cmd;
 	memcpy(&(sp[1]), parms, parmlen);
-	if (sp_streamed_transmit_bytes >= (1 + parmlen + sp_device_serbuf_size))
-		sp_flush_stream();
-	if (write(sp_fd, sp, 1 + parmlen) != (1 + parmlen))
-		sp_die("Error: cannot write command");
-	free(sp);
+
+	if (sp_streamed_transmit_bytes >= (1 + parmlen + sp_device_serbuf_size)) {
+		if (sp_flush_stream() != 0) {
+			free(sp);
+			return 1;
+		}
+	}
+	if (serialport_write(sp, 1 + parmlen) != 0) {
+		msg_perr("Error: cannot write command\n");
+		free(sp);
+		return 1;
+	}
 	sp_streamed_transmit_ops += 1;
 	sp_streamed_transmit_bytes += 1 + parmlen;
+
+	free(sp);
 	return 0;
 }
 
@@ -375,7 +360,7 @@ int serprog_init(void)
 		}
 		if (strlen(device)) {
 			sp_fd = sp_openserport(device, atoi(baudport));
-			if (sp_fd < 0) {
+			if (sp_fd == SER_INV_FD) {
 				free(device);
 				return 1;
 			}
@@ -390,6 +375,7 @@ int serprog_init(void)
 	}
 	free(device);
 
+#ifndef _WIN32
 	device = extract_programmer_param("ip");
 	if (have_device && device) {
 		msg_perr("Error: Both host and device specified.\n"
@@ -433,6 +419,7 @@ int serprog_init(void)
 			 "flashrom -p serprog:ip=ipaddr:port\n");
 		return 1;
 	}
+#endif
 
 	if (register_shutdown(serprog_shutdown, NULL))
 		return 1;
@@ -441,7 +428,8 @@ int serprog_init(void)
 
 	sp_check_avail_automatic = 0;
 
-	sp_synchronize();
+	if (sp_synchronize())
+		return 1;
 
 	msg_pdbg(MSGHEADER "Synchronized\n");
 
@@ -469,7 +457,7 @@ int serprog_init(void)
 	 * in a single byte.
 	 */
 	if (sp_docommand(S_CMD_Q_BUSTYPE, 0, NULL, 1, &c)) {
-		msg_perr("Warning: NAK to query supported buses\n");
+		msg_pwarn("Warning: NAK to query supported buses\n");
 		c = BUS_NONSPI;	/* A reasonable default for now. */
 	}
 	serprog_buses_supported = c;
@@ -482,6 +470,7 @@ int serprog_init(void)
 	/* Check for the minimum operational set of commands. */
 	if (serprog_buses_supported & BUS_SPI) {
 		uint8_t bt = BUS_SPI;
+		char *spispeed;
 		if (sp_check_commandavail(S_CMD_O_SPIOP) == 0) {
 			msg_perr("Error: SPI operation not supported while the "
 				 "bustype is SPI\n");
@@ -513,6 +502,53 @@ int serprog_init(void)
 			spi_programmer_serprog.max_data_read = v;
 			msg_pdbg(MSGHEADER "Maximum read-n length is %d\n", v);
 		}
+		spispeed = extract_programmer_param("spispeed");
+		if (spispeed && strlen(spispeed)) {
+			uint32_t f_spi_req, f_spi;
+			uint8_t buf[4];
+			char *f_spi_suffix;
+
+			errno = 0;
+			f_spi_req = strtol(spispeed, &f_spi_suffix, 0);
+			if (errno != 0 || spispeed == f_spi_suffix) {
+				msg_perr("Error: Could not convert 'spispeed'.\n");
+				free(spispeed);
+				return 1;
+			}
+			if (strlen(f_spi_suffix) == 1) {
+				if (!strcasecmp(f_spi_suffix, "M"))
+					f_spi_req *= 1000000;
+				else if (!strcasecmp(f_spi_suffix, "k"))
+					f_spi_req *= 1000;
+				else {
+					msg_perr("Error: Garbage following 'spispeed' value.\n");
+					free(spispeed);
+					return 1;
+				}
+			} else if (strlen(f_spi_suffix) > 1) {
+				msg_perr("Error: Garbage following 'spispeed' value.\n");
+				free(spispeed);
+				return 1;
+			}
+
+			buf[0] = (f_spi_req >> (0 * 8)) & 0xFF;
+			buf[1] = (f_spi_req >> (1 * 8)) & 0xFF;
+			buf[2] = (f_spi_req >> (2 * 8)) & 0xFF;
+			buf[3] = (f_spi_req >> (3 * 8)) & 0xFF;
+
+			if (sp_check_commandavail(S_CMD_S_SPI_FREQ) == 0)
+				msg_pwarn(MSGHEADER "Warning: Setting the SPI clock rate is not supported!\n");
+			else if (sp_docommand(S_CMD_S_SPI_FREQ, 4, buf, 4, buf) == 0) {
+				f_spi = buf[0];
+				f_spi |= buf[1] << (1 * 8);
+				f_spi |= buf[2] << (2 * 8);
+				f_spi |= buf[3] << (3 * 8);
+				msg_pdbg(MSGHEADER "Requested to set SPI clock frequency to %u Hz. "
+					 "It was actually set to %u Hz\n", f_spi_req, f_spi);
+			} else
+				msg_pwarn(MSGHEADER "Setting SPI clock rate to %u Hz failed!\n", f_spi_req);
+		}
+		free(spispeed);
 		bt = serprog_buses_supported;
 		if (sp_docommand(S_CMD_S_BUSTYPE, 1, &bt, 0, NULL))
 			return 1;
@@ -586,14 +622,14 @@ int serprog_init(void)
 	}
 
 	if (sp_docommand(S_CMD_Q_PGMNAME, 0, NULL, 16, pgmname)) {
-		msg_perr("Warning: NAK to query programmer name\n");
+		msg_pwarn("Warning: NAK to query programmer name\n");
 		strcpy((char *)pgmname, "(unknown)");
 	}
 	pgmname[16] = 0;
 	msg_pinfo(MSGHEADER "Programmer name is \"%s\"\n", pgmname);
 
 	if (sp_docommand(S_CMD_Q_SERBUF, 0, NULL, 2, &sp_device_serbuf_size)) {
-		msg_perr("Warning: NAK to query serial buffer size\n");
+		msg_pwarn("Warning: NAK to query serial buffer size\n");
 	}
 	msg_pdbg(MSGHEADER "Serial buffer size is %d\n",
 		     sp_device_serbuf_size);
@@ -613,13 +649,21 @@ int serprog_init(void)
 
 		if (sp_docommand(S_CMD_Q_OPBUF, 0, NULL, 2,
 		    &sp_device_opbuf_size)) {
-			msg_perr("Warning: NAK to query operation buffer "
-				 "size\n");
+			msg_pwarn("Warning: NAK to query operation buffer size\n");
 		}
 		msg_pdbg(MSGHEADER "operation buffer size is %d\n",
 			 sp_device_opbuf_size);
   	}
 
+	if (sp_check_commandavail(S_CMD_S_PIN_STATE)) {
+		uint8_t en = 1;
+		if (sp_docommand(S_CMD_S_PIN_STATE, 1, &en, 0, NULL) != 0) {
+			msg_perr("Error: could not enable output buffers\n");
+			return 1;
+		} else
+			msg_pdbg(MSGHEADER "Output drivers enabled\n");
+	} else
+		msg_pdbg(MSGHEADER "Warning: Programmer does not support toggling its output drivers\n");
 	sp_prev_was_write = 0;
 	sp_streamed_transmit_ops = 0;
 	sp_streamed_transmit_bytes = 0;
@@ -632,16 +676,16 @@ int serprog_init(void)
 	return 0;
 }
 
-/* Move an in flashrom buffer existing write-n operation to	*
- * the on-device operation buffer.				*/
-static void sp_pass_writen(void)
+/* Move an in flashrom buffer existing write-n operation to the on-device operation buffer. */
+static int sp_pass_writen(void)
 {
 	unsigned char header[7];
-	msg_pspew(MSGHEADER "Passing write-n bytes=%d addr=0x%x\n",
-		  sp_write_n_bytes, sp_write_n_addr);
-	if (sp_streamed_transmit_bytes >=
-	    (7 + sp_write_n_bytes + sp_device_serbuf_size))
-		sp_flush_stream();
+	msg_pspew(MSGHEADER "Passing write-n bytes=%d addr=0x%x\n", sp_write_n_bytes, sp_write_n_addr);
+	if (sp_streamed_transmit_bytes >= (7 + sp_write_n_bytes + sp_device_serbuf_size)) {
+		if (sp_flush_stream() != 0) {
+			return 1;
+		}
+	}
 	/* In case it's just a single byte send it as a single write. */
 	if (sp_write_n_bytes == 1) {
 		sp_write_n_bytes = 0;
@@ -649,9 +693,10 @@ static void sp_pass_writen(void)
 		header[1] = (sp_write_n_addr >> 8) & 0xFF;
 		header[2] = (sp_write_n_addr >> 16) & 0xFF;
 		header[3] = sp_write_n_buf[0];
-		sp_stream_buffer_op(S_CMD_O_WRITEB, 4, header);
+		if (sp_stream_buffer_op(S_CMD_O_WRITEB, 4, header) != 0)
+			return 1;
 		sp_opbuf_usage += 5;
-		return;
+		return 0;
 	}
 	header[0] = S_CMD_O_WRITEN;
 	header[1] = (sp_write_n_bytes >> 0) & 0xFF;
@@ -660,55 +705,78 @@ static void sp_pass_writen(void)
 	header[4] = (sp_write_n_addr >> 0) & 0xFF;
 	header[5] = (sp_write_n_addr >> 8) & 0xFF;
 	header[6] = (sp_write_n_addr >> 16) & 0xFF;
-	if (write(sp_fd, header, 7) != 7)
-		sp_die("Error: cannot write write-n command\n");
-	if (write(sp_fd, sp_write_n_buf, sp_write_n_bytes) !=
-	    sp_write_n_bytes)
-		sp_die("Error: cannot write write-n data");
+	if (serialport_write(header, 7) != 0) {
+		msg_perr(MSGHEADER "Error: cannot write write-n command\n");
+		return 1;
+	}
+	if (serialport_write(sp_write_n_buf, sp_write_n_bytes) != 0) {
+		msg_perr(MSGHEADER "Error: cannot write write-n data");
+		return 1;
+	}
 	sp_streamed_transmit_bytes += 7 + sp_write_n_bytes;
 	sp_streamed_transmit_ops += 1;
 	sp_opbuf_usage += 7 + sp_write_n_bytes;
 	sp_write_n_bytes = 0;
 	sp_prev_was_write = 0;
+	return 0;
 }
 
-static void sp_execute_opbuf_noflush(void)
+static int sp_execute_opbuf_noflush(void)
 {
-	if ((sp_max_write_n) && (sp_write_n_bytes))
-		sp_pass_writen();
-	sp_stream_buffer_op(S_CMD_O_EXEC, 0, NULL);
-	msg_pspew(MSGHEADER "Executed operation buffer of %d bytes\n",
-		     sp_opbuf_usage);
+	if ((sp_max_write_n) && (sp_write_n_bytes)) {
+		if (sp_pass_writen() != 0) {
+			msg_perr("Error: could not transfer write buffer\n");
+			return 1;
+		}
+	}
+	if (sp_stream_buffer_op(S_CMD_O_EXEC, 0, NULL) != 0) {
+		msg_perr("Error: could not execute command buffer\n");
+		return 1;
+	}
+	msg_pspew(MSGHEADER "Executed operation buffer of %d bytes\n", sp_opbuf_usage);
 	sp_opbuf_usage = 0;
 	sp_prev_was_write = 0;
-	return;
+	return 0;
 }
 
-static void sp_execute_opbuf(void)
+static int sp_execute_opbuf(void)
 {
-	sp_execute_opbuf_noflush();
-	sp_flush_stream();
+	if (sp_execute_opbuf_noflush() != 0)
+		return 1;
+	if (sp_flush_stream() != 0)
+		return 1;
+
+	return 0;
 }
 
 static int serprog_shutdown(void *data)
 {
-	msg_pspew("%s\n", __func__);
 	if ((sp_opbuf_usage) || (sp_max_write_n && sp_write_n_bytes))
-		sp_execute_opbuf();
-	close(sp_fd);
+	if (sp_execute_opbuf() != 0)
+		msg_pwarn("Could not flush command buffer.\n");
+	if (sp_check_commandavail(S_CMD_S_PIN_STATE)) {
+		uint8_t dis = 0;
+		if (sp_docommand(S_CMD_S_PIN_STATE, 1, &dis, 0, NULL) == 0)
+			msg_pdbg(MSGHEADER "Output drivers disabled\n");
+		else
+			msg_pwarn(MSGHEADER "%s: Warning: could not disable output buffers\n", __func__);
+	}
+	/* FIXME: fix sockets on windows(?), especially closing */
+	serialport_shutdown(&sp_fd);
 	if (sp_max_write_n)
 		free(sp_write_n_buf);
 	return 0;
 }
 
-static void sp_check_opbuf_usage(int bytes_to_be_added)
+static int sp_check_opbuf_usage(int bytes_to_be_added)
 {
 	if (sp_device_opbuf_size <= (sp_opbuf_usage + bytes_to_be_added)) {
-		sp_execute_opbuf();
-		/* If this happens in the mid of an page load the page load *
-		 * will probably fail.					    */
-		msg_pdbg(MSGHEADER "Warning: executed operation buffer due to size reasons\n");
+		/* If this happens in the middle of a page load the page load will probably fail. */
+		msg_pwarn(MSGHEADER "Warning: executed operation buffer due to size reasons\n");
+		if (sp_execute_opbuf() != 0)
+			return 1;
 	}
+	return 0;
 }
 
 static void serprog_chip_writeb(const struct flashctx *flash, uint8_t val,
@@ -738,7 +806,7 @@ static void serprog_chip_writeb(const struct flashctx *flash, uint8_t val,
 		writeb_parm[1] = (addr >> 8) & 0xFF;
 		writeb_parm[2] = (addr >> 16) & 0xFF;
 		writeb_parm[3] = val;
-		sp_stream_buffer_op(S_CMD_O_WRITEB, 4, writeb_parm);
+		sp_stream_buffer_op(S_CMD_O_WRITEB, 4, writeb_parm); // FIXME: return error
 		sp_opbuf_usage += 5;
 	}
 }
@@ -755,20 +823,19 @@ static uint8_t serprog_chip_readb(const struct flashctx *flash,
 	buf[0] = ((addr >> 0) & 0xFF);
 	buf[1] = ((addr >> 8) & 0xFF);
 	buf[2] = ((addr >> 16) & 0xFF);
-	sp_stream_buffer_op(S_CMD_R_BYTE, 3, buf);
-	sp_flush_stream();
-	if (read(sp_fd, &c, 1) != 1)
-		sp_die("readb byteread");
-	msg_pspew("%s addr=0x%lx returning 0x%02X\n", __func__, addr, c);
+	sp_stream_buffer_op(S_CMD_R_BYTE, 3, buf); // FIXME: return error
+	sp_flush_stream(); // FIXME: return error
+	if (serialport_read(&c, 1) != 0)
+		msg_perr(MSGHEADER "readb byteread");  // FIXME: return error
+	msg_pspew("%s addr=0x%" PRIxPTR " returning 0x%02X\n", __func__, addr, c);
 	return c;
 }
 
 /* Local version that really does the job, doesn't care of max_read_n. */
-static void sp_do_read_n(uint8_t * buf, const chipaddr addr, size_t len)
+static int sp_do_read_n(uint8_t * buf, const chipaddr addr, size_t len)
 {
-	int rd_bytes = 0;
 	unsigned char sbuf[6];
-	msg_pspew("%s: addr=0x%lx len=%lu\n", __func__, addr, (unsigned long)len);
+	msg_pspew("%s: addr=0x%" PRIxPTR " len=%zu\n", __func__, addr, len);
 	/* Stream the read-n -- as above. */
 	if ((sp_opbuf_usage) || (sp_max_write_n && sp_write_n_bytes))
 		sp_execute_opbuf_noflush();
@@ -779,14 +846,13 @@ static void sp_do_read_n(uint8_t * buf, const chipaddr addr, size_t len)
 	sbuf[4] = ((len >> 8) & 0xFF);
 	sbuf[5] = ((len >> 16) & 0xFF);
 	sp_stream_buffer_op(S_CMD_R_NBYTES, 6, sbuf);
-	sp_flush_stream();
-	do {
-		int r = read(sp_fd, buf + rd_bytes, len - rd_bytes);
-		if (r <= 0)
-			sp_die("Error: cannot read read-n data");
-		rd_bytes += r;
-	} while (rd_bytes != len);
-	return;
+	if (sp_flush_stream() != 0)
+		return 1;
+	if (serialport_read(buf, len) != 0) {
+		msg_perr(MSGHEADER "Error: cannot read read-n data");
+		return 1;
+	}
+	return 0;
 }
 
 /* The externally called version that makes sure that max_read_n is obeyed. */
@@ -796,21 +862,20 @@ static void serprog_chip_readn(const struct flashctx *flash, uint8_t * buf,
 	size_t lenm = len;
 	chipaddr addrm = addr;
 	while ((sp_max_read_n != 0) && (lenm > sp_max_read_n)) {
-		sp_do_read_n(&(buf[addrm-addr]), addrm, sp_max_read_n);
+		sp_do_read_n(&(buf[addrm-addr]), addrm, sp_max_read_n); // FIXME: return error
 		addrm += sp_max_read_n;
 		lenm -= sp_max_read_n;
 	}
 	if (lenm)
-		sp_do_read_n(&(buf[addrm-addr]), addrm, lenm);
+		sp_do_read_n(&(buf[addrm-addr]), addrm, lenm); // FIXME: return error
 }
 
-void serprog_delay(int usecs)
+void serprog_delay(unsigned int usecs)
 {
 	unsigned char buf[4];
 	msg_pspew("%s usecs=%d\n", __func__, usecs);
 	if (!sp_check_commandavail(S_CMD_O_DELAY)) {
-		msg_pdbg("Note: serprog_delay used, but the programmer doesn't "
-			 "support delay\n");
+		msg_pdbg2("serprog_delay used, but programmer doesn't support delays natively - emulating\n");
 		internal_delay(usecs);
 		return;
 	}
@@ -834,11 +899,18 @@ static int serprog_spi_send_command(struct flashctx *flash,
 	unsigned char *parmbuf;
 	int ret;
 	msg_pspew("%s, writecnt=%i, readcnt=%i\n", __func__, writecnt, readcnt);
-	if ((sp_opbuf_usage) || (sp_max_write_n && sp_write_n_bytes))
-		sp_execute_opbuf();
+	if ((sp_opbuf_usage) || (sp_max_write_n && sp_write_n_bytes)) {
+		if (sp_execute_opbuf() != 0) {
+			msg_perr("Error: could not execute command buffer before sending SPI commands.\n");
+			return 1;
+		}
+	}
+
 	parmbuf = malloc(writecnt + 6);
-	if (!parmbuf)
-		sp_die("Error: cannot malloc SPI send param buffer");
+	if (!parmbuf) {
+		msg_perr("Error: could not allocate SPI send param buffer.\n");
+		return 1;
+	}
 	parmbuf[0] = (writecnt >> 0) & 0xFF;
 	parmbuf[1] = (writecnt >> 8) & 0xFF;
 	parmbuf[2] = (writecnt >> 16) & 0xFF;
@@ -855,8 +927,7 @@ static int serprog_spi_send_command(struct flashctx *flash,
 /* FIXME: This function is optimized so that it does not split each transaction
  * into chip page_size long blocks unnecessarily like spi_read_chunked. This has
  * the advantage that it is much faster for most chips, but breaks those with
- * non-contiguous address space (like AT45DB161D). When spi_read_chunked is
- * fixed this method can be removed. */
+ * non-continuous reads. When spi_read_chunked is fixed this method can be removed. */
 static int serprog_spi_read(struct flashctx *flash, uint8_t *buf,
 			    unsigned int start, unsigned int len)
 {

@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2005-2008 coresystems GmbH
  * (Written by Stefan Reinauer <stepan@coresystems.de> for coresystems GmbH)
+ * Copyright (C) 2011-2013 Stefan Tauner
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,129 +22,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
 #include <limits.h>
 #include "flash.h"
 #include "programmer.h"
 
-#if CONFIG_INTERNAL == 1
-char *mainboard_vendor = NULL;
-char *mainboard_part = NULL;
-#endif
-static int romimages = 0;
-
 #define MAX_ROMLAYOUT	32
 
 typedef struct {
-	unsigned int start;
-	unsigned int end;
+	chipoff_t start;
+	chipoff_t end;
 	unsigned int included;
 	char name[256];
-} romlayout_t;
+} romentry_t;
 
-/* include_args lists arguments specified at the command line with -i. They
- * must be processed at some point so that desired regions are marked as
- * "included" in the rom_entries list.
- */
+/* rom_entries store the entries specified in a layout file and associated run-time data */
+static romentry_t rom_entries[MAX_ROMLAYOUT];
+static int num_rom_entries = 0; /* the number of successfully parsed rom_entries */
+
+/* include_args holds the arguments specified at the command line with -i. They must be processed at some point
+ * so that desired regions are marked as "included" in the rom_entries list. */
 static char *include_args[MAX_ROMLAYOUT];
-static int num_include_args = 0; /* the number of valid entries. */
-static romlayout_t rom_entries[MAX_ROMLAYOUT];
-
-#if CONFIG_INTERNAL == 1 /* FIXME: Move the whole block to cbtable.c? */
-static char *def_name = "DEFAULT";
-
-int show_id(uint8_t *bios, int size, int force)
-{
-	unsigned int *walk;
-	unsigned int mb_part_offset, mb_vendor_offset;
-	char *mb_part, *mb_vendor;
-
-	mainboard_vendor = def_name;
-	mainboard_part = def_name;
-
-	walk = (unsigned int *)(bios + size - 0x10);
-	walk--;
-
-	if ((*walk) == 0 || ((*walk) & 0x3ff) != 0) {
-		/* We might have an NVIDIA chipset BIOS which stores the ID
-		 * information at a different location.
-		 */
-		walk = (unsigned int *)(bios + size - 0x80);
-		walk--;
-	}
-
-	/*
-	 * Check if coreboot last image size is 0 or not a multiple of 1k or
-	 * bigger than the chip or if the pointers to vendor ID or mainboard ID
-	 * are outside the image of if the start of ID strings are nonsensical
-	 * (nonprintable and not \0).
-	 */
-	mb_part_offset = *(walk - 1);
-	mb_vendor_offset = *(walk - 2);
-	if ((*walk) == 0 || ((*walk) & 0x3ff) != 0 || (*walk) > size ||
-	    mb_part_offset > size || mb_vendor_offset > size) {
-		msg_pinfo("Flash image seems to be a legacy BIOS. "
-		          "Disabling coreboot-related checks.\n");
-		return 0;
-	}
-
-	mb_part = (char *)(bios + size - mb_part_offset);
-	mb_vendor = (char *)(bios + size - mb_vendor_offset);
-	if (!isprint((unsigned char)*mb_part) ||
-	    !isprint((unsigned char)*mb_vendor)) {
-		msg_pinfo("Flash image seems to have garbage in the ID location."
-		       " Disabling checks.\n");
-		return 0;
-	}
-
-	msg_pdbg("coreboot last image size "
-		     "(not ROM size) is %d bytes.\n", *walk);
-
-	mainboard_part = strdup(mb_part);
-	mainboard_vendor = strdup(mb_vendor);
-	msg_pdbg("Manufacturer: %s\n", mainboard_vendor);
-	msg_pdbg("Mainboard ID: %s\n", mainboard_part);
-
-	/*
-	 * If lb_vendor is not set, the coreboot table was
-	 * not found. Nor was -p internal:mainboard=VENDOR:PART specified.
-	 */
-	if (!lb_vendor || !lb_part) {
-		msg_pinfo("Note: If the following flash access fails, try "
-			  "-p internal:mainboard=<vendor>:<mainboard>.\n");
-		return 0;
-	}
-
-	/* These comparisons are case insensitive to make things
-	 * a little less user^Werror prone. 
-	 */
-	if (!strcasecmp(mainboard_vendor, lb_vendor) &&
-	    !strcasecmp(mainboard_part, lb_part)) {
-		msg_pdbg("This firmware image matches this mainboard.\n");
-	} else {
-		if (force_boardmismatch) {
-			msg_pinfo("WARNING: This firmware image does not "
-			       "seem to fit to this machine - forcing it.\n");
-		} else {
-			msg_pinfo("ERROR: Your firmware image (%s:%s) does not "
-				  "appear to\n"
-				  "       be correct for the detected "
-				  "mainboard (%s:%s)\n\n"
-				  "Override with -p internal:boardmismatch="
-				  "force to ignore the board name in the\n"
-				  "firmware image or override the detected "
-				  "mainboard with\n"
-				  "-p internal:mainboard=<vendor>:<mainboard>."
-				  "\n\n",
-				  mainboard_vendor, mainboard_part, lb_vendor,
-				  lb_part);
-			return 1;
-		}
-	}
-
-	return 0;
-}
-#endif
+static int num_include_args = 0; /* the number of valid include_args. */
 
 #ifndef __LIBPAYLOAD__
 int read_romlayout(char *name)
@@ -163,12 +62,13 @@ int read_romlayout(char *name)
 	while (!feof(romlayout)) {
 		char *tstr1, *tstr2;
 
-		if (romimages >= MAX_ROMLAYOUT) {
+		if (num_rom_entries >= MAX_ROMLAYOUT) {
 			msg_gerr("Maximum number of ROM images (%i) in layout "
 				 "file reached.\n", MAX_ROMLAYOUT);
+			fclose(romlayout);
 			return 1;
 		}
-		if (2 != fscanf(romlayout, "%s %s\n", tempstr, rom_entries[romimages].name))
+		if (2 != fscanf(romlayout, "%s %s\n", tempstr, rom_entries[num_rom_entries].name))
 			continue;
 #if 0
 		// fscanf does not like arbitrary comments like that :( later
@@ -179,17 +79,17 @@ int read_romlayout(char *name)
 		tstr1 = strtok(tempstr, ":");
 		tstr2 = strtok(NULL, ":");
 		if (!tstr1 || !tstr2) {
-			msg_gerr("Error parsing layout file.\n");
+			msg_gerr("Error parsing layout file. Offending string: \"%s\"\n", tempstr);
 			fclose(romlayout);
 			return 1;
 		}
-		rom_entries[romimages].start = strtol(tstr1, (char **)NULL, 16);
-		rom_entries[romimages].end = strtol(tstr2, (char **)NULL, 16);
-		rom_entries[romimages].included = 0;
-		romimages++;
+		rom_entries[num_rom_entries].start = strtol(tstr1, (char **)NULL, 16);
+		rom_entries[num_rom_entries].end = strtol(tstr2, (char **)NULL, 16);
+		rom_entries[num_rom_entries].included = 0;
+		num_rom_entries++;
 	}
 
-	for (i = 0; i < romimages; i++) {
+	for (i = 0; i < num_rom_entries; i++) {
 		msg_gdbg("romlayout %08x - %08x named %s\n",
 			     rom_entries[i].start,
 			     rom_entries[i].end, rom_entries[i].name);
@@ -240,11 +140,11 @@ static int find_romentry(char *name)
 {
 	int i;
 
-	if (!romimages)
+	if (num_rom_entries == 0)
 		return -1;
 
 	msg_gspew("Looking for region \"%s\"... ", name);
-	for (i = 0; i < romimages; i++) {
+	for (i = 0; i < num_rom_entries; i++) {
 		if (!strcmp(rom_entries[i].name, name)) {
 			rom_entries[i].included = 1;
 			msg_gspew("found.\n");
@@ -267,7 +167,7 @@ int process_include_args(void)
 		return 0;
 
 	/* User has specified an area, but no layout file is loaded. */
-	if (!romimages) {
+	if (num_rom_entries == 0) {
 		msg_gerr("Region requested (with -i \"%s\"), "
 			 "but no layout data is available.\n",
 			 include_args[0]);
@@ -291,15 +191,30 @@ int process_include_args(void)
 	return 0;
 }
 
-romlayout_t *get_next_included_romentry(unsigned int start)
+void layout_cleanup(void)
+{
+	int i;
+	for (i = 0; i < num_include_args; i++) {
+		free(include_args[i]);
+		include_args[i] = NULL;
+	}
+	num_include_args = 0;
+
+	for (i = 0; i < num_rom_entries; i++) {
+		rom_entries[i].included = 0;
+	}
+	num_rom_entries = 0;
+}
+
+romentry_t *get_next_included_romentry(unsigned int start)
 {
 	int i;
 	unsigned int best_start = UINT_MAX;
-	romlayout_t *best_entry = NULL;
-	romlayout_t *cur;
+	romentry_t *best_entry = NULL;
+	romentry_t *cur;
 
 	/* First come, first serve for overlapping regions. */
-	for (i = 0; i < romimages; i++) {
+	for (i = 0; i < num_rom_entries; i++) {
 		cur = &rom_entries[i];
 		if (!cur->included)
 			continue;
@@ -318,11 +233,35 @@ romlayout_t *get_next_included_romentry(unsigned int start)
 	return best_entry;
 }
 
-int handle_romentries(struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents)
+/* Validate and - if needed - normalize layout entries. */
+int normalize_romentries(const struct flashctx *flash)
+{
+	chipsize_t total_size = flash->chip->total_size * 1024;
+	int ret = 0;
+
+	int i;
+	for (i = 0; i < num_rom_entries; i++) {
+		if (rom_entries[i].start >= total_size || rom_entries[i].end >= total_size) {
+			msg_gwarn("Warning: Address range of region \"%s\" exceeds the current chip's "
+				  "address space.\n", rom_entries[i].name);
+			if (rom_entries[i].included)
+				ret = 1;
+		}
+		if (rom_entries[i].start > rom_entries[i].end) {
+			msg_gerr("Error: Size of the address range of region \"%s\" is not positive.\n",
+				  rom_entries[i].name);
+			ret = 1;
+		}
+	}
+
+	return ret;
+}
+
+int build_new_image(const struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents)
 {
 	unsigned int start = 0;
-	romlayout_t *entry;
-	unsigned int size = flash->total_size * 1024;
+	romentry_t *entry;
+	unsigned int size = flash->chip->total_size * 1024;
 
 	/* If no regions were specified for inclusion, assume
 	 * that the user wants to write the complete new image.

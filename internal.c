@@ -18,6 +18,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
+#include <strings.h>
 #include <string.h>
 #include <stdlib.h>
 #include "flash.h"
@@ -169,6 +170,12 @@ int internal_init(void)
 #endif
 	int force_laptop = 0;
 	int not_a_laptop = 0;
+	const char *board_vendor = NULL;
+	const char *board_model = NULL;
+#if defined (__i386__) || defined (__x86_64__) || defined (__arm__)
+	const char *cb_vendor = NULL;
+	const char *cb_model = NULL;
+#endif
 	char *arg;
 
 	arg = extract_programmer_param("boardenable");
@@ -217,7 +224,10 @@ int internal_init(void)
 
 	arg = extract_programmer_param("mainboard");
 	if (arg && strlen(arg)) {
-		lb_vendor_dev_from_string(arg);
+		if (board_parse_parameter(arg, &board_vendor, &board_model)) {
+			free(arg);
+			return 1;
+		}
 	} else if (arg && !strlen(arg)) {
 		msg_perr("Missing argument for mainboard.\n");
 		free(arg);
@@ -237,10 +247,8 @@ int internal_init(void)
 	internal_buses_supported = BUS_NONSPI;
 
 	/* Initialize PCI access for flash enables */
-	pacc = pci_alloc();	/* Get the pci_access structure */
-	/* Set all options you want -- here we stick with the defaults */
-	pci_init(pacc);		/* Initialize the PCI library */
-	pci_scan_bus(pacc);	/* We want to get the list of devices */
+	if (pci_init_common() != 0)
+		return 1;
 
 	if (processor_flash_enable()) {
 		msg_perr("Processor detection/init failed.\n"
@@ -248,12 +256,20 @@ int internal_init(void)
 		return 1;
 	}
 
-#if defined(__i386__) || defined(__x86_64__)
-	/* We look at the cbtable first to see if we need a
-	 * mainboard specific flash enable sequence.
-	 */
-	coreboot_init();
+#if defined(__i386__) || defined(__x86_64__) || defined (__arm__)
+	if ((cb_parse_table(&cb_vendor, &cb_model) == 0) && (board_vendor != NULL) && (board_model != NULL)) {
+		if (strcasecmp(board_vendor, cb_vendor) || strcasecmp(board_model, cb_model)) {
+			msg_pwarn("Warning: The mainboard IDs set by -p internal:mainboard (%s:%s) do not\n"
+				  "         match the current coreboot IDs of the mainboard (%s:%s).\n",
+				  board_vendor, board_model, cb_vendor, cb_model);
+			if (!force_boardmismatch)
+				return 1;
+			msg_pinfo("Continuing anyway.\n");
+		}
+	}
+#endif
 
+#if defined(__i386__) || defined(__x86_64__)
 	dmi_init();
 
 	/* In case Super I/O probing would cause pretty explosions. */
@@ -287,7 +303,7 @@ int internal_init(void)
 		msg_perr("Laptops, notebooks and netbooks are difficult to support and we\n"
 			 "recommend to use the vendor flashing utility. The embedded controller\n"
 			 "(EC) in these machines often interacts badly with flashing.\n"
-			 "See http://www.flashrom.org/Laptops for details.\n\n"
+			 "See the manpage and http://www.flashrom.org/Laptops for details.\n\n"
 			 "If flash is shared with the EC, erase is guaranteed to brick your laptop\n"
 			 "and write may brick your laptop.\n"
 			 "Read and probe may irritate your EC and cause fan failure, backlight\n"
@@ -315,18 +331,16 @@ int internal_init(void)
 		return ret;
 
 #if defined(__i386__) || defined(__x86_64__)
-	/* Probe unconditionally for IT87* LPC->SPI translation and for
-	 * IT87* Parallel write enable.
-	 */
+	/* Probe unconditionally for ITE Super I/O chips. This enables LPC->SPI translation on IT87* and
+	 * parallel writes on IT8705F. Also, this handles the manual chip select for Gigabyte's DualBIOS. */
 	init_superio_ite();
 #endif
 
-	board_flash_enable(lb_vendor, lb_part);
+	if (board_flash_enable(board_vendor, board_model, cb_vendor, cb_model)) {
+		msg_perr("Aborting to be safe.\n");
+		return 1;
+	}
 
-	/* Even if chipset init returns an error code, we don't want to abort.
-	 * The error code might have been a warning only.
-	 * Besides that, we don't check the board enable return code either.
-	 */
 #if defined(__i386__) || defined(__x86_64__) || defined (__mips)
 	register_par_programmer(&par_programmer_internal, internal_buses_supported);
 	return 0;

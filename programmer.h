@@ -87,25 +87,45 @@ enum programmer {
 #if CONFIG_LINUX_SPI == 1
 	PROGRAMMER_LINUX_SPI,
 #endif
+#if CONFIG_USBBLASTER_SPI == 1
+	PROGRAMMER_USBBLASTER_SPI,
+#endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
 };
 
+enum programmer_type {
+	PCI = 1, /* to detect uninitialized values */
+	USB,
+	OTHER,
+};
+
+struct dev_entry {
+	uint16_t vendor_id;
+	uint16_t device_id;
+	const enum test_state status;
+	const char *vendor_name;
+	const char *device_name;
+};
+
 struct programmer_entry {
-	const char *vendor;
 	const char *name;
+	const enum programmer_type type;
+	union {
+		const struct dev_entry *const dev;
+		const char *const note;
+	} devs;
 
 	int (*init) (void);
 
-	void *(*map_flash_region) (const char *descr, unsigned long phys_addr,
-				   size_t len);
+	void *(*map_flash_region) (const char *descr, uintptr_t phys_addr, size_t len);
 	void (*unmap_flash_region) (void *virt_addr, size_t len);
 
-	void (*delay) (int usecs);
+	void (*delay) (unsigned int usecs);
 };
 
 extern const struct programmer_entry programmer_table[];
 
-int programmer_init(enum programmer prog, char *param);
+int programmer_init(enum programmer prog, const char *param);
 int programmer_shutdown(void);
 
 enum bitbang_spi_master_type {
@@ -143,8 +163,25 @@ struct bitbang_spi_master {
 	unsigned int half_period;
 };
 
-#if CONFIG_INTERNAL == 1
+#if NEED_PCI == 1
 struct pci_dev;
+
+/* pcidev.c */
+// FIXME: These need to be local, not global
+extern uint32_t io_base_addr;
+extern struct pci_access *pacc;
+int pci_init_common(void);
+uintptr_t pcidev_readbar(struct pci_dev *dev, int bar);
+struct pci_dev *pcidev_init(const struct dev_entry *devs, int bar);
+/* rpci_write_* are reversible writes. The original PCI config space register
+ * contents will be restored on shutdown.
+ */
+int rpci_write_byte(struct pci_dev *dev, int reg, uint8_t data);
+int rpci_write_word(struct pci_dev *dev, int reg, uint16_t data);
+int rpci_write_long(struct pci_dev *dev, int reg, uint32_t data);
+#endif
+
+#if CONFIG_INTERNAL == 1
 struct penable {
 	uint16_t vendor_id;
 	uint16_t device_id;
@@ -211,40 +248,14 @@ extern const struct board_info laptops_known[];
 #endif
 
 /* udelay.c */
-void myusec_delay(int usecs);
+void myusec_delay(unsigned int usecs);
 void myusec_calibrate_delay(void);
-void internal_delay(int usecs);
-
-#if NEED_PCI == 1
-/* pcidev.c */
-// FIXME: These need to be local, not global
-extern uint32_t io_base_addr;
-extern struct pci_access *pacc;
-extern struct pci_dev *pcidev_dev;
-struct pcidev_status {
-	uint16_t vendor_id;
-	uint16_t device_id;
-	const enum test_state status;
-	const char *vendor_name;
-	const char *device_name;
-};
-uintptr_t pcidev_readbar(struct pci_dev *dev, int bar);
-uintptr_t pcidev_init(int bar, const struct pcidev_status *devs);
-/* rpci_write_* are reversible writes. The original PCI config space register
- * contents will be restored on shutdown.
- */
-int rpci_write_byte(struct pci_dev *dev, int reg, uint8_t data);
-int rpci_write_word(struct pci_dev *dev, int reg, uint16_t data);
-int rpci_write_long(struct pci_dev *dev, int reg, uint32_t data);
-#endif
-
-/* print.c */
-#if CONFIG_NIC3COM+CONFIG_NICREALTEK+CONFIG_NICNATSEMI+CONFIG_GFXNVIDIA+CONFIG_DRKAISER+CONFIG_SATASII+CONFIG_ATAHPT+CONFIG_NICINTEL+CONFIG_NICINTEL_SPI+CONFIG_OGP_SPI+CONFIG_SATAMV >= 1
-void print_supported_pcidevs(const struct pcidev_status *devs);
-#endif
+void internal_sleep(unsigned int usecs);
+void internal_delay(unsigned int usecs);
 
 #if CONFIG_INTERNAL == 1
 /* board_enable.c */
+int board_parse_parameter(const char *boardstring, const char **vendor, const char **model);
 void w836xx_ext_enter(uint16_t port);
 void w836xx_ext_leave(uint16_t port);
 void probe_superio_winbond(void);
@@ -254,7 +265,7 @@ void sio_write(uint16_t port, uint8_t reg, uint8_t data);
 void sio_mask(uint16_t port, uint8_t reg, uint8_t data, uint8_t mask);
 void board_handle_before_superio(void);
 void board_handle_before_laptop(void);
-int board_flash_enable(const char *vendor, const char *part);
+int board_flash_enable(const char *vendor, const char *model, const char *cb_vendor, const char *cb_model);
 
 /* chipset_enable.c */
 int chipset_flash_enable(void);
@@ -264,23 +275,26 @@ int processor_flash_enable(void);
 #endif
 
 /* physmap.c */
-void *physmap(const char *descr, unsigned long phys_addr, size_t len);
-void *physmap_try_ro(const char *descr, unsigned long phys_addr, size_t len);
+void *physmap(const char *descr, uintptr_t phys_addr, size_t len);
+void *rphysmap(const char *descr, uintptr_t phys_addr, size_t len);
+void *physmap_ro(const char *descr, uintptr_t phys_addr, size_t len);
+void *physmap_ro_unaligned(const char *descr, uintptr_t phys_addr, size_t len);
 void physunmap(void *virt_addr, size_t len);
+void physunmap_unaligned(void *virt_addr, size_t len);
 #if CONFIG_INTERNAL == 1
 int setup_cpu_msr(int cpu);
 void cleanup_cpu_msr(void);
 
 /* cbtable.c */
-void lb_vendor_dev_from_string(const char *boardstring);
-int coreboot_init(void);
-extern char *lb_part, *lb_vendor;
-extern int partvendor_from_cbtable;
+int cb_parse_table(const char **vendor, const char **model);
+int cb_check_image(uint8_t *bios, int size);
 
 /* dmi.c */
+#if defined(__i386__) || defined(__x86_64__)
 extern int has_dmi_support;
 void dmi_init(void);
 int dmi_match(const char *pattern);
+#endif // defined(__i386__) || defined(__x86_64__)
 
 /* internal.c */
 struct superio {
@@ -350,88 +364,86 @@ void rmmio_vall(void *addr);
 /* dummyflasher.c */
 #if CONFIG_DUMMY == 1
 int dummy_init(void);
-void *dummy_map(const char *descr, unsigned long phys_addr, size_t len);
+void *dummy_map(const char *descr, uintptr_t phys_addr, size_t len);
 void dummy_unmap(void *virt_addr, size_t len);
 #endif
 
 /* nic3com.c */
 #if CONFIG_NIC3COM == 1
 int nic3com_init(void);
-extern const struct pcidev_status nics_3com[];
+extern const struct dev_entry nics_3com[];
 #endif
 
 /* gfxnvidia.c */
 #if CONFIG_GFXNVIDIA == 1
 int gfxnvidia_init(void);
-extern const struct pcidev_status gfx_nvidia[];
+extern const struct dev_entry gfx_nvidia[];
 #endif
 
 /* drkaiser.c */
 #if CONFIG_DRKAISER == 1
 int drkaiser_init(void);
-extern const struct pcidev_status drkaiser_pcidev[];
+extern const struct dev_entry drkaiser_pcidev[];
 #endif
 
 /* nicrealtek.c */
 #if CONFIG_NICREALTEK == 1
 int nicrealtek_init(void);
-extern const struct pcidev_status nics_realtek[];
+extern const struct dev_entry nics_realtek[];
 #endif
 
 /* nicnatsemi.c */
 #if CONFIG_NICNATSEMI == 1
 int nicnatsemi_init(void);
-extern const struct pcidev_status nics_natsemi[];
+extern const struct dev_entry nics_natsemi[];
 #endif
 
 /* nicintel.c */
 #if CONFIG_NICINTEL == 1
 int nicintel_init(void);
-extern const struct pcidev_status nics_intel[];
+extern const struct dev_entry nics_intel[];
 #endif
 
 /* nicintel_spi.c */
 #if CONFIG_NICINTEL_SPI == 1
 int nicintel_spi_init(void);
-extern const struct pcidev_status nics_intel_spi[];
+extern const struct dev_entry nics_intel_spi[];
 #endif
 
 /* ogp_spi.c */
 #if CONFIG_OGP_SPI == 1
 int ogp_spi_init(void);
-extern const struct pcidev_status ogp_spi[];
+extern const struct dev_entry ogp_spi[];
 #endif
 
 /* satamv.c */
 #if CONFIG_SATAMV == 1
 int satamv_init(void);
-extern const struct pcidev_status satas_mv[];
+extern const struct dev_entry satas_mv[];
 #endif
 
 /* satasii.c */
 #if CONFIG_SATASII == 1
 int satasii_init(void);
-extern const struct pcidev_status satas_sii[];
+extern const struct dev_entry satas_sii[];
 #endif
 
 /* atahpt.c */
 #if CONFIG_ATAHPT == 1
 int atahpt_init(void);
-extern const struct pcidev_status ata_hpt[];
+extern const struct dev_entry ata_hpt[];
 #endif
 
 /* ft2232_spi.c */
 #if CONFIG_FT2232_SPI == 1
-struct usbdev_status {
-	uint16_t vendor_id;
-	uint16_t device_id;
-	const enum test_state status;
-	const char *vendor_name;
-	const char *device_name;
-};
 int ft2232_spi_init(void);
-extern const struct usbdev_status devs_ft2232spi[];
-void print_supported_usbdevs(const struct usbdev_status *devs);
+extern const struct dev_entry devs_ft2232spi[];
+#endif
+
+/* usbblaster_spi.c */
+#if CONFIG_USBBLASTER_SPI == 1
+int usbblaster_spi_init(void);
+extern const struct dev_entry devs_usbblasterspi[];
 #endif
 
 /* rayer_spi.c */
@@ -473,12 +485,9 @@ struct decode_sizes {
 extern struct decode_sizes max_rom_decode;
 extern int programmer_may_write;
 extern unsigned long flashbase;
-void check_chip_supported(const struct flashctx *flash);
+void check_chip_supported(const struct flashchip *chip);
 int check_max_decode(enum chipbustype buses, uint32_t size);
 char *extract_programmer_param(const char *param_name);
-
-/* layout.c */
-int show_id(uint8_t *bios, int size, int force);
 
 /* spi.c */
 enum spi_controller {
@@ -515,6 +524,9 @@ enum spi_controller {
 #if CONFIG_SERPROG == 1
 	SPI_CONTROLLER_SERPROG,
 #endif
+#if CONFIG_USBBLASTER_SPI == 1
+	SPI_CONTROLLER_USBBLASTER,
+#endif
 };
 
 #define MAX_DATA_UNSPECIFIED 0
@@ -543,25 +555,35 @@ int default_spi_write_256(struct flashctx *flash, uint8_t *buf, unsigned int sta
 int default_spi_write_aai(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 int register_spi_programmer(const struct spi_programmer *programmer);
 
-/* The following enum is needed by ich_descriptor_tool and ich* code. */
+/* The following enum is needed by ich_descriptor_tool and ich* code as well as in chipset_enable.c. */
 enum ich_chipset {
 	CHIPSET_ICH_UNKNOWN,
-	CHIPSET_ICH7 = 7,
+	CHIPSET_ICH,
+	CHIPSET_ICH2345,
+	CHIPSET_ICH6,
+	CHIPSET_POULSBO, /* SCH U* */
+	CHIPSET_TUNNEL_CREEK, /* Atom E6xx */
+	CHIPSET_CENTERTON, /* Atom S1220 S1240 S1260 */
+	CHIPSET_ICH7,
 	CHIPSET_ICH8,
 	CHIPSET_ICH9,
 	CHIPSET_ICH10,
 	CHIPSET_5_SERIES_IBEX_PEAK,
 	CHIPSET_6_SERIES_COUGAR_POINT,
 	CHIPSET_7_SERIES_PANTHER_POINT,
-	CHIPSET_8_SERIES_LYNX_POINT
+	CHIPSET_8_SERIES_LYNX_POINT,
+	CHIPSET_8_SERIES_LYNX_POINT_LP,
+	CHIPSET_8_SERIES_WELLSBURG,
 };
 
 /* ichspi.c */
 #if CONFIG_INTERNAL == 1
 extern uint32_t ichspi_bbar;
-int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
-		 enum ich_chipset ich_generation);
-int via_init_spi(struct pci_dev *dev);
+int ich_init_spi(struct pci_dev *dev, void *spibar, enum ich_chipset ich_generation);
+int via_init_spi(struct pci_dev *dev, uint32_t mmio_base);
+
+/* amd_imc.c */
+int amd_imc_shutdown(struct pci_dev *dev);
 
 /* it85spi.c */
 int it85xx_spi_init(struct superio s);
@@ -597,7 +619,7 @@ int register_opaque_programmer(const struct opaque_programmer *pgm);
 
 /* programmer.c */
 int noop_shutdown(void);
-void *fallback_map(const char *descr, unsigned long phys_addr, size_t len);
+void *fallback_map(const char *descr, uintptr_t phys_addr, size_t len);
 void fallback_unmap(void *virt_addr, size_t len);
 void noop_chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr);
 void fallback_chip_writew(const struct flashctx *flash, uint16_t val, chipaddr addr);
@@ -633,24 +655,28 @@ int register_programmer(struct registered_programmer *pgm);
 /* serprog.c */
 #if CONFIG_SERPROG == 1
 int serprog_init(void);
-void serprog_delay(int usecs);
+void serprog_delay(unsigned int usecs);
 #endif
 
 /* serial.c */
-#if _WIN32
+#ifdef _WIN32
 typedef HANDLE fdtype;
+#define SER_INV_FD	INVALID_HANDLE_VALUE
 #else
 typedef int fdtype;
+#define SER_INV_FD	-1
 #endif
 
 void sp_flush_incoming(void);
 fdtype sp_openserport(char *dev, unsigned int baud);
-void __attribute__((noreturn)) sp_die(char *msg);
+int serialport_config(fdtype fd, unsigned int baud);
 extern fdtype sp_fd;
 /* expose serialport_shutdown as it's currently used by buspirate */
 int serialport_shutdown(void *data);
 int serialport_write(unsigned char *buf, unsigned int writecnt);
+int serialport_write_nonblock(unsigned char *buf, unsigned int writecnt, unsigned int timeout, unsigned int *really_wrote);
 int serialport_read(unsigned char *buf, unsigned int readcnt);
+int serialport_read_nonblock(unsigned char *c, unsigned int readcnt, unsigned int timeout, unsigned int *really_read);
 
 /* Serial port/pin mapping:
 

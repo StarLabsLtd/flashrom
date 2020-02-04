@@ -19,18 +19,26 @@
  */
 
 /*
- * Datasheet:
+ * Datasheets:
  * PCI/PCI-X Family of Gigabit Ethernet Controllers Software Developer's Manual
  * 82540EP/EM, 82541xx, 82544GC/EI, 82545GM/EM, 82546GB/EB, and 82547xx
- * http://download.intel.com/design/network/manuals/8254x_GBe_SDM.pdf
+ * http://www.intel.com/content/www/us/en/ethernet-controllers/pci-pci-x-family-gbe-controllers-software-dev-manual.html
+ *
+ * PCIe GbE Controllers Open Source Software Developer's Manual
+ * http://www.intel.com/content/www/us/en/ethernet-controllers/pcie-gbe-controllers-open-source-manual.html
+ *
+ * Intel 82574 Gigabit Ethernet Controller Family Datasheet
+ * http://www.intel.com/content/www/us/en/ethernet-controllers/82574l-gbe-controller-datasheet.html
  */
 
 #include <stdlib.h>
+#include <unistd.h>
 #include "flash.h"
 #include "programmer.h"
 #include "hwaccess.h"
 
 #define PCI_VENDOR_ID_INTEL 0x8086
+#define MEMMAP_SIZE getpagesize()
 
 /* EEPROM/Flash Control & Data Register */
 #define EECD	0x10
@@ -65,13 +73,14 @@
 
 uint8_t *nicintel_spibar;
 
-const struct pcidev_status nics_intel_spi[] = {
+const struct dev_entry nics_intel_spi[] = {
 	{PCI_VENDOR_ID_INTEL, 0x105e, OK, "Intel", "82571EB Gigabit Ethernet Controller"},
 	{PCI_VENDOR_ID_INTEL, 0x1076, OK, "Intel", "82541GI Gigabit Ethernet Controller"},
 	{PCI_VENDOR_ID_INTEL, 0x107c, OK, "Intel", "82541PI Gigabit Ethernet Controller"},
 	{PCI_VENDOR_ID_INTEL, 0x10b9, OK, "Intel", "82572EI Gigabit Ethernet Controller"},
+	{PCI_VENDOR_ID_INTEL, 0x10d3, OK, "Intel", "82574L Gigabit Ethernet Controller"},
 
-	{},
+	{0},
 };
 
 static void nicintel_request_spibus(void)
@@ -149,31 +158,35 @@ static int nicintel_spi_shutdown(void *data)
 {
 	uint32_t tmp;
 
-	/* Disable writes manually. See the comment about EECD in
-	 * nicintel_spi_init() for details.
-	 */
+	/* Disable writes manually. See the comment about EECD in nicintel_spi_init() for details. */
 	tmp = pci_mmio_readl(nicintel_spibar + EECD);
 	tmp &= ~FLASH_WRITES_ENABLED;
 	tmp |= FLASH_WRITES_DISABLED;
 	pci_mmio_writel(tmp, nicintel_spibar + EECD);
-
-	physunmap(nicintel_spibar, 4096);
-	pci_cleanup(pacc);
 
 	return 0;
 }
 
 int nicintel_spi_init(void)
 {
+	struct pci_dev *dev = NULL;
 	uint32_t tmp;
 
 	if (rget_io_perms())
 		return 1;
 
-	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, nics_intel_spi);
+	dev = pcidev_init(nics_intel_spi, PCI_BASE_ADDRESS_0);
+	if (!dev)
+		return 1;
 
-	nicintel_spibar = physmap("Intel Gigabit NIC w/ SPI flash",
-				  io_base_addr, 4096);
+	io_base_addr = pcidev_readbar(dev, PCI_BASE_ADDRESS_0);
+	if (!io_base_addr)
+		return 1;
+
+	nicintel_spibar = rphysmap("Intel Gigabit NIC w/ SPI flash", io_base_addr, MEMMAP_SIZE);
+	if (nicintel_spibar == ERROR_PTR)
+		return 1;
+
 	/* Automatic restore of EECD on shutdown is not possible because EECD
 	 * does not only contain FLASH_WRITES_DISABLED|FLASH_WRITES_ENABLED,
 	 * but other bits with side effects as well. Those other bits must be

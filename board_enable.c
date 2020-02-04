@@ -24,7 +24,9 @@
  * Contains the board specific flash enables.
  */
 
+#include <strings.h>
 #include <string.h>
+#include <stdlib.h>
 #include "flash.h"
 #include "programmer.h"
 #include "hwaccess.h"
@@ -291,7 +293,7 @@ static uint8_t w836xx_deviceid_hwmon(uint16_t sio_port)
 
 void probe_superio_winbond(void)
 {
-	struct superio s = {};
+	struct superio s = {0};
 	uint16_t winbond_ports[] = {WINBOND_SUPERIO_PORT1, WINBOND_SUPERIO_PORT2, 0};
 	uint16_t *i = winbond_ports;
 	uint8_t model;
@@ -344,7 +346,7 @@ void probe_superio_winbond(void)
 		case WINBOND_W83627HF_ID:
 		case WINBOND_W83627EHF_ID:
 		case WINBOND_W83627THF_ID:
-			msg_pdbg("Found Winbond Super I/O, id %02hx\n", s.model);
+			msg_pdbg("Found Winbond Super I/O, id 0x%02hx\n", s.model);
 			register_superio(s);
 			break;
 		case WINBOND_W83697HF_ID:
@@ -353,7 +355,7 @@ void probe_superio_winbond(void)
 			if (((tmp == 0x00) && (s.port != WINBOND_SUPERIO_PORT1)) ||
 			    ((tmp == 0x40) && (s.port != WINBOND_SUPERIO_PORT2))) {
 				msg_pdbg("Winbond Super I/O probe weirdness: Port mismatch for ID "
-					 "%02x at port %04x\n", s.model, s.port);
+					 "0x%02x at port 0x%04x\n", s.model, s.port);
 				break;
 			}
 			tmp = w836xx_deviceid_hwmon(s.port);
@@ -363,11 +365,11 @@ void probe_superio_winbond(void)
 				break;
 			}
 			if (tmp != s.model) {
-				msg_pinfo("W83 series hardware monitor device ID weirdness: expected %02x, "
-					  "got %02x\n", WINBOND_W83697HF_ID, tmp);
+				msg_pinfo("W83 series hardware monitor device ID weirdness: expected 0x%02x, "
+					  "got 0x%02x\n", WINBOND_W83697HF_ID, tmp);
 				break;
 			}
-			msg_pinfo("Found Winbond Super I/O, id %02hx\n", s.model);
+			msg_pinfo("Found Winbond Super I/O, id 0x%02hx\n", s.model);
 			register_superio(s);
 			break;
 		}
@@ -544,7 +546,7 @@ void w83697xx_memw_enable(uint16_t port)
 			sio_mask(port, 0x24, 0x28, 0x38);
 
 		} else {
-			msg_perr("WARNING: Flash interface in use by GPIO!\n");
+			msg_pwarn("Warning: Flash interface in use by GPIO!\n");
 		}
 	} else {
 		msg_pinfo("BIOS ROM is disabled\n");
@@ -554,6 +556,19 @@ void w83697xx_memw_enable(uint16_t port)
 
 /*
  * Suited for:
+ *  - Biostar M7VIQ: VIA KM266 + VT8235
+ */
+static int w83697xx_memw_enable_2e(void)
+{
+	w83697xx_memw_enable(0x2E);
+
+	return 0;
+}
+
+
+/*
+ * Suited for:
+ *  - DFI AD77: VIA KT400 + VT8235 + W83697HF
  *  - EPoX EP-8K5A2: VIA KT333 + VT8235
  *  - Albatron PM266A Pro: VIA P4M266A + VT8235
  *  - Shuttle AK31 (all versions): VIA KT266 + VT8233
@@ -771,7 +786,7 @@ static int via_vt823x_gpio_set(uint8_t gpio, int raise)
 	dev = pci_dev_find_vendorclass(0x1106, 0x0601);
 	switch (dev->device_id) {
 	case 0x3177:	/* VT8235 */
-	case 0x3227:	/* VT8237R */
+	case 0x3227:	/* VT8237/VT8237R */
 	case 0x3337:	/* VT8237A */
 		break;
 	default:
@@ -978,26 +993,6 @@ static int board_ibm_x3455(void)
 
 /*
  * Suited for:
- *  - Shuttle FN25 (SN25P): AMD S939 + NVIDIA CK804 (nForce4)
- */
-static int board_shuttle_fn25(void)
-{
-	struct pci_dev *dev;
-
-	dev = pci_dev_find(0x10DE, 0x0050);	/* NVIDIA CK804 ISA bridge. */
-	if (!dev) {
-		msg_perr("\nERROR: NVIDIA nForce4 ISA bridge not found.\n");
-		return -1;
-	}
-
-	/* One of those bits seems to be connected to TBL#, but -ENOINFO. */
-	pci_write_byte(dev, 0x92, 0);
-
-	return 0;
-}
-
-/*
- * Suited for:
  * - Elitegroup GeForce6100SM-M: NVIDIA MCP61 + ITE IT8726F
  */
 static int board_ecs_geforce6100sm_m(void)
@@ -1170,6 +1165,7 @@ static int nvidia_mcp_gpio0a_raise(void)
 
 /*
  * Suited for:
+ *  - MSI K8N Neo Platinum: Socket 754 + nForce3 Ultra + CK8
  *  - MSI K8N Neo2 Platinum: Socket 939 + nForce3 Ultra + CK8
  */
 static int nvidia_mcp_gpio0c_raise(void)
@@ -1492,6 +1488,7 @@ static int intel_ich_gpio_set(int gpio, int raise)
 		{0x24D0, 0x58, 0x1BFF0000, 0x00030305,          0}, /* 82801EB/ER (ICH5/ICH5R) */
 		{0x2640, 0x48, 0x1BFF0000, 0x00030307,          0}, /* 82801FB/FR (ICH6/ICH6R) */
 		{0x2641, 0x48, 0x1BFF0000, 0x00030307,          0}, /* 82801FBM (ICH6M) */
+		{0x27B0, 0x48, 0xFFFFFFFF, 0x000300FF,          0}, /* 82801GDH (ICH7 DH) */
 		{0x27B8, 0x48, 0xFFFFFFFF, 0x000300FF,          0}, /* 82801GB/GR (ICH7 Family) */
 		{0x27B9, 0x48, 0xFFEBFFFE, 0x000300FE,          0}, /* 82801GBM (ICH7-M) */
 		{0x27BD, 0x48, 0xFFEBFFFE, 0x000300FE,          0}, /* 82801GHM (ICH7-M DH) */
@@ -1668,6 +1665,8 @@ static int intel_ich_gpio_set(int gpio, int raise)
  *  - abit IP35: Intel P35 + ICH9R
  *  - abit IP35 Pro: Intel P35 + ICH9R
  *  - ASUS P5LD2
+ *  - ASUS P5LD2-VM
+ *  - ASUS P5LD2-VM DH
  */
 static int intel_ich_gpio16_raise(void)
 {
@@ -1703,11 +1702,13 @@ static int intel_ich_gpio20_raise(void)
 
 /*
  * Suited for:
+ *  - ASUS CUSL2-C: Intel socket370 + 815 + ICH2
  *  - ASUS P4B266LM (Sony Vaio PCV-RX650): socket478 + 845D + ICH2
  *  - ASUS P4C800-E Deluxe: socket478 + 875P + ICH5
  *  - ASUS P4P800: Intel socket478 + 865PE + ICH5R
  *  - ASUS P4P800-E Deluxe: Intel socket478 + 865PE + ICH5R
  *  - ASUS P4P800-VM: Intel socket478 + 865PE + ICH5R
+ *  - ASUS P4P800-X: Intel socket478 + 865PE + ICH5R
  *  - ASUS P5GD1 Pro: Intel LGA 775 + 915P + ICH6R
  *  - ASUS P5GD2 Premium: Intel LGA775 + 915G + ICH6R
  *  - ASUS P5GDC Deluxe: Intel socket775 + 915P + ICH6R
@@ -1824,6 +1825,7 @@ static int intel_ich_gpio26_raise(void)
 
 /*
  * Suited for:
+ *  - ASUS DSAN-DX
  *  - P4SD-LA (HP OEM): i865 + ICH5
  *  - GIGABYTE GA-8IP775: 865P + ICH5
  *  - GIGABYTE GA-8PE667 Ultra 2: socket 478 + i845PE + ICH4
@@ -2234,6 +2236,8 @@ static int it8718f_gpio63_raise(void)
 /*
  * Suited for all boards with ambiguous DMI chassis information, which should be
  * whitelisted because they are known to work:
+ * - ASRock IMB-A180(-H)
+ * - Intel D945GCNL
  * - MSC Q7 Tunnel Creek Module (Q7-TCTC)
  */
 static int p2_not_a_laptop(void)
@@ -2241,6 +2245,17 @@ static int p2_not_a_laptop(void)
 	/* label this board as not a laptop */
 	is_laptop = 0;
 	msg_pdbg("Laptop detection overridden by P2 board enable.\n");
+	return 0;
+}
+
+/*
+ * Suited for all laptops, which are known to *not* have interfering embedded controllers.
+ */
+static int p2_whitelist_laptop(void)
+{
+	is_laptop = 1;
+	laptop_ok = 1;
+	msg_pdbg("Whitelisted laptop detected.\n");
 	return 0;
 }
 
@@ -2253,13 +2268,13 @@ static int p2_not_a_laptop(void)
  * NOTE: Please add boards that _don't_ need such enables or don't work yet
  *       to the respective tables in print.c. Thanks!
  *
- * We use 2 sets of IDs here, you're free to choose which is which. This
+ * We use 2 sets of PCI IDs here, you're free to choose which is which. This
  * is to provide a very high degree of certainty when matching a board on
  * the basis of subsystem/card IDs. As not every vendor handles
  * subsystem/card IDs in a sane manner.
  *
  * Keep the second set NULLed if it should be ignored. Keep the subsystem IDs
- * NULLed if they don't identify the board fully and if you can't use DMI.
+ * and the dmi identifier NULLed if they don't identify the board fully to disable autodetection.
  * But please take care to provide an as complete set of pci ids as possible;
  * autodetection is the preferred behaviour and we would like to make sure that
  * matches are unique.
@@ -2293,29 +2308,32 @@ const struct board_match board_matches[] = {
 #if defined(__i386__) || defined(__x86_64__)
 	{0x10DE, 0x0547, 0x147B, 0x1C2F,  0x10DE, 0x0548, 0x147B, 0x1C2F, NULL,         NULL, NULL,           P3, "abit",        "AN-M2",                 0,   NT, nvidia_mcp_gpio2_raise},
 	{0x1106, 0x0282, 0x147B, 0x1415,  0x1106, 0x3227, 0x147B, 0x1415, "^AV8 ",      NULL, NULL,           P3, "abit",        "AV8",                   0,   OK, board_abit_av8},
+	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, NULL /* "^I440BX-W977$" */, "abit", "bf6", P3, "abit", "BF6",                   0,   OK, intel_piix4_gpo26_lower},
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^i440BX-W977 (BM6)$", NULL, NULL,  P3, "abit",        "BM6",                   0,   OK, intel_piix4_gpo26_lower},
 	{0x8086, 0x24d3, 0x147b, 0x1014,  0x8086, 0x2578, 0x147b, 0x1014, NULL,         NULL, NULL,           P3, "abit",        "IC7",                   0,   NT, intel_ich_gpio23_raise},
 	{0x8086, 0x2930, 0x147b, 0x1084,  0x11ab, 0x4364, 0x147b, 0x1084, NULL,         NULL, NULL,           P3, "abit",        "IP35",                  0,   OK, intel_ich_gpio16_raise},
 	{0x8086, 0x2930, 0x147b, 0x1083,  0x10ec, 0x8167, 0x147b, 0x1083, NULL,         NULL, NULL,           P3, "abit",        "IP35 Pro",              0,   OK, intel_ich_gpio16_raise},
-	{0x10de, 0x0050, 0x147b, 0x1c1a,       0,      0,      0,      0, NULL,         NULL, NULL,           P3, "abit",        "KN8 Ultra",             0,   NT, nvidia_mcp_gpio2_lower},
+	{0x10de, 0x0050, 0x147b, 0x1c1a,  0x10de, 0x0052, 0x147b, 0x1c1a, NULL,         NULL, NULL,           P3, "abit",        "KN8 Ultra",             0,   NT, nvidia_mcp_gpio2_lower},
 	{0x10de, 0x01e0, 0x147b, 0x1c00,  0x10de, 0x0060, 0x147B, 0x1c00, NULL,         NULL, NULL,           P3, "abit",        "NF7-S",                 0,   OK, nvidia_mcp_gpio8_raise},
 	{0x10de, 0x02f0, 0x147b, 0x1c26,  0x10de, 0x0260, 0x147b, 0x1c26, NULL,         NULL, NULL,           P3, "abit",        "NF-M2 nView",           0,   OK, nvidia_mcp_gpio4_lower},
 	{0x1106, 0x0691,      0,      0,  0x1106, 0x3057,      0,      0, "(VA6)$",     NULL, NULL,           P3, "abit",        "VA6",                   0,   OK, via_apollo_gpo4_lower},
 	{0x1106, 0x0691,      0,      0,  0x1106, 0x3057,      0,      0, NULL,         "abit", "vt6x4",      P3, "abit",        "VT6X4",                 0,   OK, via_apollo_gpo4_lower},
 	{0x105a, 0x0d30, 0x105a, 0x4d33,  0x8086, 0x1130, 0x8086,      0, NULL,         NULL, NULL,           P3, "Acorp",       "6A815EPD",              0,   OK, board_acorp_6a815epd},
-	{0x1022, 0x746B,      0,      0,       0,      0,      0,      0, NULL,         "AGAMI", "ARUMA",     P3, "agami",       "Aruma",                 0,   OK, w83627hf_gpio24_raise_2e},
+	{0x1022, 0x746B,      0,      0,  0x1022, 0x7460,      0,      0, NULL,         "AGAMI", "ARUMA",     P3, "agami",       "Aruma",                 0,   OK, w83627hf_gpio24_raise_2e},
 	{0x1106, 0x3177, 0x17F2, 0x3177,  0x1106, 0x3148, 0x17F2, 0x3148, NULL,         NULL, NULL,           P3, "Albatron",    "PM266A Pro",            0,   OK, w836xx_memw_enable_2e},
 	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, NULL,        "artecgroup", "dbe61", P3, "Artec Group", "DBE61",                 0,   OK, board_artecgroup_dbe6x},
 	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, NULL,        "artecgroup", "dbe62", P3, "Artec Group", "DBE62",                 0,   OK, board_artecgroup_dbe6x},
 	{0x8086, 0x27b9, 0xa0a0, 0x0632,  0x8086, 0x27da, 0xa0a0, 0x0632, NULL,         NULL, NULL,           P3, "AOpen",       "i945GMx-VFX",           0,   OK, intel_ich_gpio38_raise},
 	{0x8086, 0x277c, 0xa0a0, 0x060b,  0x8086, 0x27da, 0xa0a0, 0x060b, NULL,         NULL, NULL,           P3, "AOpen",       "i975Xa-YDG",            0,   OK, board_aopen_i975xa_ydg},
 	{0x8086, 0x27b8, 0x1849, 0x27b8,  0x8086, 0x27da, 0x1849, 0x27da, "^ConRoeXFire-eSATA2", NULL, NULL,  P3, "ASRock",      "ConRoeXFire-eSATA2",    0,   OK, intel_ich_gpio16_raise},
+	{0x1022, 0x1536, 0x1849, 0x1536,  0x1022, 0x780e, 0x1849, 0x780e, "^Kabini CRB$", NULL, NULL,         P2, "ASRock",      "IMB-A180(-H)",          0,   OK, p2_not_a_laptop},
 	{0x1039, 0x0741, 0x1849, 0x0741,  0x1039, 0x5513, 0x1849, 0x5513, "^K7S41 $",   NULL, NULL,           P3, "ASRock",      "K7S41",                 0,   OK, w836xx_memw_enable_2e},
 	{0x1039, 0x0741, 0x1849, 0x0741,  0x1039, 0x5513, 0x1849, 0x5513, "^K7S41GX$",  NULL, NULL,           P3, "ASRock",      "K7S41GX",               0,   OK, w836xx_memw_enable_2e},
 	{0x8086, 0x24D4, 0x1849, 0x24D0,  0x8086, 0x24D5, 0x1849, 0x9739, NULL,         NULL, NULL,           P3, "ASRock",      "P4i65GV",               0,   OK, intel_ich_gpio23_raise},
 	{0x8086, 0x2570, 0x1849, 0x2570,  0x8086, 0x24d3, 0x1849, 0x24d0, NULL,         NULL, NULL,           P3, "ASRock",      "775i65G",               0,   OK, intel_ich_gpio23_raise},
 	{0x10DE, 0x0060, 0x1043, 0x80AD,  0x10DE, 0x01E0, 0x1043, 0x80C0, NULL,         NULL, NULL,           P3, "ASUS",        "A7N8X-VM/400",          0,   OK, it8712f_gpio12_raise},
 	{0x1106, 0x3189, 0x1043, 0x807F,  0x1106, 0x3065, 0x1043, 0x80ED, NULL,         NULL, NULL,           P3, "ASUS",        "A7V600-X",              0,   OK, it8712f_gpio31_raise},
+	{0x1106, 0x3177, 0x1043, 0x80F9,  0x1106, 0x3205, 0x1043, 0x80F9, NULL,         NULL, NULL,           P3, "ASUS",        "A7V8X-MX",              0,   OK, w836xx_memw_enable_2e},
 	{0x1106, 0x3177, 0x1043, 0x80A1,  0x1106, 0x3205, 0x1043, 0x8118, NULL,         NULL, NULL,           P3, "ASUS",        "A7V8X-MX SE",           0,   OK, w836xx_memw_enable_2e},
 	{0x1106, 0x3189, 0x1043, 0x807F,  0x1106, 0x3177, 0x1043, 0x808C, NULL,         NULL, NULL,           P3, "ASUS",        "A7V8X",                 0,   OK, it8703f_gpio51_raise},
 	{0x1106, 0x3099, 0x1043, 0x807F,  0x1106, 0x3147, 0x1043, 0x808C, NULL,         NULL, NULL,           P3, "ASUS",        "A7V333",                0,   OK, it8703f_gpio51_raise},
@@ -2324,8 +2342,8 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x27A0, 0x1043, 0x1287,  0x8086, 0x27DF, 0x1043, 0x1287, "^A8J",       NULL, NULL,           P3, "ASUS",        "A8Jm",                  0,   NT, intel_ich_gpio34_raise},
 	{0x10DE, 0x0260, 0x103C, 0x2A34,  0x10DE, 0x0264, 0x103C, 0x2A34, "NODUSM3",    NULL, NULL,           P3, "ASUS",        "A8M2N-LA (NodusM3-GL8E)",  0,   OK, nvidia_mcp_gpio0_raise},
 	{0x10DE, 0x0260, 0x103c, 0x2a3e,  0x10DE, 0x0264, 0x103c, 0x2a3e, "NAGAMI2L",   NULL, NULL,           P3, "ASUS",        "A8N-LA (Nagami-GL8E)",  0,   OK, nvidia_mcp_gpio0_raise},
-	{0x10DE, 0x005E, 0x1043, 0x815A,  0x10DE, 0x0054, 0x1043, 0x815A, "^A8N-SLI DELUXE", NULL, NULL,      P3, "ASUS",        "A8N-SLI Deluxe",        0,   NT, board_shuttle_fn25},
 	{0x10de, 0x0264, 0x1043, 0x81bc,  0x10de, 0x02f0, 0x1043, 0x81cd, NULL,         NULL, NULL,           P3, "ASUS",        "A8N-VM CSM",            0,   OK, w83627ehf_gpio22_raise_2e},
+	{0x8086, 0x65c0, 0x1043, 0x8301,  0x8086, 0x2916, 0x1043, 0x82a6, "^DSAN-DX$",  NULL, NULL,           P3, "ASUS",        "DSAN-DX",               0,   NT, intel_ich_gpio32_raise},
 	{0x10DE, 0x0264, 0x1043, 0x81C0,  0x10DE, 0x0260, 0x1043, 0x81C0, NULL,         NULL, NULL,           P3, "ASUS",        "M2NBP-VM CSM",          0,   OK, nvidia_mcp_gpio0_raise},
 	{0x1106, 0x1336, 0x1043, 0x80ed,  0x1106, 0x3288, 0x1043, 0x8249, NULL,         NULL, NULL,           P3, "ASUS",        "M2V-MX",                0,   OK, via_vt823x_gpio5_raise},
 	{0x8086, 0x24cc,      0,      0,  0x8086, 0x24c3, 0x1043, 0x1869, "^M6Ne$",     NULL, NULL,           P3, "ASUS",        "M6Ne",                  0,   NT, intel_ich_gpio43_raise},
@@ -2337,8 +2355,10 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x2560, 0x103C, 0x2A00,  0x8086, 0x24C3, 0x103C, 0x2A01, "^Guppy",     NULL, NULL,           P3, "ASUS",        "P4GV-LA (Guppy)",       0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x24D3, 0x1043, 0x80A6,  0x8086, 0x2578, 0x1043, 0x80F6, NULL,         NULL, NULL,           P3, "ASUS",        "P4C800-E Deluxe",       0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x2570, 0x1043, 0x80F2,  0x8086, 0x24D5, 0x1043, 0x80F3, NULL,         NULL, NULL,           P3, "ASUS",        "P4P800",                0,   NT, intel_ich_gpio21_raise},
-	{0x8086, 0x2570, 0x1043, 0x80F2,  0x8086, 0x24D3, 0x1043, 0x80A6, "^P4P800-E$", NULL, NULL,           P3, "ASUS",        "P4P800-E Deluxe",       0,   OK, intel_ich_gpio21_raise},
-	{0x8086, 0x2570, 0x1043, 0x80A5,  0x8086, 0x24d0,      0,      0, NULL,         NULL, NULL,           P3, "ASUS",        "P4P800-VM",             0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2570, 0x1043, 0x80f2,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-E$", NULL, NULL,           P3, "ASUS",        "P4P800-E Deluxe",       0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2570, 0x1043, 0x80a5,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-VM$", NULL, NULL,          P3, "ASUS",        "P4P800-VM",             0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2570, 0x1043, 0x80f2,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-X$", NULL, NULL,           P3, "ASUS",        "P4P800-X",              0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2570, 0x1043, 0x80b2,  0x8086, 0x24c3, 0x1043, 0x8089, "^P4PE-X/TE$",NULL, NULL,           P3, "ASUS",        "P4PE-X/TE",             0,   NT, intel_ich_gpio21_raise},
 	{0x1039, 0x0651, 0x1043, 0x8081,  0x1039, 0x0962,      0,      0, NULL,         NULL, NULL,           P3, "ASUS",        "P4SC-E",                0,   OK, it8707f_write_enable_2e},
 	{0x8086, 0x2570, 0x1043, 0x80A5,  0x105A, 0x24D3, 0x1043, 0x80A6, NULL,         NULL, NULL,           P3, "ASUS",        "P4SD-LA",               0,   NT, intel_ich_gpio32_raise},
 	{0x1039, 0x0661, 0x1043, 0x8113,  0x1039, 0x5513, 0x1043, 0x8087, NULL,         NULL, NULL,           P3, "ASUS",        "P4S800-MX",             512, OK, w836xx_memw_enable_2e},
@@ -2355,13 +2375,20 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x27b8, 0x103c, 0x2a22,  0x8086, 0x2770, 0x103c, 0x2a22, "^LITHIUM$",  NULL, NULL,           P3, "ASUS",        "P5LP-LE (Lithium-UL8E)",0,   OK, intel_ich_gpio34_raise},
 	{0x8086, 0x27b8, 0x1043, 0x2a22,  0x8086, 0x2770, 0x1043, 0x2a22, "^P5LP-LE$",  NULL, NULL,           P3, "ASUS",        "P5LP-LE (Epson OEM)",   0,   OK, intel_ich_gpio34_raise},
 	{0x8086, 0x27da, 0x1043, 0x8179,  0x8086, 0x27b8, 0x1043, 0x8179, "^P5LD2$",    NULL, NULL,           P3, "ASUS",        "P5LD2",                 0,   NT, intel_ich_gpio16_raise},
+	{0x8086, 0x27da, 0x1043, 0x8179,  0x8086, 0x27b8, 0x1043, 0x8179, "^P5LD2-VM$", NULL, NULL,           P3, "ASUS",        "P5LD2-VM",              0,   NT, intel_ich_gpio16_raise},
+	{0x8086, 0x27b0, 0x1043, 0x8179,  0x8086, 0x2770, 0x1043, 0x817a, "^P5LD2-VM DH$", NULL, NULL,        P3, "ASUS",        "P5LD2-VM DH",           0,   OK, intel_ich_gpio16_raise},
 	{0x10DE, 0x0030, 0x1043, 0x818a,  0x8086, 0x100E, 0x1043, 0x80EE, NULL,         NULL, NULL,           P3, "ASUS",        "P5ND2-SLI Deluxe",      0,   OK, nvidia_mcp_gpio10_raise},
 	{0x10DE, 0x0260, 0x1043, 0x81BC,  0x10DE, 0x026C, 0x1043, 0x829E, "^P5N-D$",    NULL, NULL,           P3, "ASUS",        "P5N-D",                 0,   OK, it8718f_gpio63_raise},
 	{0x10DE, 0x0260, 0x1043, 0x81BC,  0x10DE, 0x026C, 0x1043, 0x8249, "^P5N-E SLI$",NULL, NULL,           P3, "ASUS",        "P5N-E SLI",             0,   NT, it8718f_gpio63_raise},
 	{0x8086, 0x24dd, 0x1043, 0x80a6,  0x8086, 0x2570, 0x1043, 0x8157, NULL,         NULL, NULL,           P3, "ASUS",        "P5PE-VM",               0,   OK, intel_ich_gpio21_raise},
-	{0x8086, 0x2443, 0x1043, 0x8027,  0x8086, 0x1130, 0x1043, 0x8027, NULL,         NULL, NULL,           P3, "ASUS",        "TUSL2-C",               0,   NT, intel_ich_gpio21_raise},
+	{0x8086, 0x2443, 0x1043, 0x8027,  0x8086, 0x1130, 0x1043, 0x8027, "^CUSL2-C",   NULL, NULL,           P3, "ASUS",        "CUSL2-C",               0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2443, 0x1043, 0x8027,  0x8086, 0x1130, 0x1043, 0x8027, "^TUSL2-C",   NULL, NULL,           P3, "ASUS",        "TUSL2-C",               0,   NT, intel_ich_gpio21_raise},
+	{0x1106, 0x3059, 0x1106, 0x4161,  0x1106, 0x3065, 0x1106, 0x0102, NULL,         NULL, NULL,           P3, "Bcom/Clientron", "WinNET P680",        0,   OK, w836xx_memw_enable_2e},
+	{0x1106, 0x3177, 0x1106, 0x3177,  0x1106, 0x3116, 0x1106, 0x3116, "^KM266-8235$", "biostar", "m7viq", P3, "Biostar",     "M7VIQ",                 0,   NT, w83697xx_memw_enable_2e},
 	{0x10b7, 0x9055, 0x1028, 0x0082,  0x8086, 0x7190,      0,      0, NULL,         NULL, NULL,           P3, "Dell",        "OptiPlex GX1",          0,   OK, intel_piix4_gpo30_lower},
 	{0x8086, 0x3590, 0x1028, 0x016c,  0x1000, 0x0030, 0x1028, 0x016c, NULL,         NULL, NULL,           P3, "Dell",        "PowerEdge 1850",        0,   OK, intel_ich_gpio23_raise},
+	{0x1106, 0x3189, 0x1106, 0x3189,  0x1106, 0x3177, 0x1106, 0x3177, "^AD77",      "dfi", "ad77",        P3, "DFI",         "AD77",                  0,   NT, w836xx_memw_enable_2e},
+	{0x1039, 0x6325, 0x1019, 0x0f05,  0x1039, 0x0016,      0,      0, NULL,         NULL, NULL,           P2, "Elitegroup",  "A928",                  0,   OK, p2_whitelist_laptop},
 	{0x10de, 0x03ea, 0x1019, 0x2602,  0x10de, 0x03e0, 0x1019, 0x2602, NULL,         NULL, NULL,           P3, "Elitegroup",  "GeForce6100SM-M",       0,   OK, board_ecs_geforce6100sm_m},
 	{0x1106, 0x3038, 0x1019, 0x0996,  0x1106, 0x3177, 0x1019, 0x0996, NULL,         NULL, NULL,           P3, "Elitegroup",  "K7VTA3",                256, OK, NULL},
 	{0x1106, 0x3177, 0x1106, 0x3177,  0x1106, 0x3059, 0x1695, 0x3005, NULL,         NULL, NULL,           P3, "EPoX",        "EP-8K5A2",              0,   OK, w836xx_memw_enable_2e},
@@ -2390,11 +2417,16 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x27A0,      0,      0,  0x8086, 0x27B9,      0,      0, NULL,         "ibase", "mb899",     P3, "IBASE",       "MB899",                 0,   OK, intel_ich_gpio26_raise},
 	{0x1166, 0x0205, 0x1014, 0x0347,  0x1002, 0x515E, 0x1014, 0x0325, NULL,         NULL, NULL,           P3, "IBM",         "x3455",                 0,   OK, board_ibm_x3455},
 	{0x1039, 0x5513, 0x8086, 0xd61f,  0x1039, 0x6330, 0x8086, 0xd61f, NULL,         NULL, NULL,           P3, "Intel",       "D201GLY",               0,   OK, wbsio_check_for_spi},
+	{0x8086, 0x27b8, 0x8086, 0xd606,  0x8086, 0x2770, 0x8086, 0xd606, "^D945GCNL$", NULL, NULL,           P2, "Intel",       "D945GCNL",              0,   OK, p2_not_a_laptop},
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^SE440BX-2$", NULL, NULL,          P3, "Intel",       "SE440BX-2",             0,   NT, intel_piix4_gpo27_lower},
-	{0x1022, 0x7468,      0,      0,       0,      0,      0,      0, NULL,         "iwill", "dk8_htx",   P3, "IWILL",       "DK8-HTX",               0,   OK, w83627hf_gpio24_raise_2e},
+	{0x1022, 0x7468,      0,      0,  0x1022, 0x7460,      0,      0, NULL,         "iwill", "dk8_htx",   P3, "IWILL",       "DK8-HTX",               0,   OK, w83627hf_gpio24_raise_2e},
 	{0x8086, 0x27A0, 0x8086, 0x27a0,  0x8086, 0x27b8, 0x8086, 0x27b8, NULL,        "kontron", "986lcd-m", P3, "Kontron",     "986LCD-M",              0,   OK, board_kontron_986lcd_m},
+	{0x8086, 0x27a0, 0x17aa, 0x2015,  0x8086, 0x27b9, 0x17aa, 0x2009, "^ThinkPad T60", NULL, NULL,        P2, "Lenovo",      "T60",                   0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x27a0, 0x17aa, 0x2017,  0x8086, 0x27b9, 0x17aa, 0x2009, "^ThinkPad T60", NULL, NULL,        P2, "Lenovo",      "T60(s)",                0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x27a0, 0x17aa, 0x2017,  0x8086, 0x27b9, 0x17aa, 0x2009, "^ThinkPad X60", NULL, NULL,        P2, "Lenovo",      "X60(s)",                0,   OK, p2_whitelist_laptop},
+	{0x8086, 0x3B07, 0x17AA, 0x2166,  0x8086, 0x3B30, 0x17AA, 0x2167, "^Lenovo X201", NULL, NULL,         P2, "Lenovo",      "X201",                  0,   OK, p2_whitelist_laptop},
 	{0x8086, 0x2411, 0x8086, 0x2411,  0x8086, 0x7125, 0x0e11, 0xb165, NULL,         NULL, NULL,           P3, "Mitac",       "6513WU",                0,   OK, board_mitac_6513wu},
-	{0x8086, 0x8186, 0x8086, 0x8186,  0x8086, 0x8800, 0x0000, 0x0000, "^MSC Vertriebs GmbH$", NULL, NULL, P2, "MSC",         "Q7-TCTC",               0,   OK, p2_not_a_laptop},
+	{0x8086, 0x8186, 0x8086, 0x8186,  0x8086, 0x8800,      0,      0, "^MSC Vertriebs GmbH$", NULL, NULL, P2, "MSC",         "Q7-TCTC",               0,   OK, p2_not_a_laptop},
 	{0x10DE, 0x005E, 0x1462, 0x7125,  0x10DE, 0x0052, 0x1462, 0x7125, NULL,         NULL, NULL,           P3, "MSI",         "K8N Neo4-F",            0,   OK, nvidia_mcp_gpio2_raise}, /* TODO: Should probably be K8N Neo4 Platinum, see http://www.coreboot.org/pipermail/flashrom/2010-August/004362.html. */
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^MS-6163 (i440BX)$", NULL, NULL,   P3, "MSI",         "MS-6163 (MS-6163 Pro)", 0,   OK, intel_piix4_gpo14_raise},
 	{0x1039, 0x0745,      0,      0,  0x1039, 0x0018,      0,      0, "^MS-6561",   NULL, NULL,           P3, "MSI",         "MS-6561 (745 Ultra)",   0,   OK, w836xx_memw_enable_2e},
@@ -2406,6 +2438,7 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x24d3, 0x1462, 0x7880,  0x8086, 0x2570,      0,      0, NULL,	        NULL, NULL,           P3, "MSI",         "MS-6788-040 (848P NeoV)", 0, OK, intel_ich_gpio32_raise},
 	{0x1039, 0x7012, 0x1462, 0x0050,  0x1039, 0x6325, 0x1462, 0x0058, NULL,         NULL, NULL,           P3, "MSI",         "MS-7005 (651M-L)",      0,   OK, sis_gpio0_raise_and_w836xx_memw},
 	{0x10DE, 0x00E0, 0x1462, 0x0250,  0x10DE, 0x00E1, 0x1462, 0x0250, NULL,         NULL, NULL,           P3, "MSI",         "MS-7025 (K8N Neo2 Platinum)", 0, OK, nvidia_mcp_gpio0c_raise},
+	{0x10DE, 0x00E0, 0x1462, 0x0300,  0x10DE, 0x00E1, 0x1462, 0x0300, NULL,         NULL, NULL,           P3, "MSI",         "MS-7030 (K8N Neo Platinum)", 0, OK, nvidia_mcp_gpio0c_raise},
 	{0x8086, 0x2658, 0x1462, 0x7046,  0x1106, 0x3044, 0x1462, 0x046d, NULL,         NULL, NULL,           P3, "MSI",         "MS-7046",               0,   OK, intel_ich_gpio19_raise},
 	{0x8086, 0x244b, 0x1462, 0x3910,  0x8086, 0x2442, 0x1462, 0x3910, NULL,         NULL, NULL,           P3, "MSI",         "MS-6391 (845 Pro4)",    0,   OK, intel_ich_gpio23_raise},
 	{0x1106, 0x3149, 0x1462, 0x7061,  0x1106, 0x3227,      0,      0, NULL,         NULL, NULL,           P3, "MSI",         "MS-7061 (KM4M-V/KM4AM-V)", 0, OK, w836xx_memw_enable_2e},
@@ -2416,7 +2449,6 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x24d3, 0x144d, 0xb025,  0x8086, 0x1050, 0x144d, 0xb025, NULL,         NULL, NULL,           P3, "Samsung",     "Polaris 32",            0,   OK, intel_ich_gpio21_raise},
 	{0x1106, 0x3099,      0,      0,  0x1106, 0x3074,      0,      0, NULL,         "shuttle", "ak31",    P3, "Shuttle",     "AK31",                  0,   OK, w836xx_memw_enable_2e},
 	{0x1106, 0x3104, 0x1297, 0xa238,  0x1106, 0x3059, 0x1297, 0xc063, NULL,         NULL, NULL,           P3, "Shuttle",     "AK38N",                 256, OK, NULL},
-	{0x10DE, 0x0050, 0x1297, 0x5036,  0x1412, 0x1724, 0x1297, 0x5036, NULL,         NULL, NULL,           P3, "Shuttle",     "FN25",                  0,   OK, board_shuttle_fn25},
 	{0x1106, 0x3038, 0x0925, 0x1234,  0x1106, 0x3058, 0x15DD, 0x7609, NULL,         NULL, NULL,           P3, "Soyo",        "SY-7VCA",               0,   OK, via_apollo_gpo0_lower},
 	{0x10de, 0x0364, 0x108e, 0x6676,  0x10de, 0x0369, 0x108e, 0x6676, "^Sun Ultra 40 M2", NULL, NULL,     P3, "Sun",         "Ultra 40 M2",           0,   OK, board_sun_ultra_40_m2},
 	{0x1106, 0x3038, 0x0925, 0x1234,  0x1106, 0x0596, 0x1106,      0, NULL,         NULL, NULL,           P3, "Tekram",      "P6Pro-A5",              256, OK, NULL},
@@ -2430,41 +2462,64 @@ const struct board_match board_matches[] = {
 	{     0,      0,      0,      0,       0,      0,      0,      0, NULL,         NULL, NULL,           P3, NULL,          NULL,                    0,   NT, NULL}, /* end marker */
 };
 
-/*
- * Match boards on coreboot table gathered vendor and part name.
- * Require main PCI IDs to match too as extra safety.
+/* Parse the <vendor>:<board> string specified by the user as part of -p internal:mainboard=<vendor>:<board>.
+ * Parameters vendor and model will be overwritten. Returns 0 on success.
+ * Note: strtok modifies the original string, so we work on a copy and allocate memory for the results.
  */
-static const struct board_match *board_match_cbname(const char *vendor,
-						    const char *part)
+int board_parse_parameter(const char *boardstring, const char **vendor, const char **model)
+{
+	/* strtok may modify the original string. */
+	char *tempstr = strdup(boardstring);
+	char *tempstr2 = NULL;
+	strtok(tempstr, ":");
+	tempstr2 = strtok(NULL, ":");
+	if (tempstr == NULL || tempstr2 == NULL) {
+		free(tempstr);
+		msg_pinfo("Please supply the board vendor and model name with the "
+			  "-p internal:mainboard=<vendor>:<model> option.\n");
+		return 1;
+	}
+	*vendor = strdup(tempstr);
+	*model = strdup(tempstr2);
+	msg_pspew("-p internal:mainboard: vendor=\"%s\", model=\"%s\"\n", tempstr, tempstr2);
+	free(tempstr);
+	return 0;
+}
+
+/*
+ * Match boards on vendor and model name.
+ * Hint: the parameters can come either from the coreboot table or the command line (i.e. the user).
+ * Require main PCI IDs to match too as extra safety.
+ * vendor and model must be non-NULL!
+ */
+static const struct board_match *board_match_name(const char *vendor, const char *model)
 {
 	const struct board_match *board = board_matches;
 	const struct board_match *partmatch = NULL;
 
 	for (; board->vendor_name; board++) {
-		if (vendor && (!board->lb_vendor
-			       || strcasecmp(board->lb_vendor, vendor)))
+		if (!board->lb_vendor || strcasecmp(board->lb_vendor, vendor))
 			continue;
 
-		if (!board->lb_part || strcasecmp(board->lb_part, part))
+		if (!board->lb_part || strcasecmp(board->lb_part, model))
 			continue;
 
-		if (!pci_dev_find(board->first_vendor, board->first_device))
+		if (!pci_dev_find(board->first_vendor, board->first_device)) {
+			msg_pdbg("Odd. Board name \"%s\":\"%s\" matches, but first PCI device %04x:%04x "
+				 "doesn't.\n", vendor, model, board->first_vendor, board->first_device);
 			continue;
+		}
 
-		if (board->second_vendor &&
-		    !pci_dev_find(board->second_vendor, board->second_device))
+		if (!pci_dev_find(board->second_vendor, board->second_device)) {
+			msg_pdbg("Odd. Board name \"%s\":\"%s\" matches, but second PCI device %04x:%04x "
+				 "doesn't.\n", vendor, model, board->second_vendor, board->second_device);
 			continue;
-
-		if (vendor)
-			return board;
+		}
 
 		if (partmatch) {
-			/* a second entry has a matching part name */
-			msg_pinfo("AMBIGUOUS BOARD NAME: %s\n", part);
-			msg_pinfo("At least vendors '%s' and '%s' match.\n",
-				  partmatch->lb_vendor, board->lb_vendor);
-			msg_perr("Please use the full -p internal:mainboard="
-				 "vendor:part syntax.\n");
+			/* More than one entry has a matching name. */
+			msg_perr("Board name \"%s\":\"%s\" and PCI IDs matched more than one board enable "
+				 "entry. Please report a bug at flashrom@flashrom.org\n", vendor, model);
 			return NULL;
 		}
 		partmatch = board;
@@ -2473,15 +2528,6 @@ static const struct board_match *board_match_cbname(const char *vendor,
 	if (partmatch)
 		return partmatch;
 
-	if (!partvendor_from_cbtable) {
-		/* Only warn if the mainboard type was not gathered from the
-		 * coreboot table. If it was, the coreboot implementor is
-		 * expected to fix flashrom, too.
-		 */
-		msg_perr("\nUnknown vendor:board from -p internal:mainboard="
-			 " programmer parameter:\n%s:%s\n\n",
-			 vendor, part);
-	}
 	return NULL;
 }
 
@@ -2519,25 +2565,27 @@ const static struct board_match *board_match_pci_ids(enum board_match_phase phas
 			}
 		}
 
+#if defined(__i386__) || defined(__x86_64__)
 		if (board->dmi_pattern) {
 			if (!has_dmi_support) {
-				msg_perr("WARNING: Can't autodetect %s %s,"
-					 " DMI info unavailable.\n",
-					 board->vendor_name, board->board_name);
+				msg_pwarn("Warning: Can't autodetect %s %s, DMI info unavailable.\n",
+					  board->vendor_name, board->board_name);
+				msg_pinfo("Please supply the board vendor and model name with the "
+					  "-p internal:mainboard=<vendor>:<model> option.\n");
 				continue;
 			} else {
 				if (!dmi_match(board->dmi_pattern))
 					continue;
 			}
 		}
-
+#endif // defined(__i386__) || defined(__x86_64__)
 		return board;
 	}
 
 	return NULL;
 }
 
-static int unsafe_board_handler(const struct board_match *board)
+static int board_enable_safetycheck(const struct board_match *board)
 {
 	if (!board)
 		return 1;
@@ -2546,18 +2594,15 @@ static int unsafe_board_handler(const struct board_match *board)
 		return 0;
 
 	if (!force_boardenable) {
-		msg_pinfo("WARNING: Your mainboard is %s %s, but the mainboard-specific\n"
-			  "code has not been tested, and thus will not be executed by default.\n"
-			  "Depending on your hardware environment, erasing, writing or even probing\n"
-			  "can fail without running the board specific code.\n\n"
+		msg_pwarn("Warning: The mainboard-specific code for %s %s has not been tested,\n"
+			  "and thus will not be executed by default. Depending on your hardware,\n"
+			  "erasing, writing or even probing can fail without running this code.\n\n"
 			  "Please see the man page (section PROGRAMMER SPECIFIC INFO, subsection\n"
-			  "\"internal programmer\") for details.\n",
-			  board->vendor_name, board->board_name);
+			  "\"internal programmer\") for details.\n", board->vendor_name, board->board_name);
 		return 1;
 	}
-	msg_pinfo("NOTE: Running an untested board enable procedure.\n"
-		  "Please report success/failure to flashrom@flashrom.org\n"
-		  "with your board name and SUCCESS or FAILURE in the subject.\n");
+	msg_pwarn("NOTE: Running an untested board enable procedure.\n"
+		  "Please report success/failure to flashrom@flashrom.org.\n");
 	return 0;
 }
 
@@ -2568,10 +2613,10 @@ static int board_handle_phase(enum board_match_phase phase)
 
 	board = board_match_pci_ids(phase);
 
-	if (unsafe_board_handler(board))
-		board = NULL;
-
 	if (!board)
+		return 0;
+
+	if (board_enable_safetycheck(board))
 		return 0;
 
 	if (!board->enable) {
@@ -2593,36 +2638,48 @@ void board_handle_before_laptop(void)
 	board_handle_phase(P2);
 }
 
-int board_flash_enable(const char *vendor, const char *part)
+int board_flash_enable(const char *vendor, const char *model, const char *cb_vendor, const char *cb_model)
 {
 	const struct board_match *board = NULL;
 	int ret = 0;
 
-	if (part)
-		board = board_match_cbname(vendor, part);
-
-	if (!board)
-		board = board_match_pci_ids(P3);
-
-	if (unsafe_board_handler(board))
-		board = NULL;
-
-	if (board) {
-		if (board->max_rom_decode_parallel)
-			max_rom_decode.parallel =
-				board->max_rom_decode_parallel * 1024;
-
-		if (board->enable != NULL) {
-			msg_pinfo("Disabling flash write protection for "
-				  "board \"%s %s\"... ", board->vendor_name,
-				  board->board_name);
-
-			ret = board->enable();
-			if (ret)
-				msg_pinfo("FAILED!\n");
-			else
-				msg_pinfo("OK.\n");
+	if (vendor != NULL  && model != NULL) {
+		board = board_match_name(vendor, model);
+		if (!board) { /* If a board was given by the user it has to match, else we abort here. */
+			msg_perr("No suitable board enable found for vendor=\"%s\", model=\"%s\".\n",
+				 vendor, model);
+			return 1;
 		}
+	}
+	if (board == NULL && cb_vendor != NULL && cb_model != NULL) {
+		board = board_match_name(cb_vendor, cb_model);
+		if (!board) { /* Failure is an option here, because many cb boards don't require an enable. */
+			msg_pdbg2("No board enable found matching coreboot IDs vendor=\"%s\", model=\"%s\".\n",
+				  cb_vendor, cb_model);
+		}
+	}
+	if (board == NULL) {
+		board = board_match_pci_ids(P3);
+		if (!board) /* i.e. there is just no board enable available for this board */
+			return 0;
+	}
+
+	if (board_enable_safetycheck(board))
+		return 1;
+
+	/* limit the maximum size of the parallel bus */
+	if (board->max_rom_decode_parallel)
+		max_rom_decode.parallel = board->max_rom_decode_parallel * 1024;
+
+	if (board->enable != NULL) {
+		msg_pinfo("Enabling full flash access for board \"%s %s\"... ",
+			  board->vendor_name, board->board_name);
+
+		ret = board->enable();
+		if (ret)
+			msg_pinfo("FAILED!\n");
+		else
+			msg_pinfo("OK.\n");
 	}
 
 	return ret;

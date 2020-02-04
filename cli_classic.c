@@ -33,58 +33,42 @@
 
 static void cli_classic_usage(const char *name)
 {
-	printf("Usage: flashrom [-h|-R|-L|"
+	printf("Please note that the command line interface for flashrom has changed between\n"
+	       "0.9.5 and 0.9.6 and will change again before flashrom 1.0.\n\n");
+
+	printf("Usage: %s [-h|-R|-L|"
 #if CONFIG_PRINT_WIKI == 1
-		"-z|"
+	       "-z|"
 #endif
-		"-p <programmername>[:<parameters>]\n"
-	       "                   [-E|-r <file>|-w <file>|-v <file>] [-c <chipname>]\n"
-	       "                   [-l <file> [-i <image>]] [-n] [-f]]\n"
-	       "                [-V[V[V]]] [-o <logfile>]\n\n");
+	       "-p <programmername>[:<parameters>] [-c <chipname>]\n"
+	       "[-E|(-r|-w|-v) <file>] [-l <layoutfile> [-i <imagename>]...] [-n] [-f]]\n"
+	       "[-V[V[V]]] [-o <logfile>]\n\n", name);
 
-	printf("Please note that the command line interface for flashrom has "
-	         "changed between\n"
-	       "0.9.5 and 0.9.6 and will change again before flashrom 1.0.\n"
-	       "Do not use flashrom in scripts or other automated tools "
-	         "without checking\n"
-	       "that your flashrom version won't interpret options in a "
-	         "different way.\n\n");
-
-	printf("   -h | --help                       print this help text\n"
-	       "   -R | --version                    print version (release)\n"
-	       "   -r | --read <file>                read flash and save to "
-	         "<file>\n"
-	       "   -w | --write <file>               write <file> to flash\n"
-	       "   -v | --verify <file>              verify flash against "
-	         "<file>\n"
-	       "   -E | --erase                      erase flash device\n"
-	       "   -V | --verbose                    more verbose output\n"
-	       "   -c | --chip <chipname>            probe only for specified "
-	         "flash chip\n"
-	       "   -f | --force                      force specific operations "
-	         "(see man page)\n"
-	       "   -n | --noverify                   don't auto-verify\n"
-	       "   -l | --layout <file>              read ROM layout from "
-	         "<file>\n"
-	       "   -i | --image <name>               only flash image <name> "
-	         "from flash layout\n"
-	       "   -o | --output <name>              log to file <name>\n"
-	       "   -L | --list-supported             print supported devices\n"
+	printf(" -h | --help                        print this help text\n"
+	       " -R | --version                     print version (release)\n"
+	       " -r | --read <file>                 read flash and save to <file>\n"
+	       " -w | --write <file>                write <file> to flash\n"
+	       " -v | --verify <file>               verify flash against <file>\n"
+	       " -E | --erase                       erase flash memory\n"
+	       " -V | --verbose                     more verbose output\n"
+	       " -c | --chip <chipname>             probe only for specified flash chip\n"
+	       " -f | --force                       force specific operations (see man page)\n"
+	       " -n | --noverify                    don't auto-verify\n"
+	       " -l | --layout <layoutfile>         read ROM layout from <layoutfile>\n"
+	       " -i | --image <name>                only flash image <name> from flash layout\n"
+	       " -o | --output <logfile>            log output to <logfile>\n"
+	       " -L | --list-supported              print supported devices\n"
 #if CONFIG_PRINT_WIKI == 1
-	       "   -z | --list-supported-wiki        print supported devices "
-	         "in wiki syntax\n"
+	       " -z | --list-supported-wiki         print supported devices in wiki syntax\n"
 #endif
-	       "   -p | --programmer <name>[:<param>] specify the programmer "
-	         "device\n");
-
-	list_programmers_linebreak(37, 80, 1);
-	printf("\nYou can specify one of -h, -R, -L, "
+	       " -p | --programmer <name>[:<param>] specify the programmer device. One of\n");
+	list_programmers_linebreak(4, 80, 0);
+	printf(".\n\nYou can specify one of -h, -R, -L, "
 #if CONFIG_PRINT_WIKI == 1
 	         "-z, "
 #endif
 	         "-E, -r, -w, -v or no operation.\n"
-	       "If no operation is specified, flashrom will only probe for "
-	         "flash chips.\n\n");
+	       "If no operation is specified, flashrom will only probe for flash chips.\n");
 }
 
 static void cli_classic_abort_usage(void)
@@ -109,8 +93,8 @@ int main(int argc, char *argv[])
 {
 	unsigned long size;
 	/* Probe for up to three flash chips. */
-	const struct flashchip *flash;
-	struct flashctx flashes[3];
+	const struct flashchip *chip = NULL;
+	struct flashctx flashes[3] = {{0}};
 	struct flashctx *fill_flash;
 	const char *name;
 	int namelen, opt, i, j;
@@ -146,7 +130,9 @@ int main(int argc, char *argv[])
 
 	char *filename = NULL;
 	char *layoutfile = NULL;
+#ifndef STANDALONE
 	char *logfile = NULL;
+#endif /* !STANDALONE */
 	char *tempstr = NULL;
 	char *pparam = NULL;
 
@@ -189,8 +175,7 @@ int main(int argc, char *argv[])
 				cli_classic_abort_usage();
 			}
 			if (dont_verify_it) {
-				fprintf(stderr, "--verify and --noverify are"
-					"mutually exclusive. Aborting.\n");
+				fprintf(stderr, "--verify and --noverify are mutually exclusive. Aborting.\n");
 				cli_classic_abort_usage();
 			}
 			filename = strdup(optarg);
@@ -198,8 +183,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'n':
 			if (verify_it) {
-				fprintf(stderr, "--verify and --noverify are"
-					"mutually exclusive. Aborting.\n");
+				fprintf(stderr, "--verify and --noverify are mutually exclusive. Aborting.\n");
 				cli_classic_abort_usage();
 			}
 			dont_verify_it = 1;
@@ -233,8 +217,10 @@ int main(int argc, char *argv[])
 			break;
 		case 'i':
 			tempstr = strdup(optarg);
-			if (register_include_arg(tempstr))
+			if (register_include_arg(tempstr)) {
+				free(tempstr);
 				cli_classic_abort_usage();
+			}
 			break;
 		case 'L':
 			if (++operation_specified > 1) {
@@ -296,6 +282,7 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "Error: Unknown programmer \"%s\". Valid choices are:\n",
 					optarg);
 				list_programmers_linebreak(0, 80, 0);
+				msg_ginfo(".\n");
 				cli_classic_abort_usage();
 			}
 			break;
@@ -352,19 +339,19 @@ int main(int argc, char *argv[])
 		cli_classic_abort_usage();
 	if (logfile && open_logfile(logfile))
 		return 1;
+	free(logfile);
 #endif /* !STANDALONE */
 
 #if CONFIG_PRINT_WIKI == 1
 	if (list_supported_wiki) {
 		print_supported_wiki();
-		ret = 0;
 		goto out;
 	}
 #endif
 
 	if (list_supported) {
-		print_supported();
-		ret = 0;
+		if (print_supported())
+			ret = 1;
 		goto out;
 	}
 
@@ -383,31 +370,47 @@ int main(int argc, char *argv[])
 		ret = 1;
 		goto out;
 	}
+	if (layoutfile != NULL && !write_it) {
+		msg_gerr("Layout files are currently supported for write operations only.\n");
+		ret = 1;
+		goto out;
+	}
+
 	if (process_include_args()) {
 		ret = 1;
 		goto out;
 	}
 	/* Does a chip with the requested name exist in the flashchips array? */
 	if (chip_to_probe) {
-		for (flash = flashchips; flash && flash->name; flash++)
-			if (!strcmp(flash->name, chip_to_probe))
+		for (chip = flashchips; chip && chip->name; chip++)
+			if (!strcmp(chip->name, chip_to_probe))
 				break;
-		if (!flash || !flash->name) {
+		if (!chip || !chip->name) {
 			msg_cerr("Error: Unknown chip '%s' specified.\n", chip_to_probe);
 			msg_gerr("Run flashrom -L to view the hardware supported in this flashrom version.\n");
 			ret = 1;
 			goto out;
 		}
-		/* Clean up after the check. */
-		flash = NULL;
+		/* Keep chip around for later usage in case a forced read is requested. */
 	}
 
 	if (prog == PROGRAMMER_INVALID) {
-		msg_perr("Please select a programmer with the --programmer parameter.\n"
-			 "Valid choices are:\n");
-		list_programmers_linebreak(0, 80, 0);
-		ret = 1;
-		goto out;
+		if (CONFIG_DEFAULT_PROGRAMMER != PROGRAMMER_INVALID) {
+			prog = CONFIG_DEFAULT_PROGRAMMER;
+			msg_pinfo("Using default programmer \"%s\".\n",
+				  programmer_table[CONFIG_DEFAULT_PROGRAMMER].name);
+		} else {
+			msg_perr("Please select a programmer with the --programmer parameter.\n"
+				 "Previously this was not necessary because there was a default set.\n"
+#if CONFIG_INTERNAL == 1
+				 "To choose the mainboard of this computer use 'internal'. "
+#endif
+				 "Valid choices are:\n");
+			list_programmers_linebreak(0, 80, 0);
+			msg_ginfo(".\n");
+			ret = 1;
+			goto out;
+		}
 	}
 
 	/* FIXME: Delay calibration should happen in programmer code. */
@@ -419,16 +422,13 @@ int main(int argc, char *argv[])
 		goto out_shutdown;
 	}
 	tempstr = flashbuses_to_text(get_buses_supported());
-	msg_pdbg("The following protocols are supported: %s.\n",
-		 tempstr);
+	msg_pdbg("The following protocols are supported: %s.\n", tempstr);
 	free(tempstr);
 
 	for (j = 0; j < registered_programmer_count; j++) {
 		startchip = 0;
 		while (chipcount < ARRAY_SIZE(flashes)) {
-			startchip = probe_flash(&registered_programmers[j],
-						startchip, 
-						&flashes[chipcount], 0);
+			startchip = probe_flash(&registered_programmers[j], startchip, &flashes[chipcount], 0);
 			if (startchip == -1)
 				break;
 			chipcount++;
@@ -437,10 +437,11 @@ int main(int argc, char *argv[])
 	}
 
 	if (chipcount > 1) {
-		msg_cinfo("Multiple flash chips were detected: \"%s\"", flashes[0].name);
+		msg_cinfo("Multiple flash chip definitions match the detected chip(s): \"%s\"",
+			  flashes[0].chip->name);
 		for (i = 1; i < chipcount; i++)
-			msg_cinfo(", \"%s\"", flashes[i].name);
-		msg_cinfo("\nPlease specify which chip to use with the -c <chipname> option.\n");
+			msg_cinfo(", \"%s\"", flashes[i].chip->name);
+		msg_cinfo("\nPlease specify which chip definition to use with the -c <chipname> option.\n");
 		ret = 1;
 		goto out_shutdown;
 	} else if (!chipcount) {
@@ -456,8 +457,14 @@ int main(int argc, char *argv[])
 			/* This loop just counts compatible controllers. */
 			for (j = 0; j < registered_programmer_count; j++) {
 				pgm = &registered_programmers[j];
-				if (pgm->buses_supported & flashes[0].bustype)
+				/* chip is still set from the chip_to_probe earlier in this function. */
+				if (pgm->buses_supported & chip->bustype)
 					compatible_programmers++;
+			}
+			if (!compatible_programmers) {
+				msg_cinfo("No compatible controller found for the requested flash chip.\n");
+				ret = 1;
+				goto out_shutdown;
 			}
 			if (compatible_programmers > 1)
 				msg_cinfo("More than one compatible controller found for the requested flash "
@@ -469,31 +476,32 @@ int main(int argc, char *argv[])
 					break;
 			}
 			if (startchip == -1) {
+				// FIXME: This should never happen! Ask for a bug report?
 				msg_cinfo("Probing for flash chip '%s' failed.\n", chip_to_probe);
 				ret = 1;
 				goto out_shutdown;
 			}
 			msg_cinfo("Please note that forced reads most likely contain garbage.\n");
 			ret = read_flash_to_file(&flashes[0], filename);
+			free(flashes[0].chip);
 			goto out_shutdown;
 		}
 		ret = 1;
 		goto out_shutdown;
 	} else if (!chip_to_probe) {
 		/* repeat for convenience when looking at foreign logs */
-		tempstr = flashbuses_to_text(flashes[0].bustype);
+		tempstr = flashbuses_to_text(flashes[0].chip->bustype);
 		msg_gdbg("Found %s flash chip \"%s\" (%d kB, %s).\n",
-			 flashes[0].vendor, flashes[0].name,
-			 flashes[0].total_size, tempstr);
+			 flashes[0].chip->vendor, flashes[0].chip->name, flashes[0].chip->total_size, tempstr);
 		free(tempstr);
 	}
 
 	fill_flash = &flashes[0];
 
-	check_chip_supported(fill_flash);
+	check_chip_supported(fill_flash->chip);
 
-	size = fill_flash->total_size * 1024;
-	if (check_max_decode(fill_flash->pgm->buses_supported & fill_flash->bustype, size) && (!force)) {
+	size = fill_flash->chip->total_size * 1024;
+	if (check_max_decode(fill_flash->pgm->buses_supported & fill_flash->chip->bustype, size) && (!force)) {
 		msg_cerr("Chip is too big for this programmer (-V gives details). Use --force to override.\n");
 		ret = 1;
 		goto out_shutdown;
@@ -520,6 +528,16 @@ int main(int argc, char *argv[])
 out_shutdown:
 	programmer_shutdown();
 out:
+	for (i = 0; i < chipcount; i++)
+		free(flashes[i].chip);
+
+	layout_cleanup();
+	free(filename);
+	free(layoutfile);
+	free(pparam);
+	/* clean up global variables */
+	free((char *)chip_to_probe); /* Silence! Freeing is not modifying contents. */
+	chip_to_probe = NULL;
 #ifndef STANDALONE
 	ret |= close_logfile();
 #endif /* !STANDALONE */

@@ -45,8 +45,8 @@ Build Instructions
 To build flashrom you need to install the following software:
 
  * pciutils+libpci (if you want support for mainboard or PCI device flashing)
- * libusb (if you want FT2232 or Dediprog support)
- * libftdi (if you want FT2232 support)
+ * libusb (if you want FT2232, Dediprog or USB-Blaster support)
+ * libftdi (if you want FT2232 or USB-Blaster support)
 
 Linux et al:
 
@@ -80,11 +80,9 @@ To compile on Solaris, use:
 
  gmake LDFLAGS="-L$pathtolibpci" CC="gcc -I$pathtopciheaders" CFLAGS=-O2
 
-To compile on NetBSD or DragonFly BSD, use:
+To compile on NetBSD or DragonFly BSD (with pciutils, libftdi, libusb installed in /usr/pkg/), use:
 
- ln -s /usr/pkg/include/pciutils pci
- gmake CPPFLAGS="-I. -I/usr/pkg/include" \
-       LDFLAGS="-L/usr/pkg/lib -Wl,-rpath-link,/usr/pkg/lib"
+ gmake
 
 To compile on OpenBSD, use:
 
@@ -93,40 +91,53 @@ To compile on OpenBSD, use:
 To compile and run on Darwin/Mac OS X:
 
  Install DirectHW from coresystems GmbH.
- DirectHW is available at http://www.coresystems.de/en/directhw .
+ DirectHW is available at http://www.coreboot.org/DirectHW .
 
 To cross-compile on Linux for DOS:
 
- Get RPMs of the cross compiler from the DJGPP site and install them:
+ Get packages of the DJGPP cross compiler and install them:
+ djgpp-filesystem djgpp-gcc djgpp-cpp djgpp-runtime djgpp-binutils
+ As an alternative, the DJGPP web site offers packages for download as well:
  djcross-binutils-2.19.1-10ap.i386.rpm
  djcross-gcc-4.3.2-8ap.i686.rpm
  djcrx-2.04pre_20090725-13ap.i386.rpm
- Download pciutils 3.1.5 and apply http://assembler.cz/flashrom/pciutils.patch
- Download and compile http://assembler.cz/flashrom/libgetopt/
+ The cross toolchain packages for your distribution may have slightly different
+ names (look for packages named *djgpp*).
+
+ You will need the following library source trees containing their compiled
+ static libraries either in the parent directory of the flashrom source or
+ specify the base folder on compile time with the DOSLIBS_BASE parameter.
+ The default as described above is equal to calling
+   'make djgpp-dos DOSLIBS_BASE=..'
+
+ To get and build said libraries...
+ Download pciutils 3.1.5 and apply http://flashrom.org/File:Pciutils.patch.gz
  Compile pciutils, see README.DJGPP for instructions.
+ Download and compile http://flashrom.org/File:Libgetopt.tar.gz
  Enter the flashrom directory.
- ../libpci should contain pciutils source and binaries.
- ../libgetopt should contain getopt.a from libgetopt.
  Run either (change settings where appropriate)
- make CC=i586-pc-msdosdjgpp-gcc STRIP=i586-pc-msdosdjgpp-strip OS_ARCH=DOS
+ make CC=i586-pc-msdosdjgpp-gcc STRIP=i586-pc-msdosdjgpp-strip
  or (above settings hardcoded)
  make djgpp-dos
- You might have to add WARNERROR=no to the make command line.
- To run flashrom.exe, download and unpack
- http://homer.rice.edu/~sandmann/cwsdpmi/csdpmi7b.zip and make sure
- CWSDPMI.EXE is in the current directory.
+ To run flashrom.exe, download http://flashrom.org/File:Csdpmi7b.zip and
+ unpack CWSDPMI.EXE into the current directory or one in PATH.
+
+To cross-compile on Linux for Windows:
+
+ Get packages of the MinGW cross compiler and install them:
+ mingw32-filesystem mingw32-cross-cpp mingw32-cross-binutils mingw32-cross-gcc
+ mingw32-runtime mingw32-headers
+ The cross toolchain packages for your distribution may have slightly different
+ names (look for packages named *mingw*).
+ PCI-based programmers (internal etc.) are not supported on Windows.
+ Run (change CC= and STRIP= settings where appropriate)
+ make CC=i686-w64-mingw32-gcc STRIP=i686-w64-mingw32-strip
 
 Processor architecture dependent features:
 
- On non-x86 architectures you have to disable a few programmers because they
- use port-based I/O which is not directly available on non-x86. Please add
- CONFIG_RAYER_SPI=no CONFIG_NIC3COM=no CONFIG_ATAHPT=no CONFIG_NICREALTEK=no \
- CONFIG_NICNATSEMI=no
- as parameters to the "make" invocation.
- Besides that, the internal programmer is only supported on x86 and MIPS. On
- other architectures, please add
- CONFIG_INTERNAL=no
- as parameter to the "make" invocation.
+ On non-x86 architectures a few programmers don't work (yet) because they
+ use port-based I/O which is not directly available on non-x86. Those
+ programmers will be disabled automatically if you run "make".
 
 Installation
 ------------

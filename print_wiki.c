@@ -76,15 +76,24 @@ static const char chip_th[] = "\
 | Probe\n| Read\n| Erase\n| Write\n\
 | align=\"center\" | Min \n| align=\"center\" | Max\n\n";
 
+static const char chip_intro[] = "\
+\n== Supported flash chips ==\n\n\
+The list below contains all chips that have some kind of explicit support added to flashrom and their last \
+known test status. Newer SPI flash chips might work even without explicit support if they implement SFDP ([\
+http://www.jedec.org/standards-documents/docs/jesd216 Serial Flash Discoverable Parameters - JESD216]). \
+Flashrom will detect this automatically and inform you about it.\n\n\
+The names used below are designed to be as concise as possible and hence contain only the characters \
+describing properties that are relevant to flashrom. Irrelevant characters specify attributes flashrom can not \
+use or even detect by itself (e.g. the physical package) and have no effect on flashrom's operation. They are \
+replaced by dots ('.') functioning as wildcards (like in Regular Expressions) or are completely omitted at the \
+end of a name.\n";
+
 static const char programmer_th[] = "\
+! align=\"left\" | Programmer\n\
 ! align=\"left\" | Vendor\n\
 ! align=\"left\" | Device\n\
-! align=\"center\" | PCI IDs\n\
+! align=\"center\" | IDs\n\
 ! align=\"center\" | Status\n\n";
-
-static const char programmer_intro[] = "\
-\n== Supported programmers ==\n\n\
-This is a list of supported PCI devices flashrom can use as programmer:\n\n{";
 
 #if CONFIG_INTERNAL == 1
 static const char laptop_intro[] = "\n== Supported laptops/notebooks ==\n\n\
@@ -139,7 +148,7 @@ static void print_supported_chipsets_wiki(int cols)
 	printf("\n\n|}\n");
 }
 
-static void wiki_helper(const char *devicetype, int cols, const struct board_info boards[])
+static void print_supported_boards_wiki_helper(const char *devicetype, int cols, const struct board_info boards[])
 {
 	int i, k;
 	unsigned int boardcount, lines_per_col;
@@ -162,7 +171,7 @@ static void wiki_helper(const char *devicetype, int cols, const struct board_inf
 	/* +1 to force the resulting number of columns to be < cols */
 	lines_per_col = boardcount / cols + ((boardcount%cols) > 0 ? 1 : 0);
 
-	printf("\n\nTotal amount of known good boards %s: '''%d'''; "
+	printf("\n\nTotal amount of known good %s: '''%d'''; "
 	       "Untested (e.g. user vanished before testing new code): '''%d'''; "
 	       "Not yet supported (i.e. known-bad): '''%d'''.\n\n"
 	       "{| border=\"0\" valign=\"top\"\n", devicetype, boardcount_good, boardcount_nt, boardcount_bad);
@@ -197,9 +206,17 @@ static void wiki_helper(const char *devicetype, int cols, const struct board_inf
 		       (boards[i].working == NT) ? "?3" : "No");
 
 		if (boards[i].note) {
-			printf("<sup>%d</sup>\n", num_notes + 1);
-			snprintf(tmp, sizeof(tmp), "<sup>%d</sup> %s<br />\n",
-				 1 + num_notes++, boards[i].note);
+			num_notes++;
+			printf(" <span id=\"%s_ref%d\"><sup>[[#%s_note%d|%d]]</sup></span>\n",
+			       devicetype, num_notes, devicetype, num_notes, num_notes);
+			int ret = snprintf(tmp, sizeof(tmp),
+					   "<span id=\"%s_note%d\">%d. [[#%s_ref%d|&#x2191;]]</span>"
+					   " <nowiki>%s</nowiki><br />\n", devicetype, num_notes, num_notes,
+					   devicetype, num_notes, boards[i].note);
+			if (ret < 0 || ret >= sizeof(tmp)) {
+				fprintf(stderr, "Footnote text #%d of %s truncated (ret=%d, sizeof(tmp)=%zu)\n",
+					num_notes, devicetype, ret, sizeof(tmp));
+			}
 			notes = strcat_realloc(notes, tmp);
 		} else {
 			printf("\n");
@@ -212,7 +229,7 @@ static void wiki_helper(const char *devicetype, int cols, const struct board_inf
 	/* end inner table if it did not fill the last column fully */
 	if (((i % lines_per_col)) > 0)
 		printf("\n|}\n\n");
-	printf("\n\n|}\n");
+	printf("|}\n");
 
 	if (num_notes > 0)
 		printf("\n<small>\n%s</small>\n", notes);
@@ -222,10 +239,10 @@ static void wiki_helper(const char *devicetype, int cols, const struct board_inf
 static void print_supported_boards_wiki(void)
 {
 	printf("%s", board_intro);
-	wiki_helper("boards", 2, boards_known);
+	print_supported_boards_wiki_helper("boards", 2, boards_known);
 
 	printf("%s", laptop_intro);
-	wiki_helper("laptops", 1, laptops_known);
+	print_supported_boards_wiki_helper("laptops", 1, laptops_known);
 }
 #endif
 
@@ -251,7 +268,8 @@ static void print_supported_chips_wiki(int cols)
 	/* +1 to force the resulting number of columns to be < cols */
 	lines_per_col = chipcount / cols + ((chipcount%cols) > 0 ? 1 : 0);
 
-	printf("\n== Supported chips ==\n\nTotal amount of supported chips: '''%d'''\n\n"
+	printf("%s", chip_intro);
+	printf("\nTotal amount of supported chips: '''%d'''\n\n"
 	       "{| border=\"0\" valign=\"top\"\n", chipcount);
 
 	for (f = flashchips; f->name != NULL; f++) {
@@ -302,25 +320,97 @@ static void print_supported_chips_wiki(int cols)
 	printf("|}\n\n");
 }
 
-/* Not needed for CONFIG_INTERNAL, but for all other PCI-based programmers. */
-#if CONFIG_NIC3COM+CONFIG_NICREALTEK+CONFIG_NICNATSEMI+CONFIG_GFXNVIDIA+CONFIG_DRKAISER+CONFIG_SATASII+CONFIG_ATAHPT+CONFIG_NICINTEL+CONFIG_NICINTEL_SPI+CONFIG_OGP_SPI+CONFIG_SATAMV >= 1
-static void print_supported_pcidevs_wiki(const struct pcidev_status *devs)
+/* Following functions are not needed when no PCI/USB programmers are compiled in,
+ * but since print_wiki code has no size constraints we include it unconditionally. */
+static int count_supported_devs_wiki(const struct dev_entry *devs)
+{
+	unsigned int count = 0;
+	unsigned int i = 0;
+	for (i = 0; devs[i].vendor_id != 0; i++)
+		count++;
+	return count;
+}
+
+static void print_supported_devs_wiki_helper(const struct programmer_entry prog)
 {
 	int i = 0;
 	static int c = 0;
+	const struct dev_entry *devs = prog.devs.dev;
+	const unsigned int count = count_supported_devs_wiki(devs);
 
 	/* Alternate colors if the vendor changes. */
 	c = !c;
 
-	for (i = 0; devs[i].vendor_name != NULL; i++) {
-		printf("|- bgcolor=\"#%s\"\n| %s || %s || "
-		       "%04x:%04x || {{%s}}\n", (c) ? "eeeeee" : "dddddd",
-		       devs[i].vendor_name, devs[i].device_name,
-		       devs[i].vendor_id, devs[i].device_id,
-		       (devs[i].status == NT) ? "?3" : "OK");
+	for (i = 0; devs[i].vendor_id != 0; i++) {
+		printf("|- bgcolor=\"#%s\"\n", (c) ? "eeeeee" : "dddddd");
+		if (i == 0)
+			printf("| rowspan=\"%u\" | %s |", count, prog.name);
+		printf("| %s || %s || %04x:%04x || {{%s}}\n", devs[i].vendor_name, devs[i].device_name,
+		       devs[i].vendor_id, devs[i].device_id, (devs[i].status == NT) ? "?3" : "OK");
 	}
 }
-#endif
+
+static void print_supported_devs_wiki()
+{
+	unsigned int pci_count = 0;
+	unsigned int usb_count = 0;
+	unsigned int i;
+
+	for (i = 0; i < PROGRAMMER_INVALID; i++) {
+		const struct programmer_entry prog = programmer_table[i];
+		switch (prog.type) {
+		case USB:
+			usb_count += count_supported_devs_wiki(prog.devs.dev);
+			break;
+		case PCI:
+			pci_count += count_supported_devs_wiki(prog.devs.dev);
+			break;
+		case OTHER:
+		default:
+			break;
+		}
+	}
+
+	printf("\n== PCI Devices ==\n\n"
+	       "Total amount of supported PCI devices flashrom can use as a programmer: '''%d'''\n\n"
+	       "{%s%s", pci_count, th_start, programmer_th);
+
+	for (i = 0; i < PROGRAMMER_INVALID; i++) {
+		const struct programmer_entry prog = programmer_table[i];
+		if (prog.type == PCI) {
+			print_supported_devs_wiki_helper(prog);
+		}
+	}
+	printf("\n|}\n\n|}\n");
+
+	printf("\n== USB Devices ==\n\n"
+	       "Total amount of supported USB devices flashrom can use as a programmer: '''%d'''\n\n"
+	       "{%s%s", usb_count, th_start, programmer_th);
+
+	for (i = 0; i < PROGRAMMER_INVALID; i++) {
+		const struct programmer_entry prog = programmer_table[i];
+		if (prog.type == USB) {
+			print_supported_devs_wiki_helper(prog);
+		}
+	}
+	printf("\n|}\n\n|}\n");
+
+	printf("\n== Other programmers ==\n\n"
+	       "{%s", th_start);
+	printf("! align=\"left\" | Programmer\n"
+	       "! align=\"left\" | Note\n\n");
+
+	for (i = 0; i < PROGRAMMER_INVALID; i++) {
+		static int c = 0;
+		const struct programmer_entry prog = programmer_table[i];
+		if (prog.type == OTHER && prog.devs.note != NULL) {
+			c = !c;
+			printf("|- bgcolor=\"#%s\"\n", (c) ? "eeeeee" : "dddddd");
+			printf("| %s || %s", prog.name, prog.devs.note);
+		}
+	}
+	printf("\n|}\n\n|}\n");
+}
 
 void print_supported_wiki(void)
 {
@@ -332,41 +422,6 @@ void print_supported_wiki(void)
 	print_supported_chipsets_wiki(3);
 	print_supported_boards_wiki();
 #endif
-	printf("%s%s%s", programmer_intro, th_start, programmer_th);
-
-#if CONFIG_NIC3COM == 1
-	print_supported_pcidevs_wiki(nics_3com);
-#endif
-#if CONFIG_NICREALTEK == 1
-	print_supported_pcidevs_wiki(nics_realtek);
-#endif
-#if CONFIG_NICNATSEMI == 1
-	print_supported_pcidevs_wiki(nics_natsemi);
-#endif
-#if CONFIG_GFXNVIDIA == 1
-	print_supported_pcidevs_wiki(gfx_nvidia);
-#endif
-#if CONFIG_DRKAISER == 1
-	print_supported_pcidevs_wiki(drkaiser_pcidev);
-#endif
-#if CONFIG_SATASII == 1
-	print_supported_pcidevs_wiki(satas_sii);
-#endif
-#if CONFIG_ATAHPT == 1
-	print_supported_pcidevs_wiki(ata_hpt);
-#endif
-#if CONFIG_NICINTEL == 1
-	print_supported_pcidevs_wiki(nics_intel);
-#endif
-#if CONFIG_NICINTEL_SPI == 1
-	print_supported_pcidevs_wiki(nics_intel_spi);
-#endif
-#if CONFIG_OGP_SPI == 1
-	print_supported_pcidevs_wiki(ogp_spi);
-#endif
-#if CONFIG_SATAMV == 1
-	print_supported_pcidevs_wiki(satas_mv);
-#endif
-	printf("\n|}\n\n|}\n");
+	print_supported_devs_wiki();
 }
 

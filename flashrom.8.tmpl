@@ -1,4 +1,4 @@
-.TH FLASHROM 8 "Feb 15, 2012"
+.TH FLASHROM 8 "" ""
 .SH NAME
 flashrom \- detect, read, write, verify and erase flash chips
 .SH SYNOPSIS
@@ -15,7 +15,7 @@ chips. It's often used to flash BIOS/EFI/coreboot/firmware images in-system
 using a supported mainboard. However, it also supports various external
 PCI/USB/parallel-port/serial-port based devices which can program flash chips,
 including some network cards (NICs), SATA/IDE controller cards, graphics cards,
-the Bus Pirate device, various FTDI FT2232/FT4232H based USB devices, and more.
+the Bus Pirate device, various FTDI FT2232/FT4232H/FT232H based USB devices, and more.
 .PP
 It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, TSOP40,
 TSOP48, and BGA chips, which use various protocols such as LPC, FWH,
@@ -34,7 +34,9 @@ recommended that if you try flashrom the first time on a system, you run it
 in probe-only mode and check the output. Also you are advised to make a
 backup of your current ROM contents with
 .B \-r
-before you try to write a new image.
+before you try to write a new image. All operations involving any chip access (probe/read/write/...) require the
+.B -p/--programmer
+option to be used (please see below).
 .TP
 .B "\-r, \-\-read <file>"
 Read flash ROM contents and save them into the given
@@ -128,7 +130,7 @@ If you only want to update the image named
 .sp
 .B "  flashrom \-p prog \-\-layout rom.layout \-\-image normal \-w some.rom"
 .sp
-To update only the images named 
+To update only the images named
 .BR "normal " "and " "fallback" ", run:"
 .sp
 .B "  flashrom \-p prog \-l rom.layout \-i normal -i fallback \-w some.rom"
@@ -159,6 +161,7 @@ Same as
 .BR \-\-list\-supported ,
 but outputs the supported hardware in MediaWiki syntax, so that it can be
 easily pasted into the wiki page at
+.nh
 .BR http://www.flashrom.org/ .
 Please note that MediaWiki output is not compiled in by default.
 .TP
@@ -172,9 +175,7 @@ involving any chip access (probe/read/write/...). Currently supported are:
 .sp
 .BR "* nic3com" " (for flash ROMs on 3COM network cards)"
 .sp
-.BR "* nicrealtek" " (for flash ROMs on Realtek network cards)"
-.sp
-.BR "* nicsmc1211" " (for flash ROMs on RTL8139-compatible SMC2 network cards)"
+.BR "* nicrealtek" " (for flash ROMs on Realtek and SMC 1211 network cards)"
 .sp
 .BR "* nicnatsemi" " (for flash ROMs on National Semiconductor DP838* network \
 cards)"
@@ -191,12 +192,12 @@ cards)"
 .sp
 .BR "* atahpt" " (for flash ROMs on Highpoint ATA/RAID controllers)"
 .sp
-.BR "* ft2232_spi" " (for SPI flash ROMs attached to an FT2232/FT4232H family \
+.BR "* ft2232_spi" " (for SPI flash ROMs attached to an FT2232/FT4232H/FT232H family \
 based USB SPI programmer), including the DLP Design DLP-USB1232H, \
 FTDI FT2232H Mini-Module, FTDI FT4232H Mini-Module, openbiosprog-spi, Amontec \
 JTAGkey/JTAGkey-tiny/JTAGkey-2, Dangerous Prototypes Bus Blaster, \
 Olimex ARM-USB-TINY/-H, Olimex ARM-USB-OCD/-H, TIAO/DIYGADGET USB
-Multi-Protocol Adapter (TUMPA), and GOEPEL PicoTAP.
+Multi-Protocol Adapter (TUMPA), TUMPA Lite, and GOEPEL PicoTAP.
 .sp
 .BR "* serprog" " (for flash ROMs attached to a programmer speaking serprog), \
 including AVR flasher by Urja Rannikko, AVR flasher by eightdot, \
@@ -207,8 +208,7 @@ atmegaXXu2-flasher by Stefan Tauner."
 .sp
 .BR "* dediprog" " (for SPI flash ROMs attached to a Dediprog SF100)"
 .sp
-.BR "* rayer_spi" " (for SPI flash ROMs attached to a RayeR parport "
-or Xilinx DLC5 compatible cable)
+.BR "* rayer_spi" " (for SPI flash ROMs attached to a parallel port by one of various cable types)"
 .sp
 .BR "* pony_spi" " (for SPI flash ROMs attached to a SI-Prog serial port "
 bitbanging adapter)
@@ -218,6 +218,8 @@ bitbanging adapter)
 .BR "* ogp_spi" " (for SPI flash ROMs on Open Graphics Project graphics card)"
 .sp
 .BR "* linux_spi" " (for SPI flash ROMs accessible via /dev/spidevX.Y on Linux)"
+.sp
+.BR "* usbblaster_spi" " (for SPI flash ROMs attached to an Altera USB-Blaster compatible cable)"
 .sp
 Some programmers have optional or mandatory parameters which are described
 in detail in the
@@ -259,7 +261,7 @@ and possibly DMI info. If PCI and DMI do not contain information to uniquely
 identify the mainboard (which is the exception), or if you want to override
 the detected mainboard model, you can specify the mainboard using the
 .sp
-.B "  flashrom \-p internal:mainboard=[<vendor>:]<board>"
+.B "  flashrom \-p internal:mainboard=<vendor>:<board>"
 syntax.
 .sp
 See the 'Known boards' or 'Known laptops' section in the output
@@ -293,8 +295,9 @@ contents (using
 .BR \-r )
 and store it to a medium outside of your computer, like
 a USB drive or a network share. If you needed to run the board enable code
-already for probing, use it for reading too. Now you can try to write the
-new image. You should enable the board enable code in any case now, as it
+already for probing, use it for reading too.
+If reading succeeds and the contens of the read file look legit you can try to write the new image.
+You should enable the board enable code in any case now, as it
 has been written because it is known that writing/erasing without the board
 enable is going to fail. In any case (success or failure), please report to
 the flashrom mailing list, see below.
@@ -311,6 +314,19 @@ do not match, it will refuse to write the image unless you specify
 .TP
 .B ITE IT87 Super I/O
 .sp
+If your mainboard is manufactured by GIGABYTE and supports DualBIOS it is very likely that it uses an
+ITE IT87 series Super I/O to switch between the two flash chips. Only one of them can be accessed at a time
+and you can manually select which one to use with the
+.sp
+.B "  flashrom \-p internal:dualbiosindex=chip"
+.sp
+syntax where
+.B chip
+is the index of the chip to use (0 = main, 1 = backup). You can check which one is currently selected by
+leaving out the
+.B chip
+parameter.
+.sp
 If your mainboard uses an ITE IT87 series Super I/O for LPC<->SPI flash bus
 translation, flashrom should autodetect that configuration. If you want to
 set the I/O base port of the IT87 series SPI controller manually instead of
@@ -325,10 +341,27 @@ flashrom doesn't detect an active IT87 LPC<->SPI bridge, please send a bug
 report so we can diagnose the problem.
 .sp
 .TP
+.B AMD chipsets
+.sp
+Beginning with the SB700 chipset there is an integrated microcontroller (IMC) based on the 8051 embedded in
+every AMD southbridge. Its firmware resides in the same flash chip as the host's which makes writing to the
+flash risky if the IMC is active. Flashrom tries to temporarily disable the IMC but even then changing the
+contents of the flash can have unwanted effects: when the IMC continues (at the latest after a reboot) it will
+continue executing code from the flash. If the code was removed or changed in an unfortunate way it is
+unpredictable what the IMC will do. Therefore, if flashrom detects an active IMC it will disable write support
+unless the user forces it with the
+.sp
+.B "  flashrom \-p internal:amd_imc_force=yes"
+.sp
+syntax. The user is responsible for supplying a suitable image or leaving out the IMC region with the help of
+a layout file. This limitation might be removed in the future when we understand the details better and have
+received enough feedback from users. Please report the outcome if you had to use this option to write a chip.
+.sp
+.TP
 .B Intel chipsets
 .sp
 If you have an Intel chipset with an ICH8 or later southbridge with SPI flash
-attached, and if a valid descriptor was written to it (e.g. by the vendor), the
+attached, and if a valid descriptor was written to it (e.g.\& by the vendor), the
 chipset provides an alternative way to access the flash chip(s) named
 .BR "Hardware Sequencing" .
 It is much simpler than the normal access method (called
@@ -343,7 +376,7 @@ syntax where
 .BR auto ", " swseq " or " hwseq .
 By default
 .RB "(or when setting " ich_spi_mode=auto )
-the module tries to use swseq and only activates hwseq if need be (e.g. if
+the module tries to use swseq and only activates hwseq if need be (e.g.\& if
 important opcodes are inaccessible due to lockdown; or if more than one flash
 chip is attached). The other options (swseq, hwseq) select the respective mode
 (if possible).
@@ -363,7 +396,7 @@ syntax. If this leads to erase or write accesses to the flash it would most
 probably bring it into an inconsistent and unbootable state and we will not
 provide any support in such a case.
 .sp
-If you have an Intel chipset with an ICH6 or later southbridge and if you want
+If you have an Intel chipset with an ICH2 or later southbridge and if you want
 to set specific IDSEL values for a non-default flash chip or an embedded
 controller (EC), you can use the
 .sp
@@ -389,6 +422,7 @@ unusable (see also the
 .B BUGS
 section). The embedded controller (EC) in these
 machines often interacts badly with flashing.
+.nh
 .B http://www.flashrom.org/Laptops
 has more information. For example the EC firmware sometimes resides on the same
 flash chip as the host firmware. While flashrom tries to change the contents of
@@ -484,7 +518,7 @@ the
 .sp
 syntax where
 .B size
-is the number of bytes (min. 1, max. 256).
+is the number of bytes (min.\& 1, max.\& 256).
 .sp
 Example:
 .sp
@@ -500,7 +534,7 @@ flash chip, you can specify a blacklist of SPI commands with the
 syntax where
 .B commandlist
 is a list of two-digit hexadecimal representations of
-SPI commands. If commandlist is e.g. 0302, flashrom will behave as if the SPI
+SPI commands. If commandlist is e.g.\& 0302, flashrom will behave as if the SPI
 controller refuses to run command 0x03 (READ) and command 0x02 (WRITE).
 commandlist may be up to 512 characters (256 commands) long.
 Implementation note: flashrom will detect an error during command execution.
@@ -516,7 +550,7 @@ you can specify an ignorelist of SPI commands with the
 syntax where
 .B commandlist
 is a list of two-digit hexadecimal representations of
-SPI commands. If commandlist is e.g. 0302, the emulated flash chip will ignore
+SPI commands. If commandlist is e.g.\& 0302, the emulated flash chip will ignore
 command 0x03 (READ) and command 0x02 (WRITE).  commandlist may be up to 512
 characters (256 commands) long.
 Implementation note: flashrom won't detect an error during command execution.
@@ -532,7 +566,7 @@ syntax where
 .B content
 is an 8-bit hexadecimal value.
 .SS
-.BR "nic3com" , " nicrealtek" , " nicsmc1211" , " nicnatsemi" , " nicintel\
+.BR "nic3com" , " nicrealtek" , " nicnatsemi" , " nicintel\
 " , " nicintel_spi" , " gfxnvidia" , " ogp_spi" , " drkaiser" , " satasii\
 " , " satamv" ", and " atahpt " programmers
 These programmers have an option to specify the PCI address of the card
@@ -556,27 +590,38 @@ Example:
 .SS
 .BR "ft2232_spi " programmer
 An optional parameter specifies the controller
-type and interface/port it should support. For that you have to use the
+type and channel/interface/port it should support. For that you have to use the
 .sp
 .B "  flashrom \-p ft2232_spi:type=model,port=interface"
 .sp
 syntax where
 .B model
 can be
-.BR 2232H ", " 4232H ", " jtagkey ", " busblaster ", " openmoko ", " \
+.BR 2232H ", " 4232H ", " 232H ", " jtagkey ", " busblaster ", " openmoko ", " \
 arm-usb-tiny ", " arm-usb-tiny-h ", " arm-usb-ocd ", " arm-usb-ocd-h \
-", " tumpa ", or " picotap
+", " tumpa ", " tumpalite ", or " picotap
 and
 .B interface
 can be
-.BR A ", or " B .
+.BR A ", " B ", " C ", or " D .
 The default model is
 .B 4232H
 and the default interface is
-.BR B .
+.BR A .
+.sp
+If there is more than one ft2232_spi-compatible device connected, you can select which one should be used by
+specifying its serial number with the
+.sp
+.B "  flashrom \-p ft2232_spi:serial=number"
+.sp
+syntax where
+.B number
+is the serial number of the device (which can be found for example in the output of lsusb -v).
 .sp
 All models supported by the ft2232_spi driver can configure the SPI clock rate by setting a divisor. The
-expressible divisors are all even numbers between 2 and 2^17 (=131072) resulting in SPI clock frequencies of
+expressible divisors are all
+.B even
+numbers between 2 and 2^17 (=131072) resulting in SPI clock frequencies of
 6 MHz down to about 92 Hz for 12 MHz inputs. The default divisor is set to 2, but you can use another one by
 specifying the optional
 .B divisor
@@ -598,7 +643,17 @@ syntax and for IP, you have to use
 .sp
 .B "  flashrom \-p serprog:ip=ipaddr:port"
 .sp
-instead. More information about serprog is available in
+instead. In case the device supports it, you can set the SPI clock frequency
+with the optional
+.B spispeed
+parameter. The frequency is parsed as hertz, unless an
+.BR M ", or " k
+suffix is given, then megahertz or kilohertz are used respectively.
+Example that sets the frequency to 2 MHz:
+.sp
+.B "  flashrom \-p serprog:dev=/dev/device:baud,spispeed=2M"
+.sp
+More information about serprog is available in
 .B serprog-protocol.txt
 in the source distribution.
 .SS
@@ -617,6 +672,20 @@ where
 can be
 .BR 30k ", " 125k ", " 250k ", " 1M ", " 2M ", " 2.6M ", " 4M " or " 8M
 (in Hz). The default is the maximum frequency of 8 MHz.
+.sp
+An optional pullups parameter specifies the use of the Bus Pirate internal pull-up resistors. This may be
+needed if you are working with a flash ROM chip that you have physically removed from the board. Syntax is
+.sp
+.B "  flashrom -p buspirate_spi:pullups=state"
+.sp
+where
+.B state
+can be
+.BR on " or " off .
+More information about the Bus Pirate pull-up resistors and their purpose is available at
+.nh
+.BR "http://dangerousprototypes.com/docs/Practical_guide_to_Bus_Pirate_pull-up_resistors " .
+Only the external supply voltage (Vpu) is supported as of this writing.
 .SS
 .BR "dediprog " programmer
 An optional
@@ -633,6 +702,40 @@ where
 can be
 .BR 0V ", " 1.8V ", " 2.5V ", " 3.5V
 or the equivalent in mV.
+.sp
+An optional
+.B device
+parameter specifies which of multiple connected Dediprog devices should be used.
+Please be aware that the order depends on libusb's usb_get_busses() function and that the numbering starts
+at 0.
+Usage example to select the second device:
+.sp
+.B "  flashrom \-p dediprog:device=1"
+.sp
+An optional
+.B spispeed
+parameter specifies the frequency of the SPI bus. The firmware on the device needs to be 5.0.0 or newer.
+Syntax is
+.sp
+.B "  flashrom \-p dediprog:spispeed=frequency"
+.sp
+where
+.B frequency
+can be
+.BR 375k ", " 750k ", " 1.5M ", " 2.18M ", " 3M ", " 8M ", " 12M " or " 24M
+(in Hz). The default is a frequency of 12 MHz.
+.sp
+An optional
+.B target
+parameter specifies which target chip should be used. Syntax is
+.sp
+.B "  flashrom \-p dediprog:target=value"
+.sp
+where
+.B value
+can be
+.BR 1 " or " 2
+to select target chip 1 or 2 repectively. The default is target chip 1.
 .SS
 .BR "rayer_spi " programmer
 The default I/O base address used for the parallel port is 0x378 and you can use
@@ -656,25 +759,34 @@ parameter to specify the cable type with the
 syntax where
 .B model
 can be
-.BR rayer " for the RayeR cable or " xilinx " for the Xilinx Parallel Cable III
-(DLC 5).
+.BR rayer " for the RayeR cable, " byteblastermv " for the Altera ByteBlasterMV, " stk200 " for the Atmel \
+STK200/300, " wiggler " for the Macraigor Wiggler, or " xilinx " for the Xilinx Parallel Cable III (DLC 5)."
 .sp
 More information about the RayeR hardware is available at
+.nh
 .BR "http://rayer.ic.cz/elektro/spipgm.htm " .
-The schematic of the Xilinx DLC 5 was published at
-.BR "http://www.xilinx.com/itp/xilinx4/data/docs/pac/appendixb.html " .
+The Altera ByteBlasterMV datasheet can be obtained from
+.nh
+.BR "http://www.altera.co.jp/literature/ds/dsbytemv.pdf " .
+For more information about the Macraigor Wiggler see
+.nh
+.BR "http://www.macraigor.com/wiggler.htm " .
+The schematic of the Xilinx DLC 5 was published in
+.nh
+.BR "http://www.xilinx.com/support/documentation/user_guides/xtp029.pdf " .
 .SS
 .BR "pony_spi " programmer
 The serial port (like /dev/ttyS0, /dev/ttyUSB0 on Linux or COM3 on windows) is
 specified using the mandatory
-.B dev 
+.B dev
 parameter. The adapter type is selectable between SI-Prog (used for
 SPI devices with PonyProg 2000) or a custom made serial bitbanging programmer
 named "serbang". The optional
-.B type 
+.B type
 parameter accepts the values "si_prog" (default) or "serbang".
 .sp
 Information about the SI-Prog adapter can be found at
+.nh
 .BR "http://www.lancos.com/siprogsch.html " .
 .sp
 An example call to flashrom is
@@ -697,7 +809,7 @@ is either
 .B cprom
 or
 .B s3
-for the configuration ROM and 
+for the configuration ROM and
 .B bprom
 or
 .B bios
@@ -706,10 +818,11 @@ is installed in your system, you have to specify the PCI address of the card
 you want to use with the
 .B pci=
 parameter as explained in the
-.B nic3com
+.B nic3com et al.\&
 section above.
 .sp
 More information about the hardware is available at
+.nh
 .BR http://wiki.opengraphics.org .
 .SS
 .BR "linux_spi " programmer
@@ -720,6 +833,13 @@ You have to specify the SPI controller to use with the
 syntax where
 .B /dev/spidevX.Y
 is the Linux device node for your SPI controller.
+.sp
+In case the device supports it, you can set the SPI clock frequency with the optional
+.B spispeed
+parameter. The frequency is parsed as kilohertz.
+Example that sets the frequency to 8 MHz:
+.sp
+.B "  flashrom \-p linux_spi:dev=/dev/spidevX.Y,spispeed=8000"
 .sp
 Please note that the linux_spi driver only works on Linux.
 .SH EXAMPLES
@@ -742,8 +862,7 @@ backuplog.txt, writelog.txt and restorelog.txt. See section
 .B BUGS
 for contact info.
 .SH EXIT STATUS
-flashrom exits with 0 on success, 1 on most failures but with 2 if /dev/mem
-(/dev/xsvc on Solaris) can not be opened and with 3 if a call to mmap() fails.
+flashrom exits with 0 on success, 1 on most failures but with 3 if a call to mmap() fails.
 .SH REQUIREMENTS
 flashrom needs different access permissions for different programmers.
 .sp
@@ -751,7 +870,7 @@ flashrom needs different access permissions for different programmers.
 needs raw memory access, PCI configuration space access, raw I/O port
 access (x86) and MSR access (x86).
 .sp
-.BR nic3com ", " nicrealtek ", " nicsmc1211 " and " nicnatsemi "
+.BR nic3com ", " nicrealtek " and " nicnatsemi "
 need PCI configuration space read access and raw I/O port access.
 .sp
 .B atahpt
@@ -776,17 +895,17 @@ needs TCP access to the network or userspace access to a serial port.
 .B buspirate_spi
 needs userspace access to a serial port.
 .sp
-.BR dediprog " and " ft2232_spi
+.BR dediprog ", " ft2232_spi " and " usbblaster_spi
 need access to the USB device via libusb.
 .sp
 .B dummy
 needs no access permissions at all.
 .sp
-.BR internal ", " nic3com ", " nicrealtek ", " nicsmc1211 ", " nicnatsemi ", "
+.BR internal ", " nic3com ", " nicrealtek ", " nicnatsemi ", "
 .BR gfxnvidia ", " drkaiser ", " satasii ", " satamv " and " atahpt
 have to be run as superuser/root, and need additional raw access permission.
 .sp
-.BR serprog ", " buspirate_spi ", " dediprog " and " ft2232_spi
+.BR serprog ", " buspirate_spi ", " dediprog ", " usbblaster_spi " and " ft2232_spi
 can be run as normal user on most operating systems if appropriate device
 permissions are set.
 .sp
@@ -811,11 +930,12 @@ Many of the developers communicate via the
 IRC channel on
 .BR chat.freenode.net .
 You are welcome to join and ask questions, send us bug and success reports there
-too. Please provide a way to contact you later (e.g. a mail address) and be
+too. Please provide a way to contact you later (e.g.\& a mail address) and be
 patient if there is no immediate reaction. Also, we provide a pastebin service
 at
+.nh
 .B http://paste.flashrom.org
-that is very useful when you want to share logs etc. without spamming the
+that is very useful when you want to share logs etc.\& without spamming the
 channel.
 .SS
 .B Laptops
@@ -829,14 +949,14 @@ paragraph in the
 .B internal programmer
 subsection of the
 .B PROGRAMMER SPECIFIC INFO
-section.
-.B "  http://www.flashrom.org/Laptops"
+section and the information in our wiki at
+.BR "http://www.flashrom.org/Laptops " .
 .SS
 One-time programmable (OTP) memory and unique IDs
 .sp
 Some flash chips contain OTP memory often denoted as "security registers".
 They usually have a capacity in the range of some bytes to a few hundred
-bytes and can be used to give devices unique IDs etc. flashrom is not able
+bytes and can be used to give devices unique IDs etc.  flashrom is not able
 to read or write these memories and may therefore not be able to duplicate a
 chip completely. For chip types known to include OTP memories a warning is
 printed when they are detected.

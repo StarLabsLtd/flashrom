@@ -1,7 +1,7 @@
 /*
  * This file is part of the flashrom project.
  *
- * Copyright (C) 2009, 2010 Carl-Daniel Hailfinger
+ * Copyright (C) 2009, 2010, 2011, 2012 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
  */
 
 #include <stdio.h>
+#include <strings.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -39,7 +40,7 @@ static int buspirate_serialport_setup(char *dev)
 {
 	/* 115200bps, 8 databits, no parity, 1 stopbit */
 	sp_fd = sp_openserport(dev, 115200);
- 	if (sp_fd < 0)
+ 	if (sp_fd == SER_INV_FD)
 		return 1;
 	return 0;
 }
@@ -84,7 +85,8 @@ static int buspirate_sendrecv(unsigned char *buf, unsigned int writecnt,
 		msg_perr("Zero length command!\n");
 		return 1;
 	}
-	msg_pspew("Sending");
+	if (writecnt)
+		msg_pspew("Sending");
 	for (i = 0; i < writecnt; i++)
 		msg_pspew(" 0x%02x", buf[i]);
 #ifdef FAKE_COMMUNICATION
@@ -104,24 +106,39 @@ static int buspirate_sendrecv(unsigned char *buf, unsigned int writecnt,
 	if (ret)
 		return ret;
 #endif
-	msg_pspew(", receiving");
+	if (readcnt)
+		msg_pspew(", receiving");
 	for (i = 0; i < readcnt; i++)
 		msg_pspew(" 0x%02x", buf[i]);
 	msg_pspew("\n");
 	return 0;
 }
 
-static int buspirate_spi_send_command(struct flashctx *flash,
-				      unsigned int writecnt,
-				      unsigned int readcnt,
-				      const unsigned char *writearr,
-				      unsigned char *readarr);
+static int buspirate_wait_for_string(unsigned char *buf, char *key)
+{
+	unsigned int keylen = strlen(key);
+	int ret;
 
-static const struct spi_programmer spi_programmer_buspirate = {
+	ret = buspirate_sendrecv(buf, 0, keylen);
+	while (!ret) {
+		if (!memcmp(buf, key, keylen))
+			return 0;
+		memmove(buf, buf + 1, keylen - 1);
+		ret = buspirate_sendrecv(buf + keylen - 1, 0, 1);
+	}
+	return ret;
+}
+
+static int buspirate_spi_send_command_v1(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
+					 const unsigned char *writearr, unsigned char *readarr);
+static int buspirate_spi_send_command_v2(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
+					 const unsigned char *writearr, unsigned char *readarr);
+
+static struct spi_programmer spi_programmer_buspirate = {
 	.type		= SPI_CONTROLLER_BUSPIRATE,
-	.max_data_read	= 12,
-	.max_data_write	= 12,
-	.command	= buspirate_spi_send_command,
+	.max_data_read	= MAX_DATA_UNSPECIFIED,
+	.max_data_write	= MAX_DATA_UNSPECIFIED,
+	.command	= NULL,
 	.multicommand	= default_spi_send_multicommand,
 	.read		= default_spi_read,
 	.write_256	= default_spi_write_256,
@@ -147,17 +164,15 @@ static int buspirate_spi_shutdown(void *data)
 
 	/* Exit raw SPI mode (enter raw bitbang mode) */
 	bp_commbuf[0] = 0x00;
-	ret = buspirate_sendrecv(bp_commbuf, 1, 5);
-	if (ret)
+	if ((ret = buspirate_sendrecv(bp_commbuf, 1, 0)))
 		goto out_shutdown;
-	if (memcmp(bp_commbuf, "BBIO", 4)) {
-		msg_perr("Entering raw bitbang mode failed!\n");
-		ret = 1;
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "BBIO")))
 		goto out_shutdown;
-	}
-	msg_pdbg("Raw bitbang mode version %c\n", bp_commbuf[4]);
-	if (bp_commbuf[4] != '1') {
-		msg_perr("Can't handle raw bitbang mode version %c!\n", bp_commbuf[4]);
+	if ((ret = buspirate_sendrecv(bp_commbuf, 0, 1)))
+		goto out_shutdown;
+	msg_pdbg("Raw bitbang mode version %c\n", bp_commbuf[0]);
+	if (bp_commbuf[0] != '1') {
+		msg_perr("Can't handle raw bitbang mode version %c!\n", bp_commbuf[0]);
 		ret = 1;
 		goto out_shutdown;
 	}
@@ -182,36 +197,52 @@ out_shutdown:
 	return ret;
 }
 
+#define BP_FWVERSION(a,b)	((a) << 8 | (b))
+
 int buspirate_spi_init(void)
 {
-	char *dev = NULL;
-	char *speed = NULL;
+	char *tmp;
+	char *dev;
+	int i;
+	unsigned int fw_version_major = 0;
+	unsigned int fw_version_minor = 0;
 	int spispeed = 0x7;
 	int ret = 0;
-	int i;
+	int pullup = 0;
 
 	dev = extract_programmer_param("dev");
-	if (!dev || !strlen(dev)) {
-		msg_perr("No serial device given. Use flashrom -p "
-			"buspirate_spi:dev=/dev/ttyUSB0\n");
+	if (dev && !strlen(dev)) {
+		free(dev);
+		dev = NULL;
+	}
+	if (!dev) {
+		msg_perr("No serial device given. Use flashrom -p buspirate_spi:dev=/dev/ttyUSB0\n");
 		return 1;
 	}
 
-	speed = extract_programmer_param("spispeed");
-	if (speed) {
-		for (i = 0; spispeeds[i].name; i++)
-			if (!strncasecmp(spispeeds[i].name, speed,
-			    strlen(spispeeds[i].name))) {
+	tmp = extract_programmer_param("spispeed");
+	if (tmp) {
+		for (i = 0; spispeeds[i].name; i++) {
+			if (!strncasecmp(spispeeds[i].name, tmp, strlen(spispeeds[i].name))) {
 				spispeed = spispeeds[i].speed;
 				break;
 			}
+		}
 		if (!spispeeds[i].name)
 			msg_perr("Invalid SPI speed, using default.\n");
 	}
-	free(speed);
+	free(tmp);
 
-	/* This works because speeds numbering starts at 0 and is contiguous. */
-	msg_pdbg("SPI speed is %sHz\n", spispeeds[spispeed].name);
+	tmp = extract_programmer_param("pullups");
+	if (tmp) {
+		if (strcasecmp("on", tmp) == 0)
+			pullup = 1;
+		else if (strcasecmp("off", tmp) == 0)
+			; // ignore
+		else
+			msg_perr("Invalid pullups state, not using them.\n");
+	}
+	free(tmp);
 
 	/* Default buffer size is 19: 16 bytes data, 3 bytes control. */
 #define DEFAULT_BUFSIZE (16 + 3)
@@ -219,6 +250,7 @@ int buspirate_spi_init(void)
 	if (!bp_commbuf) {
 		bp_commbufsize = 0;
 		msg_perr("Out of memory!\n");
+		free(dev);
 		return ERROR_OOM;
 	}
 	bp_commbufsize = DEFAULT_BUFSIZE;
@@ -232,78 +264,163 @@ int buspirate_spi_init(void)
 		return ret;
 	}
 
-	if (register_shutdown(buspirate_spi_shutdown, NULL))
+	if (register_shutdown(buspirate_spi_shutdown, NULL) != 0) {
+		bp_commbufsize = 0;
+		free(bp_commbuf);
+		bp_commbuf = NULL;
 		return 1;
+	}
 
-	/* This is the brute force version, but it should work. */
-	for (i = 0; i < 19; i++) {
+	/* This is the brute force version, but it should work.
+	 * It is likely to fail if a previous flashrom run was aborted during a write with the new SPI commands
+	 * in firmware v5.5 because that firmware may wait for up to 4096 bytes of input before responding to
+	 * 0x00 again. The obvious workaround (sending 4096 bytes of \0) may cause significant startup delays.
+	 */
+	for (i = 0; i < 20; i++) {
 		/* Enter raw bitbang mode */
 		bp_commbuf[0] = 0x00;
 		/* Send the command, don't read the response. */
 		ret = buspirate_sendrecv(bp_commbuf, 1, 0);
 		if (ret)
 			return ret;
-		/* Read any response and discard it. */
-		sp_flush_incoming();
+		/* The old way to handle responses from a Bus Pirate already in BBIO mode was to flush any
+		 * response which came in over serial. Unfortunately that does not work reliably on Linux
+		 * with FTDI USB-serial.
+		 */
+		//sp_flush_incoming();
+		/* The Bus Pirate can't handle UART input buffer overflow in BBIO mode, and sending a sequence
+		 * of 0x00 too fast apparently triggers such an UART input buffer overflow.
+		 */
+		internal_sleep(10000);
 	}
-	/* USB is slow. The Bus Pirate is even slower. Apparently the flush
-	 * action above is too fast or too early. Some stuff still remains in
-	 * the pipe after the flush above, and one additional flush is not
-	 * sufficient either. Use a 1.5 ms delay inside the loop to make
-	 * mostly sure that at least one USB frame had time to arrive.
-	 * Looping only 5 times is not sufficient and causes the
-	 * occasional failure.
-	 * Folding the delay into the loop above is not reliable either.
-	 */
-	for (i = 0; i < 10; i++) {
-		usleep(1500);
-		/* Read any response and discard it. */
-		sp_flush_incoming();
-	}
-	/* Enter raw bitbang mode */
-	bp_commbuf[0] = 0x00;
-	ret = buspirate_sendrecv(bp_commbuf, 1, 5);
-	if (ret)
+	/* We know that 20 commands of \0 should elicit at least one BBIO1 response. */
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "BBIO")))
 		return ret;
-	if (memcmp(bp_commbuf, "BBIO", 4)) {
-		msg_perr("Entering raw bitbang mode failed!\n");
-		msg_pdbg("Got %02x%02x%02x%02x%02x\n",
-			 bp_commbuf[0], bp_commbuf[1], bp_commbuf[2],
-			 bp_commbuf[3], bp_commbuf[4]);
-		return 1;
+
+	/* Reset the Bus Pirate. */
+	bp_commbuf[0] = 0x0f;
+	/* Send the command, don't read the response. */
+	if ((ret = buspirate_sendrecv(bp_commbuf, 1, 0)))
+		return ret;
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "irate ")))
+		return ret;
+	/* Read the hardware version string. Last byte of the buffer is reserved for \0. */
+	for (i = 0; i < DEFAULT_BUFSIZE - 1; i++) {
+		if ((ret = buspirate_sendrecv(bp_commbuf + i, 0, 1)))
+			return ret;
+		if (strchr("\r\n\t ", bp_commbuf[i]))
+			break;
 	}
-	msg_pdbg("Raw bitbang mode version %c\n", bp_commbuf[4]);
-	if (bp_commbuf[4] != '1') {
-		msg_perr("Can't handle raw bitbang mode version %c!\n",
-			bp_commbuf[4]);
+	bp_commbuf[i] = '\0';
+	msg_pdbg("Detected Bus Pirate hardware %s\n", bp_commbuf);
+
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "irmware ")))
+		return ret;
+	/* Read the firmware version string. Last byte of the buffer is reserved for \0. */
+	for (i = 0; i < DEFAULT_BUFSIZE - 1; i++) {
+		if ((ret = buspirate_sendrecv(bp_commbuf + i, 0, 1)))
+			return ret;
+		if (strchr("\r\n\t ", bp_commbuf[i]))
+			break;
+	}
+	bp_commbuf[i] = '\0';
+	msg_pdbg("Detected Bus Pirate firmware ");
+	if (bp_commbuf[0] != 'v')
+		msg_pdbg("(unknown version number format)");
+	else if (!strchr("0123456789", bp_commbuf[1]))
+		msg_pdbg("(unknown version number format)");
+	else {
+		fw_version_major = strtoul((char *)bp_commbuf + 1, &tmp, 10);
+		while ((*tmp != '\0') && !strchr("0123456789", *tmp))
+			tmp++;
+		fw_version_minor = strtoul(tmp, NULL, 10);
+		msg_pdbg("%u.%u", fw_version_major, fw_version_minor);
+	}
+	msg_pdbg2(" (\"%s\")", bp_commbuf);
+	msg_pdbg("\n");
+
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "HiZ>")))
+		return ret;
+	
+	/* Tell the user about missing SPI binary mode in firmware 2.3 and older. */
+	if (BP_FWVERSION(fw_version_major, fw_version_minor) < BP_FWVERSION(2, 4)) {
+		msg_pinfo("Bus Pirate firmware 2.3 and older does not support binary SPI access.\n");
+		msg_pinfo("Please upgrade to the latest firmware (at least 2.4).\n");
+		return SPI_PROGRAMMER_ERROR;
+	}
+
+	/* Use fast SPI mode in firmware 5.5 and newer. */
+	if (BP_FWVERSION(fw_version_major, fw_version_minor) >= BP_FWVERSION(5, 5)) {
+		msg_pdbg("Using SPI command set v2.\n"); 
+		/* Sensible default buffer size. */
+		if (buspirate_commbuf_grow(260 + 5))
+			return ERROR_OOM;
+		spi_programmer_buspirate.max_data_read = 2048;
+		spi_programmer_buspirate.max_data_write = 256;
+		spi_programmer_buspirate.command = buspirate_spi_send_command_v2;
+	} else {
+		msg_pinfo("Bus Pirate firmware 5.4 and older does not support fast SPI access.\n");
+		msg_pinfo("Reading/writing a flash chip may take hours.\n");
+		msg_pinfo("It is recommended to upgrade to firmware 5.5 or newer.\n");
+		/* Sensible default buffer size. */
+		if (buspirate_commbuf_grow(16 + 3))
+			return ERROR_OOM;
+		spi_programmer_buspirate.max_data_read = 12;
+		spi_programmer_buspirate.max_data_write = 12;
+		spi_programmer_buspirate.command = buspirate_spi_send_command_v1;
+	}
+
+	/* Workaround for broken speed settings in firmware 6.1 and older. */
+	if (BP_FWVERSION(fw_version_major, fw_version_minor) < BP_FWVERSION(6, 2))
+		if (spispeed > 0x4) {
+			msg_perr("Bus Pirate firmware 6.1 and older does not support SPI speeds above 2 MHz. "
+				 "Limiting speed to 2 MHz.\n");
+			msg_pinfo("It is recommended to upgrade to firmware 6.2 or newer.\n");
+			spispeed = 0x4;
+		}
+		
+	/* This works because speeds numbering starts at 0 and is contiguous. */
+	msg_pdbg("SPI speed is %sHz\n", spispeeds[spispeed].name);
+
+	/* Enter raw bitbang mode */
+	for (i = 0; i < 20; i++) {
+		bp_commbuf[0] = 0x00;
+		if ((ret = buspirate_sendrecv(bp_commbuf, 1, 0)))
+			return ret;
+	}
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "BBIO")))
+		return ret;
+	if ((ret = buspirate_sendrecv(bp_commbuf, 0, 1)))
+		return ret;
+	msg_pdbg("Raw bitbang mode version %c\n", bp_commbuf[0]);
+	if (bp_commbuf[0] != '1') {
+		msg_perr("Can't handle raw bitbang mode version %c!\n", bp_commbuf[0]);
 		return 1;
 	}
 	/* Enter raw SPI mode */
 	bp_commbuf[0] = 0x01;
-	ret = buspirate_sendrecv(bp_commbuf, 1, 4);
-	if (ret)
+	ret = buspirate_sendrecv(bp_commbuf, 1, 0);
+	if ((ret = buspirate_wait_for_string(bp_commbuf, "SPI")))
 		return ret;
-	if (memcmp(bp_commbuf, "SPI", 3)) {
-		msg_perr("Entering raw SPI mode failed!\n");
-		msg_pdbg("Got %02x%02x%02x%02x\n",
-			 bp_commbuf[0], bp_commbuf[1], bp_commbuf[2],
-			 bp_commbuf[3]);
-		return 1;
-	}
-	msg_pdbg("Raw SPI mode version %c\n", bp_commbuf[3]);
-	if (bp_commbuf[3] != '1') {
-		msg_perr("Can't handle raw SPI mode version %c!\n",
-			bp_commbuf[3]);
+	if ((ret = buspirate_sendrecv(bp_commbuf, 0, 1)))
+		return ret;
+	msg_pdbg("Raw SPI mode version %c\n", bp_commbuf[0]);
+	if (bp_commbuf[0] != '1') {
+		msg_perr("Can't handle raw SPI mode version %c!\n", bp_commbuf[0]);
 		return 1;
 	}
 
 	/* Initial setup (SPI peripherals config): Enable power, CS high, AUX */
-	bp_commbuf[0] = 0x40 | 0xb;
+	bp_commbuf[0] = 0x40 | 0x0b;
+	if (pullup == 1) {
+		bp_commbuf[0] |= (1 << 2);
+		msg_pdbg("Enabling pull-up resistors.\n");
+	}
 	ret = buspirate_sendrecv(bp_commbuf, 1, 1);
 	if (ret)
 		return 1;
 	if (bp_commbuf[0] != 0x01) {
-		msg_perr("Protocol error while setting power/CS/AUX!\n");
+		msg_perr("Protocol error while setting power/CS/AUX(/Pull-up resistors)!\n");
 		return 1;
 	}
 
@@ -342,11 +459,8 @@ int buspirate_spi_init(void)
 	return 0;
 }
 
-static int buspirate_spi_send_command(struct flashctx *flash,
-				      unsigned int writecnt,
-				      unsigned int readcnt,
-				      const unsigned char *writearr,
-				      unsigned char *readarr)
+static int buspirate_spi_send_command_v1(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
+					 const unsigned char *writearr, unsigned char *readarr)
 {
 	unsigned int i = 0;
 	int ret = 0;
@@ -394,6 +508,46 @@ static int buspirate_spi_send_command(struct flashctx *flash,
 
 	/* Skip CS#, length, writearr. */
 	memcpy(readarr, bp_commbuf + 2 + writecnt, readcnt);
+
+	return ret;
+}
+
+static int buspirate_spi_send_command_v2(struct flashctx *flash, unsigned int writecnt, unsigned int readcnt,
+					 const unsigned char *writearr, unsigned char *readarr)
+{
+	int i = 0, ret = 0;
+
+	if (writecnt > 4096 || readcnt > 4096 || (readcnt + writecnt) > 4096)
+		return SPI_INVALID_LENGTH;
+
+	/* 5 bytes extra for command, writelen, readlen.
+	 * 1 byte extra for Ack/Nack.
+	 */
+	if (buspirate_commbuf_grow(max(writecnt + 5, readcnt + 1)))
+		return ERROR_OOM;
+
+	/* Combined SPI write/read. */
+	bp_commbuf[i++] = 0x04;
+	bp_commbuf[i++] = (writecnt >> 8) & 0xff;
+	bp_commbuf[i++] = writecnt & 0xff;
+	bp_commbuf[i++] = (readcnt >> 8) & 0xff;
+	bp_commbuf[i++] = readcnt & 0xff;
+	memcpy(bp_commbuf + i, writearr, writecnt);
+	
+	ret = buspirate_sendrecv(bp_commbuf, i + writecnt, 1 + readcnt);
+
+	if (ret) {
+		msg_perr("Bus Pirate communication error!\n");
+		return SPI_GENERIC_ERROR;
+	}
+
+	if (bp_commbuf[0] != 0x01) {
+		msg_perr("Protocol error while sending SPI write/read!\n");
+		return SPI_GENERIC_ERROR;
+	}
+
+	/* Skip Ack. */
+	memcpy(readarr, bp_commbuf + 1, readcnt);
 
 	return ret;
 }

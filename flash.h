@@ -24,8 +24,11 @@
 #ifndef __FLASH_H__
 #define __FLASH_H__ 1
 
+#include <inttypes.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdbool.h>
 #ifdef _WIN32
 #include <windows.h>
 #undef min
@@ -38,13 +41,22 @@
 #define ERROR_OOM	-100
 #define TIMEOUT_ERROR	-101
 
-typedef unsigned long chipaddr;
+/* TODO: check using code for correct usage of types */
+typedef uintptr_t chipaddr;
+#define PRIxPTR_WIDTH ((int)(sizeof(uintptr_t)*2))
+
+/* Types and macros regarding the maximum flash space size supported by generic code. */
+typedef uint32_t chipoff_t; /* Able to store any addressable offset within a supported flash memory. */
+typedef uint32_t chipsize_t; /* Able to store the number of bytes of any supported flash memory. */
+#define FL_MAX_CHIPADDR_BITS (24)
+#define FL_MAX_CHIPADDR ((chipoff_t)(1ULL<<FL_MAX_CHIPADDR_BITS)-1)
+#define PRIxCHIPADDR "06"PRIx32
+#define PRIuCHIPSIZE PRIu32
 
 int register_shutdown(int (*function) (void *data), void *data);
-void *programmer_map_flash_region(const char *descr, unsigned long phys_addr,
-				  size_t len);
+void *programmer_map_flash_region(const char *descr, uintptr_t phys_addr, size_t len);
 void programmer_unmap_flash_region(void *virt_addr, size_t len);
-void programmer_delay(int usecs);
+void programmer_delay(unsigned int usecs);
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -59,6 +71,25 @@ enum chipbustype {
 };
 
 /*
+ * The following enum defines possible write granularities of flash chips. These tend to reflect the properties
+ * of the actual hardware not necesserily the write function(s) defined by the respective struct flashchip.
+ * The latter might (and should) be more precisely specified, e.g. they might bail out early if their execution
+ * would result in undefined chip contents.
+ */
+enum write_granularity {
+	/* We assume 256 byte granularity by default. */
+	write_gran_256bytes = 0,/* If less than 256 bytes are written, the unwritten bytes are undefined. */
+	write_gran_1bit,	/* Each bit can be cleared individually. */
+	write_gran_1byte,	/* A byte can be written once. Further writes to an already written byte cause
+				 * its contents to be either undefined or to stay unchanged. */
+	write_gran_264bytes,	/* If less than 264 bytes are written, the unwritten bytes are undefined. */
+	write_gran_512bytes,	/* If less than 512 bytes are written, the unwritten bytes are undefined. */
+	write_gran_528bytes,	/* If less than 528 bytes are written, the unwritten bytes are undefined. */
+	write_gran_1024bytes,	/* If less than 1024 bytes are written, the unwritten bytes are undefined. */
+	write_gran_1056bytes,	/* If less than 1056 bytes are written, the unwritten bytes are undefined. */
+};
+
+/*
  * How many different contiguous runs of erase blocks with one size each do
  * we have for a given erase function?
  */
@@ -70,6 +101,7 @@ enum chipbustype {
  */
 #define NUM_ERASEFUNCTIONS 6
 
+/* Feature bits used for non-SPI only */
 #define FEATURE_REGISTERMAP	(1 << 0)
 #define FEATURE_BYTEWRITES	(1 << 1)
 #define FEATURE_LONG_RESET	(0 << 4)
@@ -81,12 +113,15 @@ enum chipbustype {
 #define FEATURE_ADDR_2AA	(1 << 2)
 #define FEATURE_ADDR_AAA	(2 << 2)
 #define FEATURE_ADDR_SHIFTED	(1 << 5)
+/* Feature bits used for SPI only */
 #define FEATURE_WRSR_EWSR	(1 << 6)
 #define FEATURE_WRSR_WREN	(1 << 7)
-#define FEATURE_OTP		(1 << 8)
 #define FEATURE_WRSR_EITHER	(FEATURE_WRSR_EWSR | FEATURE_WRSR_WREN)
+#define FEATURE_OTP		(1 << 8)
+#define FEATURE_QPI		(1 << 9)
 
 struct flashctx;
+typedef int (erasefunc_t)(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 
 struct flashchip {
 	const char *vendor;
@@ -146,36 +181,16 @@ struct flashchip {
 		uint16_t min;
 		uint16_t max;
 	} voltage;
+	enum write_granularity gran;
 };
 
-/* struct flashctx must always contain struct flashchip at the beginning. */
 struct flashctx {
-	const char *vendor;
-	const char *name;
-	enum chipbustype bustype;
-	uint32_t manufacture_id;
-	uint32_t model_id;
-	int total_size;
-	int page_size;
-	int feature_bits;
-	uint32_t tested;
-	int (*probe) (struct flashctx *flash);
-	int probe_timing;
-	struct block_eraser block_erasers[NUM_ERASEFUNCTIONS];
-	int (*printlock) (struct flashctx *flash);
-	int (*unlock) (struct flashctx *flash);
-	int (*write) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-	int (*read) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-	struct voltage voltage;
-	/* struct flashchip ends here. */
-	
+	struct flashchip *chip;
 	chipaddr virtual_memory;
 	/* Some flash devices have an additional register space. */
 	chipaddr virtual_registers;
 	struct registered_programmer *pgm;
 };
-
-typedef int (erasefunc_t)(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 
 #define TEST_UNTESTED	0
 
@@ -193,6 +208,7 @@ typedef int (erasefunc_t)(struct flashctx *flash, unsigned int addr, unsigned in
 #define TEST_BAD_READ	(1 << 5)
 #define TEST_BAD_ERASE	(1 << 6)
 #define TEST_BAD_WRITE	(1 << 7)
+#define TEST_BAD_REW	(TEST_BAD_READ | TEST_BAD_ERASE | TEST_BAD_WRITE)
 #define TEST_BAD_PREW	(TEST_BAD_PROBE | TEST_BAD_READ | TEST_BAD_ERASE | TEST_BAD_WRITE)
 #define TEST_BAD_MASK	0xf0
 
@@ -219,19 +235,14 @@ void chip_readn(const struct flashctx *flash, uint8_t *buf, const chipaddr addr,
 
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
-void print_supported(void);
+int print_supported(void);
 void print_supported_wiki(void);
 
 /* flashrom.c */
-enum write_granularity {
-	write_gran_1bit,
-	write_gran_1byte,
-	write_gran_256bytes,
-};
 extern int verbose_screen;
 extern int verbose_logfile;
 extern const char flashrom_version[];
-extern char *chip_to_probe;
+extern const char *chip_to_probe;
 void map_flash_registers(struct flashctx *flash);
 int read_memmapped(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 int erase_flash(struct flashctx *flash);
@@ -240,8 +251,8 @@ int read_flash_to_file(struct flashctx *flash, const char *filename);
 int min(int a, int b);
 int max(int a, int b);
 void tolower_string(char *str);
-char *extract_param(char **haystack, const char *needle, const char *delim);
-int verify_range(struct flashctx *flash, uint8_t *cmpbuf, unsigned int start, unsigned int len, const char *message);
+char *extract_param(const char *const *haystack, const char *needle, const char *delim);
+int verify_range(struct flashctx *flash, uint8_t *cmpbuf, unsigned int start, unsigned int len);
 int need_erase(uint8_t *have, uint8_t *want, unsigned int len, enum write_granularity gran);
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
@@ -280,16 +291,25 @@ void start_logging(void);
 #endif
 enum msglevel {
 	MSG_ERROR	= 0,
-	MSG_INFO	= 1,
-	MSG_DEBUG	= 2,
-	MSG_DEBUG2	= 3,
-	MSG_SPEW	= 4,
+	MSG_WARN	= 1,
+	MSG_INFO	= 2,
+	MSG_DEBUG	= 3,
+	MSG_DEBUG2	= 4,
+	MSG_SPEW	= 5,
 };
 /* Let gcc and clang check for correct printf-style format strings. */
-int print(enum msglevel level, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+int print(enum msglevel level, const char *fmt, ...)
+#ifdef __MINGW32__
+__attribute__((format(gnu_printf, 2, 3)));
+#else
+__attribute__((format(printf, 2, 3)));
+#endif
 #define msg_gerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* general errors */
 #define msg_perr(...)	print(MSG_ERROR, __VA_ARGS__)	/* programmer errors */
 #define msg_cerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* chip errors */
+#define msg_gwarn(...)	print(MSG_WARN, __VA_ARGS__)	/* general warnings */
+#define msg_pwarn(...)	print(MSG_WARN, __VA_ARGS__)	/* programmer warnings */
+#define msg_cwarn(...)	print(MSG_WARN, __VA_ARGS__)	/* chip warnings */
 #define msg_ginfo(...)	print(MSG_INFO, __VA_ARGS__)	/* general info */
 #define msg_pinfo(...)	print(MSG_INFO, __VA_ARGS__)	/* programmer info */
 #define msg_cinfo(...)	print(MSG_INFO, __VA_ARGS__)	/* chip info */
@@ -307,7 +327,9 @@ int print(enum msglevel level, const char *fmt, ...) __attribute__((format(print
 int register_include_arg(char *name);
 int process_include_args(void);
 int read_romlayout(char *name);
-int handle_romentries(struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents);
+int normalize_romentries(const struct flashctx *flash);
+int build_new_image(const struct flashctx *flash, uint8_t *oldcontents, uint8_t *newcontents);
+void layout_cleanup(void);
 
 /* spi.c */
 struct spi_command {
