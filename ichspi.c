@@ -32,11 +32,8 @@
  *
  */
 
-#include <stdio.h>
 #include <string.h>
-#include <stdint.h>
 #include <sys/mman.h>
-#include <pci/pci.h>
 #include "flash.h"
 #include "spi.h"
 
@@ -130,27 +127,23 @@ typedef struct _OPCODES {
 static OPCODES *curopcodes = NULL;
 
 /* HW access functions */
-static inline uint32_t REGREAD32(int X)
+static uint32_t REGREAD32(int X)
 {
-	volatile uint32_t regval;
-	regval = *(volatile uint32_t *)((uint8_t *) spibar + X);
-	return regval;
+	return mmio_readl(spibar + X);
 }
 
-static inline uint16_t REGREAD16(int X)
+static uint16_t REGREAD16(int X)
 {
-	volatile uint16_t regval;
-	regval = *(volatile uint16_t *)((uint8_t *) spibar + X);
-	return regval;
+	return mmio_readw(spibar + X);
 }
 
-#define REGWRITE32(X,Y) (*(uint32_t *)((uint8_t *)spibar+X)=Y)
-#define REGWRITE16(X,Y) (*(uint16_t *)((uint8_t *)spibar+X)=Y)
-#define REGWRITE8(X,Y)  (*(uint8_t *)((uint8_t *)spibar+X)=Y)
+#define REGWRITE32(X,Y) mmio_writel(Y, spibar+X)
+#define REGWRITE16(X,Y) mmio_writew(Y, spibar+X)
+#define REGWRITE8(X,Y)  mmio_writeb(Y, spibar+X)
 
 /* Common SPI functions */
-static inline int find_opcode(OPCODES *op, uint8_t opcode);
-static inline int find_preop(OPCODES *op, uint8_t preop);
+static int find_opcode(OPCODES *op, uint8_t opcode);
+static int find_preop(OPCODES *op, uint8_t preop);
 static int generate_opcodes(OPCODES * op);
 static int program_opcodes(OPCODES * op);
 static int run_opcode(OPCODE op, uint32_t offset,
@@ -195,7 +188,7 @@ OPCODES O_ST_M25P = {
 
 OPCODES O_EXISTING = {};
 
-static inline int find_opcode(OPCODES *op, uint8_t opcode)
+static int find_opcode(OPCODES *op, uint8_t opcode)
 {
 	int a;
 
@@ -207,7 +200,7 @@ static inline int find_opcode(OPCODES *op, uint8_t opcode)
 	return -1;
 }
 
-static inline int find_preop(OPCODES *op, uint8_t preop)
+static int find_preop(OPCODES *op, uint8_t preop)
 {
 	int a;
 
@@ -458,9 +451,9 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 	REGWRITE16(ICH7_REG_SPIC, temp16);
 
 	/* wait for cycle complete */
-	timeout = 1000 * 60;	// 60s is a looong timeout.
+	timeout = 100 * 1000 * 60;	// 60s is a looong timeout.
 	while (((REGREAD16(ICH7_REG_SPIS) & SPIS_CDS) == 0) && --timeout) {
-		myusec_delay(1000);
+		myusec_delay(10);
 	}
 	if (!timeout) {
 		printf_debug("timeout\n");
@@ -575,9 +568,9 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	REGWRITE32(ICH9_REG_SSFS, temp32);
 
 	/*wait for cycle complete */
-	timeout = 1000 * 60;	// 60s is a looong timeout.
+	timeout = 100 * 1000 * 60;	// 60s is a looong timeout.
 	while (((REGREAD32(ICH9_REG_SSFS) & SSFS_CDS) == 0) && --timeout) {
-		myusec_delay(1000);
+		myusec_delay(10);
 	}
 	if (!timeout) {
 		printf_debug("timeout\n");
@@ -707,7 +700,7 @@ int ich_spi_read(struct flashchip *flash, uint8_t * buf)
 	return rc;
 }
 
-int ich_spi_write(struct flashchip *flash, uint8_t * buf)
+int ich_spi_write_256(struct flashchip *flash, uint8_t * buf)
 {
 	int i, j, rc = 0;
 	int total_size = flash->total_size * 1024;
@@ -767,7 +760,7 @@ int ich_spi_command(unsigned int writecnt, unsigned int readcnt,
 	/* unknown / not programmed command */
 	if (opcode_index == -1) {
 		printf_debug("Invalid OPCODE 0x%02x\n", cmd);
-		return 1;
+		return SPI_INVALID_OPCODE;
 	}
 
 	opcode = &(curopcodes->opcode[opcode_index]);

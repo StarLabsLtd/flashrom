@@ -1,13 +1,17 @@
-.TH FLASHROM 8 "April 11, 2009"
+.TH FLASHROM 8 "May 21, 2009"
 .SH NAME
-flashrom \- read, write, and erase BIOS/ROM/flash chips
+flashrom \- detect, read, write, verify and erase flash chips
 .SH SYNOPSIS
-.B flashrom \fR[\fB\-rwvEVfLhR\fR] [\fB\-c\fR chipname] [\fB\-s\fR exclude_start] [\fB\-e\fR exclude_end]
-         [\fB-m\fR vendor:part] [\fB-l\fR file.layout] [\fB-i\fR image_name] [file]
+.B flashrom \fR[\fB\-EVfLhR\fR] [\fB\-r\fR file] [\fB\-w\fR file] [\fB\-v\fR file]
+         [\fB\-c\fR chipname] [\fB\-s\fR addr] [\fB\-e\fR addr] [\fB\-m\fR [vendor:]part]
+         [\fB\-l\fR file] [\fB\-i\fR image] [\fB\-p\fR programmer] [file]
 .SH DESCRIPTION
 .B flashrom
-is a utility for reading, writing, and erasing flash ROM chips.
-It's often used to flash BIOS/coreboot/firmware images.
+is a utility for detecting, reading, writing, verifying and erasing flash
+chips. It's often used to flash BIOS/EFI/coreboot/firmware images in-system
+using a supported mainboard, but it also supports flashing of network cards
+(NICs), SATA controller cards, and other external devices which can program
+flash chips.
 .PP
 It supports a wide range of DIP32, PLCC32, DIP8, SO8/SOIC8, TSOP32, and
 TSOP40 chips, which use various protocols such as LPC, FWH, parallel flash,
@@ -17,6 +21,10 @@ or SPI.
 .B http://coreboot.org
 for details on coreboot)
 .SH OPTIONS
+Please note that the command line interface for flashrom will change before
+flashrom 1.0. Do not use flashrom in scripts or other automated tools without
+checking that your flashrom version won't interpret options in a different way.
+.PP
 If no file is specified, then all that happens
 is that flash info is dumped and the flash chip is set to writable.
 .TP
@@ -44,15 +52,49 @@ Probe only for specified flash ROM chip.
 .TP
 .B "\-s, \-\-estart" <addr>
 Exclude start position (obsolete).
+.sp
+flashrom supports ROM layouts. This allows you to flash certain parts of
+the flash chip only. A ROM layout file looks like follows:
+.sp
+  00000000:00008fff gfxrom
+  00009000:0003ffff normal
+  00040000:0007ffff fallback
+.sp
+  i.e.:
+  startaddr:endaddr name
+.sp
+All addresses are offsets within the file, not absolute addresses!
+If you only want to update the normal image in a ROM you can say:
+.sp
+.B "  flashrom -w --layout rom.layout --image normal agami_aruma.rom"
+.sp
+To update normal and fallback but leave the VGA BIOS alone, say:
+.sp
+.B "  flashrom -w -l rom.layout -i normal \"
+.br
+.B "           -i fallback agami_aruma.rom"
+.sp
+Currently overlapping sections are not supported.
+.sp
+ROM layouts should replace the \-s and \-e option since they are more
+flexible and they should lead to a ROM update file format with the
+ROM layout and the ROM image in one file (cpio, zip or something?).
 .TP
 .B "\-e, \-\-eend" <addr> 
 Exclude end postion (obsolete).
 .TP
 .B "\-m, \-\-mainboard" <[vendor:]part>
-Override mainboard settings. This option is needed for some mainboards,
-see the
-.B "flashrom \-\-list\-supported"
-output for a list. The vendor is not required when the board name is unique.
+Override mainboard settings.
+.sp
+flashrom reads the coreboot table to determine the current mainboard. If no
+coreboot table could be read or if you want to override these values, you can
+specify \-m, e.g.:
+.sp
+.B "  flashrom -w --mainboard AGAMI:ARUMA agami_aruma.rom"
+.sp
+See the 'Supported mainboards' section in the output of 'flashrom \-L' for
+a list of boards which require the specification of the board name, if no
+coreboot table is found.
 .TP
 .B "\-f, \-\-force"
 Force write without checking whether the ROM image file is really meant
@@ -71,18 +113,45 @@ Only flash image
 from flash layout.
 .TP
 .B "\-L, \-\-list\-supported"
-List the ROM chips, chipsets, and mainboards supported by flashrom.
-The list of mainboards consists of those boards which need a special
-ROM write-enable function for flashrom to work.
+List the flash chips, chipsets, mainboards, and PCI card "programmers"
+supported by flashrom.
 .sp
-There are many other boards which will work out of the box, without such
-special support in flashrom. Some of the known-good/known-bad and tested ones
-are listed at
-.BR http://coreboot.org/Flashrom#Supported_mainboards ,
-but the list is not exhaustive, of course.
+There are many unlisted boards which will work out of the box, without
+special support in flashrom. Please let us know if you can verify that
+other boards work or do not work out of the box. For verification you have
+to test an ERASE and/or WRITE operation, so make sure you only do that
+if you have proper means to recover from failure!
+.TP
+.B "\-p, \-\-programmer <name>"
+Specify the programmer device. Currently supported are:
 .sp
-Please let us know if you can verify other boards to work or not work out
-of the box.
+.BR "* internal" " (default, for in-system flashing in the mainboard)"
+.sp
+.BR "* dummy" " (just prints all operations and accesses)"
+.sp
+.BR "* nic3com" " (for flash ROMs on 3COM network cards)"
+.sp
+.BR "* satasii" " (for flash ROMs on Silicon Image SATA/IDE controllers)"
+.sp
+If you have multiple supported PCI cards which can program flash chips
+(NICs, SATA/IDE controllers, etc.) in your system, you must use the
+.B "flashrom -p xxxx=bb:dd.f"
+syntax to explicitly select one of them, where
+.B xxxx
+is the name of the programmer
+.B bb
+is the PCI bus number,
+.B dd
+is the PCI device number, and
+.B f
+is the PCI function number of the desired NIC.
+.sp
+Example:
+.B "flashrom -p nic3com=05:04.0"
+.sp
+Currently the following programmers support this mechanism:
+.BR nic3com ,
+.BR satasii .
 .TP
 .B "\-h, \-\-help"
 Show a help text and exit.
@@ -118,6 +187,8 @@ Giampiero Giancipoli <gianci@email.it>
 Joe Bao <Zheng.Bao@amd.com>
 .br
 Luc Verhaegen <libv@skynet.be>
+.br
+Li-Ta Lo
 .br
 Markus Boas <ryven@ryven.de>
 .br

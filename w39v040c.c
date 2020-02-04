@@ -18,12 +18,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <stdio.h>
 #include "flash.h"
 
 int probe_w39v040c(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 	uint8_t id1, id2, lock;
 
 	chip_writeb(0xAA, bios + 0x5555);
@@ -61,14 +60,14 @@ int erase_w39v040c(struct flashchip *flash)
 {
 	int i;
 	unsigned int total_size = flash->total_size * 1024;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	for (i = 0; i < total_size; i += flash->page_size)
 		erase_sector_jedec(flash->virtual_memory, i);
 
 	for (i = 0; i < total_size; i++)
-		if (0xff != bios[i]) {
-			printf("ERASE FAILED at 0x%08x!  Expected=0xff, Read=0x%02x\n", i, bios[i]);
+		if (0xff != chip_readb(bios + i)) {
+			printf("ERASE FAILED at 0x%08x!  Expected=0xff, Read=0x%02x\n", i, chip_readb(bios + i));
 			return -1;
 		}
 
@@ -80,7 +79,7 @@ int write_w39v040c(struct flashchip *flash, uint8_t *buf)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	if (flash->erase(flash))
 		return -1;

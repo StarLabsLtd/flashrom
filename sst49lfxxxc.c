@@ -22,10 +22,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <unistd.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include "flash.h"
 
 #define SECTOR_ERASE		0x30
@@ -41,8 +38,8 @@
 #define	STATUS_ESS		(1 << 6)
 #define	STATUS_WSMS		(1 << 7)
 
-static __inline__ int write_lockbits_49lfxxxc(volatile uint8_t *bios, int size,
-					      unsigned char bits)
+static int write_lockbits_49lfxxxc(chipaddr bios, int size,
+				   unsigned char bits)
 {
 	int i, left = size;
 	unsigned long address;
@@ -68,8 +65,7 @@ static __inline__ int write_lockbits_49lfxxxc(volatile uint8_t *bios, int size,
 	return 0;
 }
 
-static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
-					    unsigned long address)
+static int erase_sector_49lfxxxc(chipaddr bios, unsigned long address)
 {
 	unsigned char status;
 
@@ -79,7 +75,7 @@ static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
 	do {
 		status = chip_readb(bios);
 		if (status & (STATUS_ESS | STATUS_BPS)) {
-			printf("sector erase FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)bios + address, status);
+			printf("sector erase FAILED at address=0x%08lx status=0x%01x\n", bios + address, status);
 			chip_writeb(CLEAR_STATUS, bios);
 			return (-1);
 		}
@@ -88,10 +84,8 @@ static __inline__ int erase_sector_49lfxxxc(volatile uint8_t *bios,
 	return 0;
 }
 
-static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
-					    uint8_t *src,
-					    volatile uint8_t *dst,
-					    unsigned int page_size)
+static int write_sector_49lfxxxc(chipaddr bios, uint8_t *src, chipaddr dst,
+				 unsigned int page_size)
 {
 	int i;
 	unsigned char status;
@@ -111,7 +105,7 @@ static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
 		do {
 			status = chip_readb(bios);
 			if (status & (STATUS_ESS | STATUS_BPS)) {
-				printf("sector write FAILED at address=0x%08lx status=0x%01x\n", (unsigned long)dst, status);
+				printf("sector write FAILED at address=0x%08lx status=0x%01x\n", dst, status);
 				chip_writeb(CLEAR_STATUS, bios);
 				return (-1);
 			}
@@ -123,7 +117,7 @@ static __inline__ int write_sector_49lfxxxc(volatile uint8_t *bios,
 
 int probe_49lfxxxc(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	uint8_t id1, id2;
 
@@ -147,8 +141,8 @@ int probe_49lfxxxc(struct flashchip *flash)
 
 int erase_49lfxxxc(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
-	volatile uint8_t *registers = flash->virtual_registers;
+	chipaddr bios = flash->virtual_memory;
+	chipaddr registers = flash->virtual_registers;
 	int i;
 	unsigned int total_size = flash->total_size * 1024;
 
@@ -167,7 +161,7 @@ int write_49lfxxxc(struct flashchip *flash, uint8_t *buf)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	write_lockbits_49lfxxxc(flash->virtual_registers, total_size, 0);
 	printf("Programming page: ");

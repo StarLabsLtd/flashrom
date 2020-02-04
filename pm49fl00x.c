@@ -20,12 +20,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <stdio.h>
 #include "flash.h"
 
 extern int exclude_start_page, exclude_end_page;
 
-void write_lockbits_49fl00x(volatile uint8_t *bios, int size,
+void write_lockbits_49fl00x(chipaddr bios, int size,
 			    unsigned char bits, int block_size)
 {
 	int i, left = size;
@@ -54,7 +53,7 @@ int erase_49fl00x(struct flashchip *flash)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	/* unprotected */
 	write_lockbits_49fl00x(flash->virtual_registers,
@@ -89,7 +88,7 @@ int write_49fl00x(struct flashchip *flash, uint8_t *buf)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	/* unprotected */
 	write_lockbits_49fl00x(flash->virtual_registers, total_size, 0,

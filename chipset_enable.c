@@ -25,14 +25,12 @@
 
 #define _LARGEFILE64_SOURCE
 
-#include <stdio.h>
-#include <pci/pci.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include "flash.h"
 
 unsigned long flashbase = 0;
@@ -218,7 +216,7 @@ static int enable_flash_vt8237s_spi(struct pci_dev *dev, const char *name)
 	spibar = physmap("VT8237S MMIO registers", mmio_base, 0x70);
 
 	printf_debug("0x6c: 0x%04x     (CLOCK/DEBUG)\n",
-		     *(uint16_t *) (spibar + 0x6c));
+		     mmio_readw(spibar + 0x6c));
 
 	flashbus = BUS_TYPE_VIA_SPI;
 	ich_init_opcodes();
@@ -248,14 +246,14 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	/* Map RCBA to virtual memory */
 	rcrb = physmap("ICH RCRB", tmp, 0x4000);
 
-	gcs = *(volatile uint32_t *)(rcrb + 0x3410);
+	gcs = mmio_readl(rcrb + 0x3410);
 	printf_debug("GCS = 0x%x: ", gcs);
 	printf_debug("BIOS Interface Lock-Down: %sabled, ",
 		     (gcs & 0x1) ? "en" : "dis");
 	bbs = (gcs >> 10) & 0x3;
 	printf_debug("BOOT BIOS Straps: 0x%x (%s)\n", bbs, straps_names[bbs]);
 
-	buc = *(volatile uint8_t *)(rcrb + 0x3414);
+	buc = mmio_readb(rcrb + 0x3414);
 	printf_debug("Top Swap : %s\n",
 		     (buc & 1) ? "enabled (A16 inverted)" : "not enabled");
 
@@ -295,44 +293,44 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	switch (flashbus) {
 	case BUS_TYPE_ICH7_SPI:
 		printf_debug("0x00: 0x%04x     (SPIS)\n",
-			     *(uint16_t *) (spibar + 0));
+			     mmio_readw(spibar + 0));
 		printf_debug("0x02: 0x%04x     (SPIC)\n",
-			     *(uint16_t *) (spibar + 2));
+			     mmio_readw(spibar + 2));
 		printf_debug("0x04: 0x%08x (SPIA)\n",
-			     *(uint32_t *) (spibar + 4));
+			     mmio_readl(spibar + 4));
 		for (i = 0; i < 8; i++) {
 			int offs;
 			offs = 8 + (i * 8);
 			printf_debug("0x%02x: 0x%08x (SPID%d)\n", offs,
-				     *(uint32_t *) (spibar + offs), i);
+				     mmio_readl(spibar + offs), i);
 			printf_debug("0x%02x: 0x%08x (SPID%d+4)\n", offs + 4,
-				     *(uint32_t *) (spibar + offs + 4), i);
+				     mmio_readl(spibar + offs + 4), i);
 		}
 		printf_debug("0x50: 0x%08x (BBAR)\n",
-			     *(uint32_t *) (spibar + 0x50));
+			     mmio_readl(spibar + 0x50));
 		printf_debug("0x54: 0x%04x     (PREOP)\n",
-			     *(uint16_t *) (spibar + 0x54));
+			     mmio_readw(spibar + 0x54));
 		printf_debug("0x56: 0x%04x     (OPTYPE)\n",
-			     *(uint16_t *) (spibar + 0x56));
+			     mmio_readw(spibar + 0x56));
 		printf_debug("0x58: 0x%08x (OPMENU)\n",
-			     *(uint32_t *) (spibar + 0x58));
+			     mmio_readl(spibar + 0x58));
 		printf_debug("0x5c: 0x%08x (OPMENU+4)\n",
-			     *(uint32_t *) (spibar + 0x5c));
+			     mmio_readl(spibar + 0x5c));
 		for (i = 0; i < 4; i++) {
 			int offs;
 			offs = 0x60 + (i * 4);
 			printf_debug("0x%02x: 0x%08x (PBR%d)\n", offs,
-				     *(uint32_t *) (spibar + offs), i);
+				     mmio_readl(spibar + offs), i);
 		}
 		printf_debug("\n");
-		if ((*(uint16_t *) spibar) & (1 << 15)) {
+		if (mmio_readw(spibar) & (1 << 15)) {
 			printf("WARNING: SPI Configuration Lockdown activated.\n");
 			ichspi_lock = 1;
 		}
 		ich_init_opcodes();
 		break;
 	case BUS_TYPE_ICH9_SPI:
-		tmp2 = *(uint16_t *) (spibar + 4);
+		tmp2 = mmio_readw(spibar + 4);
 		printf_debug("0x04: 0x%04x (HSFS)\n", tmp2);
 		printf_debug("FLOCKDN %i, ", (tmp2 >> 15 & 1));
 		printf_debug("FDV %i, ", (tmp2 >> 14) & 1);
@@ -343,7 +341,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		printf_debug("FCERR %i, ", (tmp2 >> 1) & 1);
 		printf_debug("FDONE %i\n", (tmp2 >> 0) & 1);
 
-		tmp = *(uint32_t *) (spibar + 0x50);
+		tmp = mmio_readl(spibar + 0x50);
 		printf_debug("0x50: 0x%08x (FRAP)\n", tmp);
 		printf_debug("BMWAG %i, ", (tmp >> 24) & 0xff);
 		printf_debug("BMRAG %i, ", (tmp >> 16) & 0xff);
@@ -351,39 +349,39 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		printf_debug("BRRA %i\n", (tmp >> 0) & 0xff);
 
 		printf_debug("0x54: 0x%08x (FREG0)\n",
-			     *(uint32_t *) (spibar + 0x54));
+			     mmio_readl(spibar + 0x54));
 		printf_debug("0x58: 0x%08x (FREG1)\n",
-			     *(uint32_t *) (spibar + 0x58));
+			     mmio_readl(spibar + 0x58));
 		printf_debug("0x5C: 0x%08x (FREG2)\n",
-			     *(uint32_t *) (spibar + 0x5C));
+			     mmio_readl(spibar + 0x5C));
 		printf_debug("0x60: 0x%08x (FREG3)\n",
-			     *(uint32_t *) (spibar + 0x60));
+			     mmio_readl(spibar + 0x60));
 		printf_debug("0x64: 0x%08x (FREG4)\n",
-			     *(uint32_t *) (spibar + 0x64));
+			     mmio_readl(spibar + 0x64));
 		printf_debug("0x74: 0x%08x (PR0)\n",
-			     *(uint32_t *) (spibar + 0x74));
+			     mmio_readl(spibar + 0x74));
 		printf_debug("0x78: 0x%08x (PR1)\n",
-			     *(uint32_t *) (spibar + 0x78));
+			     mmio_readl(spibar + 0x78));
 		printf_debug("0x7C: 0x%08x (PR2)\n",
-			     *(uint32_t *) (spibar + 0x7C));
+			     mmio_readl(spibar + 0x7C));
 		printf_debug("0x80: 0x%08x (PR3)\n",
-			     *(uint32_t *) (spibar + 0x80));
+			     mmio_readl(spibar + 0x80));
 		printf_debug("0x84: 0x%08x (PR4)\n",
-			     *(uint32_t *) (spibar + 0x84));
+			     mmio_readl(spibar + 0x84));
 		printf_debug("0x90: 0x%08x (SSFS, SSFC)\n",
-			     *(uint32_t *) (spibar + 0x90));
+			     mmio_readl(spibar + 0x90));
 		printf_debug("0x94: 0x%04x     (PREOP)\n",
-			     *(uint16_t *) (spibar + 0x94));
+			     mmio_readw(spibar + 0x94));
 		printf_debug("0x96: 0x%04x     (OPTYPE)\n",
-			     *(uint16_t *) (spibar + 0x96));
+			     mmio_readw(spibar + 0x96));
 		printf_debug("0x98: 0x%08x (OPMENU)\n",
-			     *(uint32_t *) (spibar + 0x98));
+			     mmio_readl(spibar + 0x98));
 		printf_debug("0x9C: 0x%08x (OPMENU+4)\n",
-			     *(uint32_t *) (spibar + 0x9C));
+			     mmio_readl(spibar + 0x9C));
 		printf_debug("0xA0: 0x%08x (BBAR)\n",
-			     *(uint32_t *) (spibar + 0xA0));
+			     mmio_readl(spibar + 0xA0));
 		printf_debug("0xB0: 0x%08x (FDOC)\n",
-			     *(uint32_t *) (spibar + 0xB0));
+			     mmio_readl(spibar + 0xB0));
 		if (tmp2 & (1 << 15)) {
 			printf("WARNING: SPI Configuration Lockdown activated.\n");
 			ichspi_lock = 1;
@@ -511,14 +509,14 @@ static int enable_flash_cs5536(struct pci_dev *dev, const char *name)
 	unsigned char buf[8];
 
 	fd_msr = open("/dev/cpu/0/msr", O_RDWR);
-	if (!fd_msr) {
-		perror("open msr");
+	if (fd_msr == -1) {
+		perror("open(/dev/cpu/0/msr)");
+		printf("Cannot operate on MSR. Did you run 'modprobe msr'?\n");
 		return -1;
 	}
 
 	if (lseek64(fd_msr, (off64_t) MSR_RCONF_DEFAULT, SEEK_SET) == -1) {
 		perror("lseek64");
-		printf("Cannot operate on MSR. Did you run 'modprobe msr'?\n");
 		close(fd_msr);
 		return -1;
 	}
@@ -658,30 +656,115 @@ static int enable_flash_amd8111(struct pci_dev *dev, const char *name)
 
 static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 {
-	uint32_t tmp, low_bits, num;
+	uint32_t tmp, prot;
 	uint8_t reg;
-
-	low_bits = tmp = pci_read_long(dev, 0xa0);
-	low_bits &= ~0xffffc000; /* for mmap aligning requirements */
-	low_bits &= 0xfffffff0;	/* remove low 4 bits */
-	tmp &= 0xffffc000;
-	printf_debug("SPI base address is at 0x%x\n", tmp + low_bits);
-
-	sb600_spibar = physmap("SB600 SPI registers", tmp, 0x4000);
-	sb600_spibar += low_bits;
+	struct pci_dev *smbus_dev;
+	int has_spi = 1;
 
 	/* Clear ROM protect 0-3. */
 	for (reg = 0x50; reg < 0x60; reg += 4) {
-		num = pci_read_long(dev, reg);
-		num &= 0xfffffffc;
-		pci_write_byte(dev, reg, num);
+		prot = pci_read_long(dev, reg);
+		/* No protection flags for this region?*/
+		if ((prot & 0x3) == 0)
+			continue;
+		printf_debug("SB600 %s%sprotected from %u to %u\n",
+			(prot & 0x1) ? "write " : "",
+			(prot & 0x2) ? "read " : "",
+			(prot & 0xfffffc00),
+			(prot & 0xfffffc00) + ((prot & 0x3ff) << 8));
+		prot &= 0xfffffffc;
+		pci_write_byte(dev, reg, prot);
+		prot = pci_read_long(dev, reg);
+		if (prot & 0x3)
+			printf("SB600 %s%sunprotect failed from %u to %u\n",
+				(prot & 0x1) ? "write " : "",
+				(prot & 0x2) ? "read " : "",
+				(prot & 0xfffffc00),
+				(prot & 0xfffffc00) + ((prot & 0x3ff) << 8));
 	}
 
-	flashbus = BUS_TYPE_SB600_SPI;
+	/* Read SPI_BaseAddr */
+	tmp = pci_read_long(dev, 0xa0);
+	tmp &= 0xfffffff0;	/* remove low 4 bits (reserved) */
+	printf_debug("SPI base address is at 0x%x\n", tmp);
 
-	/* Enable SPI ROM in SB600 PM register. */
+	/* If the BAR has address 0, it is unlikely SPI is used. */
+	if (!tmp)
+		has_spi = 0;
+
+	/* Physical memory can only be mapped at page (4k) boundaries */
+	sb600_spibar = physmap("SB600 SPI registers", tmp & 0xfffff000, 0x1000);
+	/* The low bits of the SPI base address are used as offset into the mapped page */
+	sb600_spibar += tmp & 0xfff;
+
+	/* Look for the SMBus device. */
+	smbus_dev = pci_dev_find(0x1002, 0x4385);
+
+	if (!smbus_dev) {
+		fprintf(stderr, "ERROR: SMBus device not found. Not enabling SPI.\n");
+		has_spi = 0;
+	} else {
+		/* Note about the bit tests below: If a bit is zero, the GPIO is SPI. */
+		/* GPIO11/SPI_DO and GPIO12/SPI_DI status */
+		reg = pci_read_byte(smbus_dev, 0xAB);
+		reg &= 0xC0;
+		printf_debug("GPIO11 used for %s\n", (reg & (1 << 6)) ? "GPIO" : "SPI_DO");
+		printf_debug("GPIO12 used for %s\n", (reg & (1 << 7)) ? "GPIO" : "SPI_DI");
+		if (reg != 0x00)
+			has_spi = 0;
+		/* GPIO31/SPI_HOLD and GPIO32/SPI_CS status */
+		reg = pci_read_byte(smbus_dev, 0x83);
+		reg &= 0xC0;
+		printf_debug("GPIO31 used for %s\n", (reg & (1 << 6)) ? "GPIO" : "SPI_HOLD");
+		printf_debug("GPIO32 used for %s\n", (reg & (1 << 7)) ? "GPIO" : "SPI_CS");
+		/* SPI_HOLD is not used on all boards, filter it out. */
+		if ((reg & 0x80) != 0x00)
+			has_spi = 0;
+		/* GPIO47/SPI_CLK status */
+		reg = pci_read_byte(smbus_dev, 0xA7);
+		reg &= 0x40;
+		printf_debug("GPIO47 used for %s\n", (reg & (1 << 6)) ? "GPIO" : "SPI_CLK");
+		if (reg != 0x00)
+			has_spi = 0;
+	}
+
+	if (has_spi)
+		flashbus = BUS_TYPE_SB600_SPI;
+
+	/* Read ROM strap override register. */
+	OUTB(0x8f, 0xcd6);
+	reg = INB(0xcd7);
+	reg &= 0x0e;
+	printf_debug("ROM strap override is %sactive", (reg & 0x02) ? "" : "not ");
+	if (reg & 0x02) {
+		switch ((reg & 0x0c) >> 2) {
+		case 0x00:
+			printf_debug(": LPC");
+			break;
+		case 0x01:
+			printf_debug(": PCI");
+			break;
+		case 0x02:
+			printf_debug(": FWH");
+			break;
+		case 0x03:
+			printf_debug(": SPI");
+			break;
+		}
+	}
+	printf_debug("\n");
+
+	/* Force enable SPI ROM in SB600 PM register.
+	 * If we enable SPI ROM here, we have to disable it after we leave.
+	 * But how can we know which ROM we are going to handle? So we have
+	 * to trade off. We only access LPC ROM if we boot via LPC ROM. And
+	 * only SPI ROM if we boot via SPI ROM. If you want to access SPI on
+	 * boards with LPC straps, you have to use the code below.
+	 */
+	/*
 	OUTB(0x8f, 0xcd6);
 	OUTB(0x0e, 0xcd7);
+	*/
 
 	return 0;
 }
@@ -717,18 +800,10 @@ static int enable_flash_ck804(struct pci_dev *dev, const char *name)
 static int enable_flash_sb400(struct pci_dev *dev, const char *name)
 {
 	uint8_t tmp;
-	struct pci_filter f;
 	struct pci_dev *smbusdev;
 
 	/* Look for the SMBus device. */
-	pci_filter_init((struct pci_access *)0, &f);
-	f.vendor = 0x1002;
-	f.device = 0x4372;
-
-	for (smbusdev = pacc->devices; smbusdev; smbusdev = smbusdev->next) {
-		if (pci_filter_match(&f, smbusdev))
-			break;
-	}
+	smbusdev = pci_dev_find(0x1002, 0x4372);
 
 	if (!smbusdev) {
 		fprintf(stderr, "ERROR: SMBus device not found. Aborting.\n");
@@ -823,7 +898,7 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 	 *    BOOTCS region (PARx[31:29] = 100b)e
 	 */
 	for (i = 0x88; i <= 0xc4; i += 4) {
-		parx = *(volatile uint32_t *)(mmcr + i);
+		parx = mmio_readl(mmcr + i);
 		if ((parx >> 29) == 4) {
 			bootcs_found = 1;
 			break; /* BOOTCS found */
@@ -850,100 +925,109 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 	return 0;
 }
 
-typedef struct penable {
-	uint16_t vendor, device;
-	const char *name;
-	int (*doit) (struct pci_dev *dev, const char *name);
-} FLASH_ENABLE;
+#define OK 0
+#define NT 1	/* Not tested */
 
-static const FLASH_ENABLE enables[] = {
-	{0x1039, 0x0630, "SiS630",		enable_flash_sis630},
-	{0x8086, 0x122e, "Intel PIIX",		enable_flash_piix4},
-	{0x8086, 0x1234, "Intel MPIIX",		enable_flash_piix4},
-	{0x8086, 0x7000, "Intel PIIX3",		enable_flash_piix4},
-	{0x8086, 0x7110, "Intel PIIX4/4E/4M",	enable_flash_piix4},
-	{0x8086, 0x7198, "Intel 440MX",		enable_flash_piix4},
-	{0x8086, 0x2410, "Intel ICH",		enable_flash_ich_4e},
-	{0x8086, 0x2420, "Intel ICH0",		enable_flash_ich_4e},
-	{0x8086, 0x2440, "Intel ICH2",		enable_flash_ich_4e},
-	{0x8086, 0x244c, "Intel ICH2-M",	enable_flash_ich_4e},
-	{0x8086, 0x2480, "Intel ICH3-S",	enable_flash_ich_4e},
-	{0x8086, 0x248c, "Intel ICH3-M",	enable_flash_ich_4e},
-	{0x8086, 0x24c0, "Intel ICH4/ICH4-L",	enable_flash_ich_4e},
-	{0x8086, 0x24cc, "Intel ICH4-M",	enable_flash_ich_4e},
-	{0x8086, 0x24d0, "Intel ICH5/ICH5R",	enable_flash_ich_4e},
-	{0x8086, 0x25a1, "Intel 6300ESB",	enable_flash_ich_4e},
-	{0x8086, 0x2670, "Intel 631xESB/632xESB/3100",    enable_flash_ich_dc},
-	{0x8086, 0x2640, "Intel ICH6/ICH6R",	enable_flash_ich_dc},
-	{0x8086, 0x2641, "Intel ICH6-M",	enable_flash_ich_dc},
-	{0x8086, 0x5031, "Intel EP80579",	enable_flash_ich7},
-	{0x8086, 0x27b0, "Intel ICH7DH",	enable_flash_ich7},
-	{0x8086, 0x27b8, "Intel ICH7/ICH7R",	enable_flash_ich7},
-	{0x8086, 0x27b9, "Intel ICH7M",		enable_flash_ich7},
-	{0x8086, 0x27bd, "Intel ICH7MDH",	enable_flash_ich7},
-	{0x8086, 0x2810, "Intel ICH8/ICH8R",	enable_flash_ich8},
-	{0x8086, 0x2811, "Intel ICH8M-E",	enable_flash_ich8},
-	{0x8086, 0x2812, "Intel ICH8DH",	enable_flash_ich8},
-	{0x8086, 0x2814, "Intel ICH8DO",	enable_flash_ich8},
-	{0x8086, 0x2815, "Intel ICH8M",		enable_flash_ich8},
-	{0x8086, 0x2912, "Intel ICH9DH",	enable_flash_ich9},
-	{0x8086, 0x2914, "Intel ICH9DO",	enable_flash_ich9},
-	{0x8086, 0x2916, "Intel ICH9R",		enable_flash_ich9},
-	{0x8086, 0x2917, "Intel ICH9M-E",	enable_flash_ich9},
-	{0x8086, 0x2918, "Intel ICH9",		enable_flash_ich9},
-	{0x8086, 0x2919, "Intel ICH9M",		enable_flash_ich9},
-	{0x8086, 0x3a14, "Intel ICH10DO",	enable_flash_ich10},
-	{0x8086, 0x3a16, "Intel ICH10R",	enable_flash_ich10},
-	{0x8086, 0x3a18, "Intel ICH10",		enable_flash_ich10},
-	{0x8086, 0x3a1a, "Intel ICH10D",	enable_flash_ich10},
-	{0x1106, 0x8231, "VIA VT8231",		enable_flash_vt823x},
-	{0x1106, 0x3177, "VIA VT8235",		enable_flash_vt823x},
-	{0x1106, 0x3227, "VIA VT8237",		enable_flash_vt823x},
-	{0x1106, 0x3337, "VIA VT8237A",		enable_flash_vt823x},
-	{0x1106, 0x3372, "VIA VT8237S",		enable_flash_vt8237s_spi},
-	{0x1106, 0x8324, "VIA CX700",		enable_flash_vt823x},
-	{0x1106, 0x0586, "VIA VT82C586A/B",	enable_flash_amd8111},
-	{0x1106, 0x0686, "VIA VT82C686A/B",	enable_flash_amd8111},
-	{0x1078, 0x0100, "AMD CS5530(A)",	enable_flash_cs5530},
-	{0x100b, 0x0510, "AMD SC1100",		enable_flash_sc1100},
-	{0x1039, 0x0008, "SiS5595",		enable_flash_sis5595},
-	{0x1022, 0x2080, "AMD CS5536",		enable_flash_cs5536},
-	{0x1022, 0x7468, "AMD8111",		enable_flash_amd8111},
-	{0x1002, 0x438D, "ATI(AMD) SB600",	enable_flash_sb600},
-	{0x1002, 0x439d, "ATI(AMD) SB700",	enable_flash_sb600},
-	{0x10B9, 0x1533, "ALi M1533",		enable_flash_ali_m1533},
-	{0x10de, 0x0050, "NVIDIA CK804",	enable_flash_ck804}, /* LPC */
-	{0x10de, 0x0051, "NVIDIA CK804",	enable_flash_ck804}, /* Pro */
+/* Please keep this list alphabetically sorted by vendor/device. */
+const struct penable chipset_enables[] = {
+	{0x10B9, 0x1533, OK, "ALi", "M1533",		enable_flash_ali_m1533},
+	{0x1022, 0x7440, OK, "AMD", "AMD-768",		enable_flash_amd8111},
+	{0x1022, 0x7468, OK, "AMD", "AMD8111",		enable_flash_amd8111},
+	{0x1078, 0x0100, OK, "AMD", "CS5530(A)",	enable_flash_cs5530},
+	{0x1022, 0x2080, OK, "AMD", "CS5536",		enable_flash_cs5536},
+	{0x1022, 0x3000, OK, "AMD", "Elan SC520",	get_flashbase_sc520},
+	{0x1002, 0x438D, OK, "AMD", "SB600",		enable_flash_sb600},
+	{0x1002, 0x439d, OK, "AMD", "SB700",		enable_flash_sb600},
+	{0x100b, 0x0510, NT, "AMD", "SC1100",		enable_flash_sc1100},
+	{0x1002, 0x4377, OK, "ATI", "SB400",		enable_flash_sb400},
+	{0x1166, 0x0205, OK, "Broadcom", "HT-1000",	enable_flash_ht1000},
+	{0x8086, 0x7198, OK, "Intel", "440MX",		enable_flash_piix4},
+	{0x8086, 0x25a1, OK, "Intel", "6300ESB",	enable_flash_ich_4e},
+	{0x8086, 0x2670, OK, "Intel", "631xESB/632xESB/3100", enable_flash_ich_dc},
+	{0x8086, 0x5031, OK, "Intel", "EP80579",	enable_flash_ich7},
+	{0x8086, 0x2420, OK, "Intel", "ICH0",		enable_flash_ich_4e},
+	{0x8086, 0x3a18, OK, "Intel", "ICH10",		enable_flash_ich10},
+	{0x8086, 0x3a1a, OK, "Intel", "ICH10D",		enable_flash_ich10},
+	{0x8086, 0x3a14, OK, "Intel", "ICH10DO",	enable_flash_ich10},
+	{0x8086, 0x3a16, OK, "Intel", "ICH10R",		enable_flash_ich10},
+	{0x8086, 0x2440, OK, "Intel", "ICH2",		enable_flash_ich_4e},
+	{0x8086, 0x244c, OK, "Intel", "ICH2-M",		enable_flash_ich_4e},
+	{0x8086, 0x248c, OK, "Intel", "ICH3-M",		enable_flash_ich_4e},
+	{0x8086, 0x2480, OK, "Intel", "ICH3-S",		enable_flash_ich_4e},
+	{0x8086, 0x24c0, OK, "Intel", "ICH4/ICH4-L",	enable_flash_ich_4e},
+	{0x8086, 0x24cc, OK, "Intel", "ICH4-M",		enable_flash_ich_4e},
+	{0x8086, 0x24d0, OK, "Intel", "ICH5/ICH5R",	enable_flash_ich_4e},
+	{0x8086, 0x2640, OK, "Intel", "ICH6/ICH6R",	enable_flash_ich_dc},
+	{0x8086, 0x2641, OK, "Intel", "ICH6-M",		enable_flash_ich_dc},
+	{0x8086, 0x27b0, OK, "Intel", "ICH7DH",		enable_flash_ich7},
+	{0x8086, 0x27b8, OK, "Intel", "ICH7/ICH7R",	enable_flash_ich7},
+	{0x8086, 0x27b9, OK, "Intel", "ICH7M",		enable_flash_ich7},
+	{0x8086, 0x27bd, OK, "Intel", "ICH7MDH",	enable_flash_ich7},
+	{0x8086, 0x2410, OK, "Intel", "ICH",		enable_flash_ich_4e},
+	{0x8086, 0x2812, OK, "Intel", "ICH8DH",		enable_flash_ich8},
+	{0x8086, 0x2814, OK, "Intel", "ICH8DO",		enable_flash_ich8},
+	{0x8086, 0x2810, OK, "Intel", "ICH8/ICH8R",	enable_flash_ich8},
+	{0x8086, 0x2815, OK, "Intel", "ICH8M",		enable_flash_ich8},
+	{0x8086, 0x2811, OK, "Intel", "ICH8M-E",	enable_flash_ich8},
+	{0x8086, 0x2918, OK, "Intel", "ICH9",		enable_flash_ich9},
+	{0x8086, 0x2912, OK, "Intel", "ICH9DH",		enable_flash_ich9},
+	{0x8086, 0x2914, OK, "Intel", "ICH9DO",		enable_flash_ich9},
+	{0x8086, 0x2919, OK, "Intel", "ICH9M",		enable_flash_ich9},
+	{0x8086, 0x2917, OK, "Intel", "ICH9M-E",	enable_flash_ich9},
+	{0x8086, 0x2916, OK, "Intel", "ICH9R",		enable_flash_ich9},
+	{0x8086, 0x1234, NT, "Intel", "MPIIX",		enable_flash_piix4},
+	{0x8086, 0x7000, OK, "Intel", "PIIX3",		enable_flash_piix4},
+	{0x8086, 0x7110, OK, "Intel", "PIIX4/4E/4M",	enable_flash_piix4},
+	{0x8086, 0x122e, OK, "Intel", "PIIX",		enable_flash_piix4},
+	{0x10de, 0x0050, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* LPC */
+	{0x10de, 0x0051, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* Pro */
 	/* Slave, should not be here, to fix known bug for A01. */
-	{0x10de, 0x00d3, "NVIDIA CK804",	enable_flash_ck804},
-	{0x10de, 0x0260, "NVIDIA MCP51",	enable_flash_ck804},
-	{0x10de, 0x0261, "NVIDIA MCP51",	enable_flash_ck804},
-	{0x10de, 0x0262, "NVIDIA MCP51",	enable_flash_ck804},
-	{0x10de, 0x0263, "NVIDIA MCP51",	enable_flash_ck804},
-	{0x10de, 0x0360, "NVIDIA MCP55",	enable_flash_mcp55}, /* M57SLI*/
-	{0x10de, 0x0361, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0362, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0363, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0364, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0365, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0366, "NVIDIA MCP55",	enable_flash_mcp55}, /* LPC */
-	{0x10de, 0x0367, "NVIDIA MCP55",	enable_flash_mcp55}, /* Pro */
-	{0x10de, 0x0548, "NVIDIA MCP67",	enable_flash_mcp55},
-	{0x1002, 0x4377, "ATI SB400",		enable_flash_sb400},
-	{0x1166, 0x0205, "Broadcom HT-1000",	enable_flash_ht1000},
-	{0x1022, 0x3000, "AMD Elan SC520",	get_flashbase_sc520},
-	{0x1022, 0x7440, "AMD AMD-768",         enable_flash_amd8111},
+	{0x10de, 0x00d3, OK, "NVIDIA", "CK804",		enable_flash_ck804},
+	{0x10de, 0x0260, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
+	{0x10de, 0x0261, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
+	{0x10de, 0x0262, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
+	{0x10de, 0x0263, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
+	{0x10de, 0x0360, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* M57SLI*/
+	{0x10de, 0x0361, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0362, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0363, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0364, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0365, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0366, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* LPC */
+	{0x10de, 0x0367, OK, "NVIDIA", "MCP55",		enable_flash_mcp55}, /* Pro */
+	{0x10de, 0x0548, OK, "NVIDIA", "MCP67",		enable_flash_mcp55},
+	{0x1039, 0x0008, OK, "SiS", "SiS5595",		enable_flash_sis5595},
+	{0x1039, 0x0630, NT, "SiS", "SiS630",		enable_flash_sis630},
+	{0x1106, 0x8324, OK, "VIA", "CX700",		enable_flash_vt823x},
+	{0x1106, 0x8231, NT, "VIA", "VT8231",		enable_flash_vt823x},
+	{0x1106, 0x3177, OK, "VIA", "VT8235",		enable_flash_vt823x},
+	{0x1106, 0x3227, OK, "VIA", "VT8237",		enable_flash_vt823x},
+	{0x1106, 0x3337, OK, "VIA", "VT8237A",		enable_flash_vt823x},
+	{0x1106, 0x3372, OK, "VIA", "VT8237S",		enable_flash_vt8237s_spi},
+	{0x1106, 0x0586, OK, "VIA", "VT82C586A/B",	enable_flash_amd8111},
+	{0x1106, 0x0686, NT, "VIA", "VT82C686A/B",	enable_flash_amd8111},
+
+	{},
 };
 
 void print_supported_chipsets(void)
 {
-	int i;
+	int i, j;
+	const struct penable *c = chipset_enables;
 
-	printf("\nSupported chipsets:\n\n");
+	printf("\nSupported chipsets:\n\nVendor:                  Chipset:"
+	       "                 PCI IDs:\n\n");
 
-	for (i = 0; i < ARRAY_SIZE(enables); i++)
-		printf("%s (%04x:%04x)\n", enables[i].name,
-		       enables[i].vendor, enables[i].device);
+	for (i = 0; c[i].vendor_name != NULL; i++) {
+		printf("%s", c[i].vendor_name);
+		for (j = 0; j < 25 - strlen(c[i].vendor_name); j++)
+			printf(" ");
+		printf("%s", c[i].device_name);
+		for (j = 0; j < 25 - strlen(c[i].device_name); j++)
+			printf(" ");
+		printf("%04x:%04x%s\n", c[i].vendor_id, c[i].device_id,
+		       (c[i].status == OK) ? "" : " (untested)");
+	}
 }
 
 int chipset_flash_enable(void)
@@ -953,17 +1037,20 @@ int chipset_flash_enable(void)
 	int i;
 
 	/* Now let's try to find the chipset we have... */
-	for (i = 0; i < ARRAY_SIZE(enables); i++) {
-		dev = pci_dev_find(enables[i].vendor, enables[i].device);
+	for (i = 0; chipset_enables[i].vendor_name != NULL; i++) {
+		dev = pci_dev_find(chipset_enables[i].vendor_id,
+				   chipset_enables[i].device_id);
 		if (dev)
 			break;
 	}
 
 	if (dev) {
-		printf("Found chipset \"%s\", enabling flash write... ",
-		       enables[i].name);
+		printf("Found chipset \"%s %s\", enabling flash write... ",
+		       chipset_enables[i].vendor_name,
+		       chipset_enables[i].device_name);
 
-		ret = enables[i].doit(dev, enables[i].name);
+		ret = chipset_enables[i].doit(dev,
+					      chipset_enables[i].device_name);
 		if (ret)
 			printf("FAILED!\n");
 		else

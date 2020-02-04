@@ -18,13 +18,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <stdio.h>
-#include <stdint.h>
 #include "flash.h"
 
 int probe_29f002(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 	uint8_t id1, id2;
 
 	chip_writeb(0xAA, bios + 0x5555);
@@ -47,7 +45,7 @@ int probe_29f002(struct flashchip *flash)
 
 int erase_29f002(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virtual_memory;
+	chipaddr bios = flash->virtual_memory;
 
 	chip_writeb(0xF0, bios + 0x555);
 	chip_writeb(0xAA, bios + 0x555);
@@ -80,8 +78,8 @@ int write_29f002(struct flashchip *flash, uint8_t *buf)
 {
 	int i;
 	int total_size = flash->total_size * 1024;
-	volatile uint8_t *bios = flash->virtual_memory;
-	volatile uint8_t *dst = bios;
+	chipaddr bios = flash->virtual_memory;
+	chipaddr dst = bios;
 
 	chip_writeb(0xF0, bios);
 	myusec_delay(10);
