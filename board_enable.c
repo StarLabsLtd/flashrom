@@ -334,14 +334,14 @@ static int w83627hf_gpio25_raise_2e(void)
 }
 
 /*
- * Winbond W83627EHF: Raise GPIO24.
+ * Winbond W83627EHF: Raise GPIO22.
  *
  * Suited for:
  *  - ASUS A8N-VM CSM: AMD Socket 939 + GeForce 6150 (C51) + MCP51
  */
-static int w83627ehf_gpio24_raise_2e(void)
+static int w83627ehf_gpio22_raise_2e(void)
 {
-	return winbond_gpio_set(0x2e, WINBOND_W83627EHF_ID, 24, 1);
+	return winbond_gpio_set(0x2e, WINBOND_W83627EHF_ID, 22, 1);
 }
 
 /*
@@ -391,6 +391,7 @@ static void w836xx_memw_enable(uint16_t port)
  *  - MSI MS-6561 (745 Ultra): SiS 745 + W83697HF
  *  - MSI MS-6787 (P4MAM-V/P4MAM-L): VIA P4M266 + VT8235
  *  - ASRock K7S41: SiS 741 + SiS 963 + W83697HF
+ *  - ASRock K7S41GX: SiS 741GX + SiS 963L + W83697HF
  */
 static int w836xx_memw_enable_2e(void)
 {
@@ -985,6 +986,15 @@ static int nvidia_mcp_gpio8_raise(void)
 
 /*
  * Suited for:
+ *  - GIGABYTE GA-K8NS Pro-939: Socket 939 + NVIDIA nForce3  + CK8
+ */
+static int nvidia_mcp_gpio0a_raise(void)
+{
+	return nvidia_mcp_gpio_set(0x0a, 1);
+}
+
+/*
+ * Suited for:
  *  - MSI K8N Neo2 Platinum: Socket 939 + nForce3 Ultra + CK8
  */
 static int nvidia_mcp_gpio0c_raise(void)
@@ -1465,15 +1475,6 @@ static int intel_ich_gpio18_raise(void)
 
 /*
  * Suited for:
- *  - ASUS A8Jm (laptop): Intel 945 + ICH7
- */
-static int intel_ich_gpio34_raise(void)
-{
-	return intel_ich_gpio_set(34, 1);
-}
-
-/*
- * Suited for:
  *  - MSI MS-7046: LGA775 + 915P + ICH6
  */
 static int intel_ich_gpio19_raise(void)
@@ -1507,6 +1508,24 @@ static int intel_ich_gpio21_raise(void)
 static int intel_ich_gpio22_raise(void)
 {
 	return intel_ich_gpio_set(22, 1);
+}
+
+/*
+ * Suited for:
+ *  - ASUS A8Jm (laptop): Intel 945 + ICH7
+ */
+static int intel_ich_gpio34_raise(void)
+{
+	return intel_ich_gpio_set(34, 1);
+}
+
+/*
+ * Suited for:
+ *  - ASUS M6Ne (laptop): socket 479M (guessed) + Intel 855PM + ICH4-M
+ */
+static int intel_ich_gpio43_raise(void)
+{
+	return intel_ich_gpio_set(43, 1);
 }
 
 /*
@@ -1571,7 +1590,9 @@ static int intel_ich_gpio26_raise(void)
 /*
  * Suited for:
  *  - P4SD-LA (HP OEM): i865 + ICH5
+ *  - GIGABYTE GA-8IP775: 865P + ICH5
  *  - GIGABYTE GA-8PE667 Ultra 2: socket 478 + i845PE + ICH4
+ *  - MSI MS-6788-40 (aka 848P Neo-V)
  */
 static int intel_ich_gpio32_raise(void)
 {
@@ -1704,12 +1725,13 @@ static int via_apollo_gpo0_lower(void)
 }
 
 /*
- * Enable some GPIO pin on SiS southbridge.
+ * Enable some GPIO pin on SiS southbridge and enables SIO flash writes.
  *
  * Suited for:
  *  - MSI 651M-L: SiS651 / SiS962
+ *  - GIGABYTE GA-8SIMLH
  */
-static int board_msi_651ml(void)
+static int sis_gpio0_raise_and_w836xx_memw(void)
 {
 	struct pci_dev *dev;
 	uint16_t base, temp;
@@ -1720,7 +1742,6 @@ static int board_msi_651ml(void)
 		return 1;
 	}
 
-	/* Registers 68 and 64 seem like bitmaps. */
 	base = pci_read_word(dev, 0x74);
 	temp = INW(base + 0x68);
 	temp &= ~(1 << 0);		/* Make pin output? */
@@ -1969,6 +1990,7 @@ const struct board_pciid_enable board_pciid_enables[] = {
 	{0x1022, 0x2090,      0,      0,  0x1022, 0x2080,      0,      0, NULL,        "artecgroup", "dbe62", P3, "Artec Group", "DBE62",                 0,   OK, board_artecgroup_dbe6x},
 	{0x8086, 0x277c, 0xa0a0, 0x060b,  0x8086, 0x27da, 0xa0a0, 0x060b, NULL,         NULL, NULL,           P3, "AOpen",       "i975Xa-YDG",            0,   OK, board_aopen_i975xa_ydg},
 	{0x1039, 0x0741, 0x1849, 0x0741,  0x1039, 0x5513, 0x1849, 0x5513, "^K7S41 $",   NULL, NULL,           P3, "ASRock",      "K7S41",                 0,   OK, w836xx_memw_enable_2e},
+	{0x1039, 0x0741, 0x1849, 0x0741,  0x1039, 0x5513, 0x1849, 0x5513, "^K7S41GX$",  NULL, NULL,           P3, "ASRock",      "K7S41GX",               0,   OK, w836xx_memw_enable_2e},
 	{0x8086, 0x24D4, 0x1849, 0x24D0,  0x8086, 0x24D5, 0x1849, 0x9739, NULL,         NULL, NULL,           P3, "ASRock",      "P4i65GV",               0,   OK, intel_ich_gpio23_raise},
 	{0x8086, 0x2570, 0x1849, 0x2570,  0x8086, 0x24d3, 0x1849, 0x24d0, NULL,         NULL, NULL,           P3, "ASRock",      "775i65G",               0,   OK, intel_ich_gpio23_raise},
 	{0x1106, 0x3189, 0x1043, 0x807F,  0x1106, 0x3065, 0x1043, 0x80ED, NULL,         NULL, NULL,           P3, "ASUS",        "A7V600-X",              0,   OK, it8712f_gpio3_1_raise},
@@ -1979,10 +2001,11 @@ const struct board_pciid_enable board_pciid_enables[] = {
 	{0x1002, 0x4372, 0x103c, 0x2a26,  0x1002, 0x4377, 0x103c, 0x2a26, NULL,         NULL, NULL,           P3, "ASUS",        "A8AE-LE",               0,   OK, amd_sbxxx_gpio9_raise},
 	{0x8086, 0x27A0, 0x1043, 0x1287,  0x8086, 0x27DF, 0x1043, 0x1287, "^A8J",       NULL, NULL,           P3, "ASUS",        "A8Jm",                  0,   NT, intel_ich_gpio34_raise},
 	{0x10DE, 0x0260, 0x103c, 0x2a3e,  0x10DE, 0x0264, 0x103c, 0x2a3e, "NAGAMI2L",   NULL, NULL,           P3, "ASUS",        "A8N-LA (Nagami-GL8E)",  0,   OK, nvidia_mcp_gpio0_raise},
-	{0x10DE, 0x005E, 0x1043, 0x815A,  0x10DE, 0x0054, 0x1043, 0x815A, NULL,         NULL, NULL,           P3, "ASUS",        "A8N",                   0,   NT, board_shuttle_fn25}, /* TODO: This should probably be A8N-SLI Deluxe, see http://www.coreboot.org/pipermail/flashrom/2009-November/000878.html. */
-	{0x10de, 0x0264, 0x1043, 0x81bc,  0x10de, 0x02f0, 0x1043, 0x81cd, NULL,         NULL, NULL,           P3, "ASUS",        "A8N-VM CSM",            0,   NT, w83627ehf_gpio24_raise_2e},
+	{0x10DE, 0x005E, 0x1043, 0x815A,  0x10DE, 0x0054, 0x1043, 0x815A, "^A8N-SLI",   NULL, NULL,           P3, "ASUS",        "A8N-SLI Deluxe",        0,   NT, board_shuttle_fn25},
+	{0x10de, 0x0264, 0x1043, 0x81bc,  0x10de, 0x02f0, 0x1043, 0x81cd, NULL,         NULL, NULL,           P3, "ASUS",        "A8N-VM CSM",            0,   OK, w83627ehf_gpio22_raise_2e},
 	{0x10DE, 0x0264, 0x1043, 0x81C0,  0x10DE, 0x0260, 0x1043, 0x81C0, NULL,         NULL, NULL,           P3, "ASUS",        "M2NBP-VM CSM",          0,   OK, nvidia_mcp_gpio0_raise},
 	{0x1106, 0x1336, 0x1043, 0x80ed,  0x1106, 0x3288, 0x1043, 0x8249, NULL,         NULL, NULL,           P3, "ASUS",        "M2V-MX",                0,   OK, via_vt823x_gpio5_raise},
+	{0x8086, 0x24cc,      0,      0,  0x8086, 0x24c3, 0x1043, 0x1869, "^M6Ne$",     NULL, NULL,           P3, "ASUS",        "M6Ne",                  0,   NT, intel_ich_gpio43_raise},
 	{0x8086, 0x7190,      0,      0,  0x8086, 0x7110,      0,      0, "^P2B-N$",    NULL, NULL,           P3, "ASUS",        "P2B-N",                 0,   OK, intel_piix4_gpo18_lower},
 	{0x8086, 0x1A30, 0x1043, 0x8025,  0x8086, 0x244B, 0x104D, 0x80F0, NULL,         NULL, NULL,           P3, "ASUS",        "P4B266-LM",             0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x1a30, 0x1043, 0x8070,  0x8086, 0x244b, 0x1043, 0x8028, NULL,         NULL, NULL,           P3, "ASUS",        "P4B266",                0,   OK, intel_ich_gpio22_raise},
@@ -2004,22 +2027,25 @@ const struct board_pciid_enable board_pciid_enables[] = {
 	{0x10de, 0x03ea, 0x1019, 0x2602,  0x10de, 0x03e0, 0x1019, 0x2602, NULL,         NULL, NULL,           P3, "Elitegroup",  "GeForce6100SM-M",       0,   OK, board_ecs_geforce6100sm_m},
 	{0x1106, 0x3038, 0x1019, 0x0996,  0x1106, 0x3177, 0x1019, 0x0996, NULL,         NULL, NULL,           P3, "Elitegroup",  "K7VTA3",                256, OK, NULL},
 	{0x1106, 0x3177, 0x1106, 0x3177,  0x1106, 0x3059, 0x1695, 0x3005, NULL,         NULL, NULL,           P3, "EPoX",        "EP-8K5A2",              0,   OK, w836xx_memw_enable_2e},
-	{0x10DE, 0x005E, 0x1695, 0x1010,  0x10DE, 0x0050, 0x1695, 0x1010, NULL,         NULL, NULL,           P3, "EPoX",        "EP-8NPA7I",             0,   OK, nvidia_mcp_gpio4_raise},
+	{0x10DE, 0x005E, 0x1695, 0x1010,  0x10DE, 0x0050, 0x1695, 0x1010, "8NPA7I",     NULL, NULL,           P3, "EPoX",        "EP-8NPA7I",             0,   NT, nvidia_mcp_gpio4_raise}, /* needs http://patchwork.coreboot.org/patch/2125/ */
 	{0x10EC, 0x8139, 0x1695, 0x9001,  0x11C1, 0x5811, 0x1695, 0x9015, NULL,         NULL, NULL,           P3, "EPoX",        "EP-8RDA3+",             0,   OK, nvidia_mcp_gpio31_raise},
 	{0x8086, 0x7110,      0,      0,  0x8086, 0x7190,      0,      0, NULL,         "epox", "ep-bx3",     P3, "EPoX",        "EP-BX3",                0,   NT, intel_piix4_gpo22_raise},
 	{0x10de, 0x02f0, 0x105b, 0x0d01,  0x10de, 0x0264, 0x105b, 0x0d01, NULL,         NULL, NULL,           P3, "Foxconn",     "6150K8MD-8EKRSH",       0,   NT, nvidia_mcp_gpio2_raise},
 	{0x8086, 0x2443, 0x8086, 0x2442,  0x8086, 0x1130, 0x8086, 0x1130, "^6IEM ",     NULL, NULL,           P3, "GIGABYTE",    "GA-6IEM",               0,   NT, intel_ich_gpio25_raise},
 	{0x1106, 0x0686, 0x1106, 0x0686,  0x1106, 0x3058, 0x1458, 0xa000, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-7ZM",                512, OK, NULL},
+	{0x8086, 0x2570, 0x1458, 0x2570,  0x8086, 0x24d0,      0,      0, "^8IP775/-G$",NULL, NULL,           P3, "GIGABYTE",    "GA-8IP775",             0,   OK, intel_ich_gpio32_raise},
 	{0x8086, 0x244b, 0x8086, 0x2442,  0x8086, 0x2445, 0x1458, 0xa002, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-8IRML",              0,   OK, intel_ich_gpio25_raise},
 	{0x8086, 0x24c3, 0x1458, 0x24c2,  0x8086, 0x24cd, 0x1458, 0x5004, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-8PE667 Ultra 2",     0,   OK, intel_ich_gpio32_raise},
+	{0x1039, 0x0651, 0x1039, 0x0651,  0x1039, 0x7002, 0x1458, 0x5004, "^GA-8SIMLH$",NULL, NULL,           P3, "GIGABYTE",    "GA-8SIMLH",             0,   OK, sis_gpio0_raise_and_w836xx_memw},
 	{0x10DE, 0x02F1, 0x1458, 0x5000,  0x10DE, 0x0261, 0x1458, 0x5001, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-K8N51GMF",           0,   OK, nvidia_mcp_gpio3b_raise},
 	{0x10DE, 0x026C, 0x1458, 0xA102,  0x10DE, 0x0260, 0x1458, 0x5001, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-K8N51GMF-9",         0,   OK, nvidia_mcp_gpio3b_raise},
+	{0x10de, 0x00e4, 0x1458, 0x0c11,  0x10de, 0x00e0, 0x1458, 0x0c11, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-K8NS Pro-939",       0,   NT, nvidia_mcp_gpio0a_raise},
 	{0x10DE, 0x0050, 0x1458, 0x0C11,  0x10DE, 0x005e, 0x1458, 0x5000, NULL,         NULL, NULL,           P3, "GIGABYTE",    "GA-K8N-SLI",            0,   OK, nvidia_mcp_gpio21_raise},
-	{0x8086, 0x2415, 0x103c, 0x1250,  0x10b7, 0x9200, 0x103c, 0x1247, NULL,         NULL, NULL,           P3, "HP",          "e-Vectra P2706T",       0,   OK, board_hp_p2706t}, 
+	{0x8086, 0x2415, 0x103c, 0x1250,  0x10b7, 0x9200, 0x103c, 0x1247, NULL,         NULL, NULL,           P3, "HP",          "e-Vectra P2706T",       0,   OK, board_hp_p2706t},
 	{0x1166, 0x0223, 0x103c, 0x320d,  0x14e4, 0x1678, 0x103c, 0x703e, NULL,         "hp", "dl145_g3",     P3, "HP",          "ProLiant DL145 G3",     0,   OK, board_hp_dl145_g3_enable},
 	{0x1166, 0x0223, 0x103c, 0x320d,  0x14e4, 0x1648, 0x103c, 0x310f, NULL,         "hp", "dl165_g6",     P3, "HP",          "ProLiant DL165 G6",     0,   OK, board_hp_dl165_g6_enable},
 	{0x8086, 0x2580, 0x103c, 0x2a08,  0x8086, 0x2640, 0x103c, 0x2a0a, NULL,         NULL, NULL,           P3, "HP",          "Puffer2-UL8E",          0,   OK, intel_ich_gpio18_raise},
-	{0x8086, 0x2415, 0x103c, 0x1249,  0x10b7, 0x9200, 0x103c, 0x1246, NULL,         NULL, NULL,           P3, "HP",          "Vectra VL400",          0,   OK, board_hp_vl400}, 
+	{0x8086, 0x2415, 0x103c, 0x1249,  0x10b7, 0x9200, 0x103c, 0x1246, NULL,         NULL, NULL,           P3, "HP",          "Vectra VL400",          0,   OK, board_hp_vl400},
 	{0x8086, 0x1a30, 0x103c, 0x1a30,  0x8086, 0x2443, 0x103c, 0x2440, "^VL420$",    NULL, NULL,           P3, "HP",          "Vectra VL420 SFF",      0,   OK, intel_ich_gpio22_raise},
 	{0x10de, 0x0369, 0x103c, 0x12fe,  0x10de, 0x0364, 0x103c, 0x12fe, NULL,         "hp", "xw9400",       P3, "HP",          "xw9400",                0,   OK, nvidia_mcp_gpio5_raise},
 	{0x8086, 0x27A0,      0,      0,  0x8086, 0x27B9,      0,      0, NULL,         "ibase", "mb899",     P3, "IBASE",       "MB899",                 0,   OK, intel_ich_gpio26_raise},
@@ -2037,7 +2063,8 @@ const struct board_pciid_enable board_pciid_enables[] = {
 	{0x1106, 0x3149, 0x1462, 0x7094,  0x10ec, 0x8167, 0x1462, 0x094c, NULL,         NULL, NULL,           P3, "MSI",         "MS-6702E (K8T Neo2-F)", 0,   OK, w83627thf_gpio44_raise_2e},
 	{0x1106, 0x0571, 0x1462, 0x7120,  0x1106, 0x3065, 0x1462, 0x7120, NULL,         NULL, NULL,           P3, "MSI",         "MS-6712 (KT4V)",        0,   OK, board_msi_kt4v},
 	{0x1106, 0x3148, 0     , 0     ,  0x1106, 0x3177, 0     , 0     , NULL,         "msi", "ms6787",      P3, "MSI",         "MS-6787 (P4MAM-V/P4MAM-L)", 0, OK, w836xx_memw_enable_2e},
-	{0x1039, 0x7012, 0x1462, 0x0050,  0x1039, 0x6325, 0x1462, 0x0058, NULL,         NULL, NULL,           P3, "MSI",         "MS-7005 (651M-L)",      0,   OK, board_msi_651ml},
+	{0x8086, 0x24d3, 0x1462, 0x7880,  0x8086, 0x2570,      0,      0, NULL,	        NULL, NULL,           P3, "MSI",         "MS-6788-040 (848P NeoV)", 0, OK, intel_ich_gpio32_raise},
+	{0x1039, 0x7012, 0x1462, 0x0050,  0x1039, 0x6325, 0x1462, 0x0058, NULL,         NULL, NULL,           P3, "MSI",         "MS-7005 (651M-L)",      0,   OK, sis_gpio0_raise_and_w836xx_memw},
 	{0x10DE, 0x00E0, 0x1462, 0x0250,  0x10DE, 0x00E1, 0x1462, 0x0250, NULL,         NULL, NULL,           P3, "MSI",         "MS-7025 (K8N Neo2 Platinum)", 0, OK, nvidia_mcp_gpio0c_raise},
 	{0x8086, 0x2658, 0x1462, 0x7046,  0x1106, 0x3044, 0x1462, 0x046d, NULL,         NULL, NULL,           P3, "MSI",         "MS-7046",               0,   OK, intel_ich_gpio19_raise},
 	{0x8086, 0x244b, 0x1462, 0x3910,  0x8086, 0x2442, 0x1462, 0x3910, NULL,         NULL, NULL,           P3, "MSI",         "MS-6391 (845 Pro4)",    0,   OK, intel_ich_gpio23_raise},

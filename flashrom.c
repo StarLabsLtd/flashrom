@@ -129,7 +129,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "internal",
 		.init			= internal_init,
-		.shutdown		= internal_shutdown,
 		.map_flash_region	= physmap,
 		.unmap_flash_region	= physunmap,
 		.chip_readb		= internal_chip_readb,
@@ -148,7 +147,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "dummy",
 		.init			= dummy_init,
-		.shutdown		= dummy_shutdown,
 		.map_flash_region	= dummy_map,
 		.unmap_flash_region	= dummy_unmap,
 		.chip_readb		= dummy_chip_readb,
@@ -167,7 +165,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "nic3com",
 		.init			= nic3com_init,
-		.shutdown		= nic3com_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= nic3com_chip_readb,
@@ -188,7 +185,6 @@ const struct programmer_entry programmer_table[] = {
 		.name                   = "nicrealtek",
 		//.name                   = "nicsmc1211",
 		.init                   = nicrealtek_init,
-		.shutdown               = nicrealtek_shutdown,
 		.map_flash_region       = fallback_map,
 		.unmap_flash_region     = fallback_unmap,
 		.chip_readb             = nicrealtek_chip_readb,
@@ -207,7 +203,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name                   = "nicnatsemi",
 		.init                   = nicnatsemi_init,
-		.shutdown               = nicnatsemi_shutdown,
 		.map_flash_region       = fallback_map,
 		.unmap_flash_region     = fallback_unmap,
 		.chip_readb             = nicnatsemi_chip_readb,
@@ -226,7 +221,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "gfxnvidia",
 		.init			= gfxnvidia_init,
-		.shutdown		= gfxnvidia_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= gfxnvidia_chip_readb,
@@ -245,7 +239,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "drkaiser",
 		.init			= drkaiser_init,
-		.shutdown		= drkaiser_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= drkaiser_chip_readb,
@@ -264,7 +257,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "satasii",
 		.init			= satasii_init,
-		.shutdown		= satasii_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= satasii_chip_readb,
@@ -283,7 +275,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "atahpt",
 		.init			= atahpt_init,
-		.shutdown		= atahpt_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= atahpt_chip_readb,
@@ -302,7 +293,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "ft2232_spi",
 		.init			= ft2232_spi_init,
-		.shutdown		= noop_shutdown, /* Missing shutdown */
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= noop_chip_readb,
@@ -321,7 +311,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "serprog",
 		.init			= serprog_init,
-		.shutdown		= serprog_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= serprog_chip_readb,
@@ -340,7 +329,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "buspirate_spi",
 		.init			= buspirate_spi_init,
-		.shutdown		= buspirate_spi_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= noop_chip_readb,
@@ -359,7 +347,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "dediprog",
 		.init			= dediprog_init,
-		.shutdown		= dediprog_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= noop_chip_readb,
@@ -378,7 +365,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "rayer_spi",
 		.init			= rayer_spi_init,
-		.shutdown		= noop_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= noop_chip_readb,
@@ -397,7 +383,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "nicintel",
 		.init			= nicintel_init,
-		.shutdown		= nicintel_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= nicintel_chip_readb,
@@ -416,7 +401,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name = "nicintel_spi",
 		.init = nicintel_spi_init,
-		.shutdown = nicintel_spi_shutdown,
 		.map_flash_region = fallback_map,
 		.unmap_flash_region = fallback_unmap,
 		.chip_readb = noop_chip_readb,
@@ -435,7 +419,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name = "ogp_spi",
 		.init = ogp_spi_init,
-		.shutdown = ogp_spi_shutdown,
 		.map_flash_region = fallback_map,
 		.unmap_flash_region = fallback_unmap,
 		.chip_readb = noop_chip_readb,
@@ -454,7 +437,6 @@ const struct programmer_entry programmer_table[] = {
 	{
 		.name			= "satamv",
 		.init			= satamv_init,
-		.shutdown		= satamv_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= satamv_chip_readb,
@@ -475,13 +457,15 @@ const struct programmer_entry programmer_table[] = {
 #define SHUTDOWN_MAXFN 32
 static int shutdown_fn_count = 0;
 struct shutdown_func_data {
-	void (*func) (void *data);
+	int (*func) (void *data);
 	void *data;
 } static shutdown_fn[SHUTDOWN_MAXFN];
 /* Initialize to 0 to make sure nobody registers a shutdown function before
  * programmer init.
  */
 static int may_register_shutdown = 0;
+
+static int check_block_eraser(const struct flashchip *flash, int k, int log);
 
 /* Register a function to be executed on programmer shutdown.
  * The advantage over atexit() is that you can supply a void pointer which will
@@ -491,7 +475,7 @@ static int may_register_shutdown = 0;
  * Please note that the first (void *data) belongs to the function signature of
  * the function passed as first parameter.
  */
-int register_shutdown(void (*function) (void *data), void *data)
+int register_shutdown(int (*function) (void *data), void *data)
 {
 	if (shutdown_fn_count >= SHUTDOWN_MAXFN) {
 		msg_perr("Tried to register more than %i shutdown functions.\n",
@@ -543,13 +527,15 @@ int programmer_init(char *param)
 
 int programmer_shutdown(void)
 {
+	int ret = 0;
+
 	/* Registering shutdown functions is no longer allowed. */
 	may_register_shutdown = 0;
 	while (shutdown_fn_count > 0) {
 		int i = --shutdown_fn_count;
-		shutdown_fn[i].func(shutdown_fn[i].data);
+		ret |= shutdown_fn[i].func(shutdown_fn[i].data);
 	}
-	return programmer_table[programmer].shutdown();
+	return ret;
 }
 
 void *programmer_map_flash_region(const char *descr, unsigned long phys_addr,
@@ -665,7 +651,7 @@ char *strcat_realloc(char *dest, const char *src)
  * needle and remove everything from the first occurrence of needle to the next
  * delimiter from haystack.
  */
-char *extract_param(char **haystack, char *needle, char *delim)
+char *extract_param(char **haystack, const char *needle, const char *delim)
 {
 	char *param_pos, *opt_pos, *rest;
 	char *opt = NULL;
@@ -722,9 +708,21 @@ char *extract_param(char **haystack, char *needle, char *delim)
 	return opt;
 }
 
-char *extract_programmer_param(char *param_name)
+char *extract_programmer_param(const char *param_name)
 {
 	return extract_param(&programmer_param, param_name, ",");
+}
+
+/* Returns the number of well-defined erasers for a chip. */
+static unsigned int count_usable_erasers(const struct flashchip *flash)
+{
+	unsigned int usable_erasefunctions = 0;
+	int k;
+	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
+		if (!check_block_eraser(flash, k, 0))
+			usable_erasefunctions++;
+	}
+	return usable_erasefunctions;
 }
 
 /* start is an offset to the base address of the flash chip */
@@ -751,7 +749,7 @@ int check_erased_range(struct flashchip *flash, int start, int len)
  * @message	string to print in the "FAILED" message
  * @return	0 for success, -1 for failure
  */
-int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message)
+int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, const char *message)
 {
 	int i, ret = 0;
 	uint8_t *readbuf = malloc(len);
@@ -1140,24 +1138,25 @@ int probe_flash(int startchip, struct flashchip *fill_flash, int force)
 	for (flash = flashchips + startchip; flash && flash->name; flash++) {
 		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0)
 			continue;
-		msg_gdbg("Probing for %s %s, %d kB: ",
-			     flash->vendor, flash->name, flash->total_size);
-		if (!flash->probe && !force) {
-			msg_gdbg("failed! flashrom has no probe function for "
-				 "this flash chip.\n");
-			continue;
-		}
 		buses_common = buses_supported & flash->bustype;
 		if (!buses_common) {
+			msg_gspew("Probing for %s %s, %d kB: skipped. ",
+			         flash->vendor, flash->name, flash->total_size);
 			tmp = flashbuses_to_text(buses_supported);
-			msg_gdbg("skipped.");
-			msg_gspew(" Host bus type %s ", tmp);
+			msg_gspew("Host bus type %s ", tmp);
 			free(tmp);
 			tmp = flashbuses_to_text(flash->bustype);
 			msg_gspew("and chip bus type %s are incompatible.",
 				  tmp);
 			free(tmp);
-			msg_gdbg("\n");
+			msg_gspew("\n");
+			continue;
+		}
+		msg_gdbg("Probing for %s %s, %d kB: ",
+			     flash->vendor, flash->name, flash->total_size);
+		if (!flash->probe && !force) {
+			msg_gdbg("failed! flashrom has no probe function for "
+				 "this flash chip.\n");
 			continue;
 		}
 
@@ -1201,10 +1200,11 @@ notfound:
 #endif
 		snprintf(location, sizeof(location), "on %s", programmer_table[programmer].name);
 
-	msg_cinfo("%s chip \"%s %s\" (%d kB, %s) %s.\n",
-	       force ? "Assuming" : "Found",
-	       flash->vendor, flash->name, flash->total_size,
-	       flashbuses_to_text(flash->bustype), location);
+	tmp = flashbuses_to_text(flash->bustype);
+	msg_cinfo("%s %s flash chip \"%s\" (%d kB, %s) %s.\n",
+		  force ? "Assuming" : "Found", fill_flash->vendor,
+		  fill_flash->name, fill_flash->total_size, tmp, location);
+	free(tmp);
 
 	/* Flash registers will not be mapped if the chip was forced. Lock info
 	 * may be stored in registers, so avoid lock info printing.
@@ -1232,7 +1232,7 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	return ret;
 }
 
-int read_buf_from_file(unsigned char *buf, unsigned long size, char *filename)
+int read_buf_from_file(unsigned char *buf, unsigned long size, const char *filename)
 {
 	unsigned long numbytes;
 	FILE *image;
@@ -1265,7 +1265,7 @@ int read_buf_from_file(unsigned char *buf, unsigned long size, char *filename)
 	return 0;
 }
 
-int write_buf_to_file(unsigned char *buf, unsigned long size, char *filename)
+int write_buf_to_file(unsigned char *buf, unsigned long size, const char *filename)
 {
 	unsigned long numbytes;
 	FILE *image;
@@ -1289,7 +1289,7 @@ int write_buf_to_file(unsigned char *buf, unsigned long size, char *filename)
 	return 0;
 }
 
-int read_flash_to_file(struct flashchip *flash, char *filename)
+int read_flash_to_file(struct flashchip *flash, const char *filename)
 {
 	unsigned long size = flash->total_size * 1024;
 	unsigned char *buf = calloc(size, sizeof(char));
@@ -1415,6 +1415,10 @@ static int erase_and_write_block_helper(struct flashchip *flash,
 		ret = erasefn(flash, start, len);
 		if (ret)
 			return ret;
+		if (check_erased_range(flash, start, len)) {
+			msg_cerr("ERASE FAILED!\n");
+			return -1;
+		}
 		/* Erase was successful. Adjust curcontents. */
 		memset(curcontents, 0xff, len);
 		skip = 0;
@@ -1467,7 +1471,6 @@ static int walk_eraseregions(struct flashchip *flash, int erasefunction,
 				     start + len - 1);
 			if (do_something(flash, start, len, param1, param2,
 					 eraser.block_erase)) {
-				msg_cdbg("\n");
 				return 1;
 			}
 			start += len;
@@ -1477,7 +1480,7 @@ static int walk_eraseregions(struct flashchip *flash, int erasefunction,
 	return 0;
 }
 
-static int check_block_eraser(struct flashchip *flash, int k, int log)
+static int check_block_eraser(const struct flashchip *flash, int k, int log)
 {
 	struct block_eraser eraser = flash->block_erasers[k];
 
@@ -1503,54 +1506,55 @@ static int check_block_eraser(struct flashchip *flash, int k, int log)
 
 int erase_and_write_flash(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents)
 {
-	int k, ret = 0;
+	int k, ret = 1;
 	uint8_t *curcontents;
 	unsigned long size = flash->total_size * 1024;
-	int usable_erasefunctions = 0;
+	unsigned int usable_erasefunctions = count_usable_erasers(flash);
 
-	for (k = 0; k < NUM_ERASEFUNCTIONS; k++)
-		if (!check_block_eraser(flash, k, 0))
-			usable_erasefunctions++;
 	msg_cinfo("Erasing and writing flash chip... ");
-	if (!usable_erasefunctions) {
-		msg_cerr("ERROR: flashrom has no erase function for this flash "
-			 "chip.\n");
-		return 1;
+	curcontents = malloc(size);
+	if (!curcontents) {
+		msg_gerr("Out of memory!\n");
+		exit(1);
 	}
-
-	curcontents = (uint8_t *) malloc(size);
 	/* Copy oldcontents to curcontents to avoid clobbering oldcontents. */
 	memcpy(curcontents, oldcontents, size);
 
 	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
-		msg_cdbg("Looking at blockwise erase function %i... ", k);
-		if (check_block_eraser(flash, k, 1) && usable_erasefunctions) {
+		if (k != 0)
 			msg_cdbg("Looking for another erase function.\n");
-			continue;
+		if (!usable_erasefunctions) {
+			msg_cdbg("No usable erase functions left.\n");
+			break;
 		}
+		msg_cdbg("Trying erase function %i... ", k);
+		if (check_block_eraser(flash, k, 1))
+			continue;
 		usable_erasefunctions--;
-		msg_cdbg("trying... ");
-		ret = walk_eraseregions(flash, k, &erase_and_write_block_helper, curcontents, newcontents);
-		msg_cdbg("\n");
+		ret = walk_eraseregions(flash, k, &erase_and_write_block_helper,
+					curcontents, newcontents);
 		/* If everything is OK, don't try another erase function. */
 		if (!ret)
 			break;
 		/* Write/erase failed, so try to find out what the current chip
-		 * contents are. If no usable erase functions remain, we could
-		 * abort the loop instead of continuing, the effect is the same.
-		 * The only difference is whether the reason for other unusable
-		 * functions is printed or not. If in doubt, verbosity wins.
+		 * contents are. If no usable erase functions remain, we can
+		 * skip this: the next iteration will break immediately anyway.
 		 */
 		if (!usable_erasefunctions)
 			continue;
+		/* Reading the whole chip may take a while, inform the user even
+		 * in non-verbose mode.
+		 */
+		msg_cinfo("Reading current flash chip contents... ");
 		if (flash->read(flash, curcontents, 0, size)) {
 			/* Now we are truly screwed. Read failed as well. */
-			msg_cerr("Can't read anymore!\n");
+			msg_cerr("Can't read anymore! Aborting.\n");
 			/* We have no idea about the flash chip contents, so
 			 * retrying with another erase function is pointless.
 			 */
 			break;
 		}
+		msg_cinfo("done. ");
 	}
 	/* Free the scratchpad. */
 	free(curcontents);
@@ -1558,7 +1562,7 @@ int erase_and_write_flash(struct flashchip *flash, uint8_t *oldcontents, uint8_t
 	if (ret) {
 		msg_cerr("FAILED!\n");
 	} else {
-		msg_cinfo("Done.\n");
+		msg_cinfo("Erase/write done.\n");
 	}
 	return ret;
 }
@@ -1588,7 +1592,7 @@ void emergency_help_message(void)
 }
 
 /* The way to go if you want a delimited list of programmers*/
-void list_programmers(char *delim)
+void list_programmers(const char *delim)
 {
 	enum programmer p;
 	for (p = 0; p < PROGRAMMER_INVALID; p++) {
@@ -1709,8 +1713,8 @@ int selfcheck(void)
 		msg_gerr("Programmer table miscompilation!\n");
 		ret = 1;
 	}
-	/* It would be favorable if we could also check for correct terminaion
-	 * of the follwing arrays, but we don't know their size in here...
+	/* It would be favorable if we could also check for correct termination
+	 * of the following arrays, but we don't know their sizes in here...
 	 * For 'flashchips' we check the first element to be non-null. In the
 	 * other cases there exist use cases where the first element can be
 	 * null. */
@@ -1835,7 +1839,11 @@ int chip_safety_check(struct flashchip *flash, int force, int read_it, int write
 				return 1;
 			msg_cerr("Continuing anyway.\n");
 		}
-		/* FIXME: Check if at least one erase function exists. */
+		if(count_usable_erasers(flash) == 0) {
+			msg_cerr("flashrom has no erase function for this "
+				 "flash chip.\n");
+			return 1;
+		}
 	}
 	if (write_it) {
 		if (flash->tested & TEST_BAD_WRITE) {
@@ -1857,7 +1865,7 @@ int chip_safety_check(struct flashchip *flash, int force, int read_it, int write
  * but right now it allows us to split off the CLI code.
  * Besides that, the function itself is a textbook example of abysmal code flow.
  */
-int doit(struct flashchip *flash, int force, char *filename, int read_it, int write_it, int erase_it, int verify_it)
+int doit(struct flashchip *flash, int force, const char *filename, int read_it, int write_it, int erase_it, int verify_it)
 {
 	uint8_t *oldcontents;
 	uint8_t *newcontents;
@@ -1881,10 +1889,18 @@ int doit(struct flashchip *flash, int force, char *filename, int read_it, int wr
 		goto out_nofree;
 	}
 
-	oldcontents = (uint8_t *) malloc(size);
+	oldcontents = malloc(size);
+	if (!oldcontents) {
+		msg_gerr("Out of memory!\n");
+		exit(1);
+	}
 	/* Assume worst case: All bits are 0. */
 	memset(oldcontents, 0x00, size);
-	newcontents = (uint8_t *) malloc(size);
+	newcontents = malloc(size);
+	if (!newcontents) {
+		msg_gerr("Out of memory!\n");
+		exit(1);
+	}
 	/* Assume best case: All bits should be 1. */
 	memset(newcontents, 0xff, size);
 	/* Side effect of the assumptions above: Default write action is erase
@@ -1925,11 +1941,13 @@ int doit(struct flashchip *flash, int force, char *filename, int read_it, int wr
 	 * preserved, but in that case we might perform unneeded erase which
 	 * takes time as well.
 	 */
-	msg_cdbg("Reading old flash chip contents...\n");
+	msg_cinfo("Reading old flash chip contents... ");
 	if (flash->read(flash, oldcontents, 0, size)) {
 		ret = 1;
+		msg_cinfo("FAILED.\n");
 		goto out;
 	}
+	msg_cinfo("done.\n");
 
 	// This should be moved into each flash part's code to do it 
 	// cleanly. This does the job.

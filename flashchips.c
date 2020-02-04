@@ -113,7 +113,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* -55 speed is +-5%, all others +-10% */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -55, others 4.5-5.5V */
 	},
 
 	{
@@ -145,6 +145,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -55, others 4.5-5.5V */
 	},
 
 	{
@@ -256,6 +257,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -45R, others 2.7-3.6V */
 	},
 
 	{
@@ -286,6 +288,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -45R, others 2.7-3.6V */
 	},
 
 	{
@@ -317,6 +320,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -55, others 2.7-3.6V */
 	},
 
 	{
@@ -348,6 +352,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -55, others 2.7-3.6V */
 	},
 
 	{
@@ -379,6 +384,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -410,6 +416,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -441,6 +448,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600} /* 3.0-3.6V for type -70R, others 2.7-3.6V */
 	},
 
 	{
@@ -472,6 +480,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600} /* 3.0-3.6V for type -70R, others 2.7-3.6V */
 	},
 
 	{
@@ -498,7 +507,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {2700, 3600},
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -60R, others 2.7-3.6V*/
 	},
 
 	{
@@ -525,7 +534,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {2700, 3600},
+		.voltage	= {3000, 3600}, /* 3.0-3.6V for type -70R, others 2.7-3.6V */
 	},
 
 	{
@@ -591,6 +600,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -1332,7 +1342,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect_at25df,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
-		.voltage	= {2300, 3600}, /* Datasheet says 2.3-3.6V or 2.7-3.6V */
+		.voltage	= {2700, 3600}, /* 2.3-3.6V & 2.7-3.6V models available */
 	},
 
 	{
@@ -1370,7 +1380,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect_at25df,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
-		.voltage	= {2300, 3600}, /* Datasheet says 2.3-3.6V or 2.7-3.6V */
+		.voltage	= {2700, 3600}, /* 2.3-3.6V & 2.7-3.6V models available */
 	},
 
 	{
@@ -1446,6 +1456,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect_at25df_sec,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -1495,7 +1506,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 4096,
 		.page_size	= 256,
 		.feature_bits	= FEATURE_WRSR_WREN,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -1773,7 +1784,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= NULL /* Incompatible Page write */,
 		.read		= spi_chip_read,
-		.voltage	= {2700, 3600}, /* Datasheet says 3.0-3.6 V or 2.7-3.6 V */
+		.voltage	= {2700, 3600}, /* 3.0-3.6V for higher speed, 2.7-3.6V normal */
 	},
 
 	{
@@ -2098,7 +2109,7 @@ const struct flashchip flashchips[] = {
 		.probe_timing	= TIMING_ZERO,
 		.write		= NULL,
 		.read		= NULL,
-		.voltage	= {2500, 3600}, /* Datasheet says 2.5-3.6 V or 2.7-3.6 V */
+		.voltage	= {2500, 3600}, /* 2.5-3.6V & 2.7-3.6V models available */
 	},
 
 	{
@@ -2114,7 +2125,7 @@ const struct flashchip flashchips[] = {
 		.probe_timing	= TIMING_ZERO,
 		.write		= NULL,
 		.read		= NULL,
-		.voltage	= {2500, 3600}, /* Datasheet says 2.5-3.6 V or 2.7-3.6 V */
+		.voltage	= {2700, 3600}, /* 2.5-3.6V & 2.7-3.6V models available */
 	},
 
 	{
@@ -2130,7 +2141,7 @@ const struct flashchip flashchips[] = {
 		.probe_timing	= TIMING_ZERO,
 		.write		= NULL,
 		.read		= NULL,
-		.voltage	= {2500, 3600}, /* Datasheet says 2.5-3.6 V or 2.7-3.6 V */
+		.voltage	= {2700, 3600}, /* 2.5-3.6V & 2.7-3.6V models available */
 	},
 
 	{
@@ -2190,7 +2201,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 64,
 		.page_size	= 64,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_UNTESTED,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= TIMING_ZERO,	/* Datasheet has no timing info specified */
 		.block_erasers	=
@@ -2317,6 +2328,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {4500, 5500},
 	},
 
 	{
@@ -2911,42 +2923,6 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Eon",
-		.name		= "EN25D16",
-		.bustype	= CHIP_BUSTYPE_SPI,
-		.manufacture_id	= EON_ID_NOPREFIX,
-		.model_id	= EON_EN25D16,
-		.total_size	= 2048,
-		.page_size	= 256,
-		.tested		= TEST_UNTESTED,
-		.probe		= probe_spi_rdid,
-		.probe_timing	= TIMING_ZERO,
-		.block_erasers	=
-		{
-			{
-				.eraseblocks = { {4 * 1024, 512} },
-				.block_erase = spi_block_erase_20,
-			}, {
-				.eraseblocks = { {64 * 1024, 32} },
-				.block_erase = spi_block_erase_d8,
-			}, {
-				.eraseblocks = { {64 * 1024, 32} },
-				.block_erase = spi_block_erase_52,
-			}, {
-				.eraseblocks = { {2 * 1024 * 1024, 1} },
-				.block_erase = spi_block_erase_60,
-			}, {
-				.eraseblocks = { {2 * 1024 * 1024, 1} },
-				.block_erase = spi_block_erase_c7,
-			}
-		},
-		.unlock		= spi_disable_blockprotect,
-		.write		= spi_chip_write_256,
-		.read		= spi_chip_read,
-		.voltage	= {2700, 3600},
-	},
-
-	{
-		.vendor		= "Eon",
 		.name		= "EN25F05",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= EON_ID_NOPREFIX,
@@ -3099,7 +3075,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 1024,
 		.page_size	= 256,
 		.feature_bits	= FEATURE_WRSR_WREN,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -3190,6 +3166,259 @@ const struct flashchip flashchips[] = {
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
 		.voltage	= {2700, 3600},
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25Q40",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q40,
+		.total_size	= 512,
+		.page_size	= 256,
+		/* TODO: chip features 256-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 128} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 8} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {512 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {512 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage        = {2700, 3600},
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25Q80(A)",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q80,
+		.total_size	= 1024,
+		.page_size	= 256,
+		/* TODO: chip features 256-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 256} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 16} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {1024 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {1024 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage        = {2700, 3600},
+	},
+
+	{
+		/* Note: EN25D16 is an evil twin which shares the model ID
+		   but has different write protection capabilities */
+		.vendor		= "Eon",
+		.name		= "EN25Q16",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q16,
+		.total_size	= 2048,
+		.page_size	= 256,
+		/* TODO: EN25D16 features 512-byte one-time programmable region,
+		 * EN25Q16 features a 128-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 512} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 32} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				/* not supported by Q16 version */
+				.eraseblocks = { {64 * 1024, 32} },
+				.block_erase = spi_block_erase_52,
+			}, {
+				.eraseblocks = { {2 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {2 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25Q32(A/B)",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q32,
+		.total_size	= 4096,
+		.page_size	= 256,
+		/* TODO: chip features 512-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 1024} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 64} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {4 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {4 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage        = {2700, 3600},
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25Q64",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q64,
+		.total_size	= 8192,
+		.page_size	= 256,
+		/* TODO: chip features 512-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 2048} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 128} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {8 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {8 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage        = {2700, 3600},
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25Q128",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25Q128,
+		.total_size	= 16384,
+		.page_size	= 256,
+		/* TODO: chip features 512-byte one-time programmable region */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 4096} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 256} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {16 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {16 * 1024 * 1024, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+	},
+
+	{
+		.vendor		= "Eon",
+		.name		= "EN25QH16",
+		.bustype	= CHIP_BUSTYPE_SPI,
+		.manufacture_id	= EON_ID_NOPREFIX,
+		.model_id	= EON_EN25QH16,
+		.total_size	= 2048,
+		.page_size	= 256,
+		/* TODO: chip features 512-byte one-time programmable region
+		 * and supports SFDP.
+		 */
+		.feature_bits	= FEATURE_WRSR_WREN,
+		.tested		= TEST_UNTESTED,
+		.probe		= probe_spi_rdid,
+		.probe_timing	= TIMING_ZERO,
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {4 * 1024, 512} },
+				.block_erase = spi_block_erase_20,
+			}, {
+				.eraseblocks = { {64 * 1024, 32} },
+				.block_erase = spi_block_erase_d8,
+			}, {
+				.eraseblocks = { {1024 * 2048, 1} },
+				.block_erase = spi_block_erase_60,
+			}, {
+				.eraseblocks = { {1024 * 2048, 1} },
+				.block_erase = spi_block_erase_c7,
+			}
+		},
+		.unlock		= spi_disable_blockprotect,
+		.write		= spi_chip_write_256,
+		.read		= spi_chip_read,
+		.voltage        = {2700, 3600},
 	},
 
 	{
@@ -3360,7 +3589,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_ADDR_SHIFTED | FEATURE_EITHER_RESET,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_m29f400bt,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (m29f400bt.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (m29f400bt.c) */
 		.block_erasers	=
 		{
 			{
@@ -3378,7 +3607,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_m29f400bt,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* 5.0V +-5% for -55 model, +-10% for rest */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -55, others 4.5-5.5V */
 	},
 
 	{
@@ -3392,7 +3621,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_ADDR_SHIFTED | FEATURE_EITHER_RESET,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_m29f400bt,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (m29f400bt.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (m29f400bt.c) */
 		.block_erasers	=
 		{
 			{
@@ -3410,7 +3639,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_m29f400bt,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* 5.0V +-5% for -55 model, +-10% for rest */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -55, others 4.5-5.5V */
 	},
 
 	{
@@ -3442,7 +3671,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* 5.0V +-5% for -45 model, +-10% for rest */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -45, others 4.5-5.5V */
 	},
 
 	{
@@ -3474,7 +3703,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* 5.0V +-5% for -45 model, +-10% for rest */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -45, others 4.5-5.5V */
 	},
 
 	{
@@ -3501,6 +3730,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {4500, 5500},
 	},
 
 	{
@@ -3582,7 +3812,6 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_82802ab,
 		.read		= read_memmapped,
-		.voltage	= {4500, 5500}, /* 5.0V +-10% read, 12V fast program & erase- +-5% standard, +-10% option */
 	},
 
 	{
@@ -3727,7 +3956,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 512,
 		.page_size	= 64 * 1024,
 		.feature_bits	= FEATURE_REGISTERMAP,
-		.tested		= TEST_OK_PR,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_82802ab,
 		.probe_timing	= TIMING_IGNORED, /* routine does not use probe_timing (82802ab.c) */
 		.block_erasers	=
@@ -3885,7 +4114,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 512,
 		.page_size	= 256,
 		.feature_bits	= FEATURE_WRSR_WREN,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -4052,6 +4281,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -4344,6 +4574,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {4500, 5500},
 	},
 
 	{
@@ -4775,6 +5006,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -4815,7 +5047,7 @@ const struct flashchip flashchips[] = {
 		.model_id	= PMC_PM25LV040,
 		.total_size	= 512,
 		.page_size	= 256,
-		.tested		= TEST_UNTESTED,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -4900,6 +5132,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5065,7 +5298,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 16 * 1024,
 		.feature_bits	= FEATURE_REGISTERMAP | FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= TIMING_ZERO,	/* routine is wrapper to probe_jedec (pm49fl00x.c) */
 		.block_erasers	=
@@ -5201,6 +5434,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5281,6 +5515,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5307,6 +5542,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5336,6 +5572,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_1,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5418,7 +5655,7 @@ const struct flashchip flashchips[] = {
 		.model_id	= SST_SST25VF064C,
 		.total_size	= 8192,
 		.page_size	= 256,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -5473,6 +5710,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_1,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5538,6 +5776,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_1,
 		.read		= spi_chip_read,
+		.voltage	= {3000, 3600},
 	},
 
 	{
@@ -5573,6 +5812,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_1,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -5622,7 +5862,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= 0,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst28sf040.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst28sf040.c) */
 		.block_erasers	=
 		{
 			{
@@ -5771,7 +6011,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 128,
 		.page_size	= 4096,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PR,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= 1,			/* 150 ns */
 		.block_erasers	=
@@ -5798,7 +6038,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 4096,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= 1,			/* 150 ns */
 		.block_erasers	=
@@ -6091,7 +6331,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst49lfxxxc.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst49lfxxxc.c) */
 		.block_erasers	=
 		{
 			{
@@ -6156,7 +6396,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst49lfxxxc.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst49lfxxxc.c) */
 		.block_erasers	=
 		{
 			{
@@ -6189,7 +6429,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_OK_PR,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst49lfxxxc.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst49lfxxxc.c) */
 		.block_erasers	=
 		{
 			{
@@ -6220,7 +6460,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 16 * 1024,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= 1,			/* 150 ns */
 		.block_erasers	=
@@ -6373,7 +6613,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_OK_PRE,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst49lfxxxc.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst49lfxxxc.c) */
 		.block_erasers	=
 		{
 			{
@@ -6597,7 +6837,7 @@ const struct flashchip flashchips[] = {
 		.model_id	= ST_M25P80,
 		.total_size	= 1024,
 		.page_size	= 256,
-		.tested		= TEST_OK_PR,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -6705,7 +6945,7 @@ const struct flashchip flashchips[] = {
 		.model_id	= ST_M25P128,
 		.total_size	= 16384,
 		.page_size	= 256,
-		.tested		= TEST_UNTESTED,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -6780,6 +7020,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= spi_disable_blockprotect,
 		.write		= spi_chip_write_256,
 		.read		= spi_chip_read,
+		.voltage	= {2700, 3600},
 	},
 
 	{
@@ -6840,7 +7081,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* Datasheet says some are only 4.75-5.25 V */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -X, others 4.5-5.5V */
 	},
 
 	{
@@ -6872,7 +7113,7 @@ const struct flashchip flashchips[] = {
 		},
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {4750, 5250}, /* Datasheet says some are only 4.75-5.25 V */
+		.voltage	= {4750, 5250}, /* 4.75-5.25V for type -X, others 4.5-5.5V */
 	},
 
 	{
@@ -6946,7 +7187,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_ADDR_SHIFTED | FEATURE_EITHER_RESET,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_m29f400bt,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (m29f400bt.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (m29f400bt.c) */
 		.block_erasers	=
 		{
 			{
@@ -7188,7 +7429,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (sst49lfxxxc.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (sst49lfxxxc.c) */
 		.block_erasers	=
 		{
 			{
@@ -7218,7 +7459,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_UNTESTED,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (82802ab.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (82802ab.c) */
 		.block_erasers	=
 		{
 			{
@@ -7243,7 +7484,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_OK_PR,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (82802ab.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (82802ab.c) */
 		.block_erasers	=
 		{
 			{
@@ -7268,7 +7509,7 @@ const struct flashchip flashchips[] = {
 		.feature_bits	= FEATURE_REGISTERMAP,
 		.tested		= TEST_OK_PREW,
 		.probe		= probe_82802ab,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (82802ab.c) */
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (82802ab.c) */
 		.block_erasers	=
 		{
 			{
@@ -7637,7 +7878,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 2048,
 		.page_size	= 256,
 		.feature_bits	= FEATURE_WRSR_WREN,
-		.tested		= TEST_UNTESTED,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -7776,7 +8017,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x10",
+		.name		= "W25X10",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X10,
@@ -7807,7 +8048,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x20",
+		.name		= "W25X20",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X20,
@@ -7838,7 +8079,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x40",
+		.name		= "W25X40",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X40,
@@ -7869,7 +8110,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x80",
+		.name		= "W25X80",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X80,
@@ -7900,14 +8141,14 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x16",
+		.name		= "W25X16",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X16,
 		.total_size	= 2048,
 		.page_size	= 256,
 		.feature_bits	= FEATURE_WRSR_WREN,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_spi_rdid,
 		.probe_timing	= TIMING_ZERO,
 		.block_erasers	=
@@ -7937,7 +8178,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x32",
+		.name		= "W25X32",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X32,
@@ -7974,7 +8215,7 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W25x64",
+		.name		= "W25X64",
 		.bustype	= CHIP_BUSTYPE_SPI,
 		.manufacture_id	= WINBOND_NEX_ID,
 		.model_id	= WINBOND_NEX_W25X64,
@@ -8011,6 +8252,29 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
+		.name		= "W29C010(M)/W29C011A/W29EE011/W29EE012-old",
+		.bustype	= CHIP_BUSTYPE_PARALLEL,
+		.manufacture_id	= WINBOND_ID,
+		.model_id	= WINBOND_W29C010,
+		.total_size	= 128,
+		.page_size	= 128,
+		.feature_bits	= FEATURE_LONG_RESET,
+		.tested		= TEST_OK_PRE,
+		.probe		= probe_w29ee011,
+		.probe_timing	= TIMING_IGNORED, /* routine doesn't use probe_timing (w29ee011.c) */
+		.block_erasers	=
+		{
+			{
+				.eraseblocks = { {128 * 1024, 1} },
+				.block_erase = erase_chip_block_jedec,
+			}
+		},
+		.write		= write_jedec,
+		.read		= read_memmapped,
+	},
+
+	{/* W29EE011, W29EE012, W29C010M, W29C011A do not support probe_jedec according to the datasheet, but it works for newer(?) steppings. */
+		.vendor		= "Winbond",
 		.name		= "W29C010(M)/W29C011A/W29EE011/W29EE012",
 		.bustype	= CHIP_BUSTYPE_PARALLEL,
 		.manufacture_id	= WINBOND_ID,
@@ -8041,9 +8305,9 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 128,
 		.feature_bits	= FEATURE_LONG_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
-		.probe_timing	= 10, 
+		.probe_timing	= 10,
 		.block_erasers	=
 		{
 			{
@@ -8082,29 +8346,6 @@ const struct flashchip flashchips[] = {
 
 	{
 		.vendor		= "Winbond",
-		.name		= "W29C010(M)/W29C011A/W29EE011/W29EE012",
-		.bustype	= CHIP_BUSTYPE_PARALLEL,
-		.manufacture_id	= WINBOND_ID,
-		.model_id	= WINBOND_W29C010,
-		.total_size	= 128,
-		.page_size	= 128,
-		.feature_bits	= FEATURE_LONG_RESET,
-		.tested		= TEST_OK_PRE,
-		.probe		= probe_w29ee011,
-		.probe_timing	= TIMING_IGNORED, /* routine don't use probe_timing (w29ee011.c) */
-		.block_erasers	=
-		{
-			{
-				.eraseblocks = { {128 * 1024, 1} },
-				.block_erase = erase_chip_block_jedec,
-			}
-		},
-		.write		= write_jedec,
-		.read		= read_memmapped,
-	},
-
-	{
-		.vendor		= "Winbond",
 		.name		= "W39L040",
 		.bustype	= CHIP_BUSTYPE_PARALLEL,
 		.manufacture_id	= WINBOND_ID,
@@ -8131,6 +8372,7 @@ const struct flashchip flashchips[] = {
 		.printlock	= printlock_w39l040,
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600},
 	},
 
 	{
@@ -8142,9 +8384,9 @@ const struct flashchip flashchips[] = {
 		.total_size	= 512,
 		.page_size	= 64 * 1024,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PR,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
-		.probe_timing	= 10, 
+		.probe_timing	= 10,
 		.block_erasers	=
 		{
 			{
@@ -8275,6 +8517,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= unlock_w39v040fb,
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* Also has 12V fast program */
 	},
 
 	{
@@ -8302,6 +8545,7 @@ const struct flashchip flashchips[] = {
 		.printlock	= printlock_w39v040fc,
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* Also has 12V fast program */
 	},
 
 	{
@@ -8341,7 +8585,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 128,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= 10,
 		.block_erasers	=
@@ -8397,9 +8641,9 @@ const struct flashchip flashchips[] = {
 		.total_size	= 256,
 		.page_size	= 128,
 		.feature_bits	= FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
-		.probe_timing	= 10, 
+		.probe_timing	= 10,
 		.block_erasers	=
 		{
 			{
@@ -8461,7 +8705,7 @@ const struct flashchip flashchips[] = {
 		.total_size	= 1024,
 		.page_size	= 64 * 1024,
 		.feature_bits	= FEATURE_REGISTERMAP | FEATURE_EITHER_RESET,
-		.tested		= TEST_OK_PRE,
+		.tested		= TEST_OK_PREW,
 		.probe		= probe_jedec,
 		.probe_timing	= 10,
 		.block_erasers	=
@@ -8478,7 +8722,7 @@ const struct flashchip flashchips[] = {
 		.unlock		= unlock_w39v080fa,
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
-		.voltage	= {3000, 3600}, /* 12 V fast program mode */
+		.voltage	= {3000, 3600}, /* Also has 12V fast program */
 	},
 
 	{
@@ -8506,6 +8750,7 @@ const struct flashchip flashchips[] = {
 		.printlock	= printlock_w39v080fa_dual,
 		.write		= write_jedec_1,
 		.read		= read_memmapped,
+		.voltage	= {3000, 3600}, /* Also has 12V fast program */
 	},
 
 	{

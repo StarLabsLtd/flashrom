@@ -89,7 +89,6 @@ struct programmer_entry {
 	const char *name;
 
 	int (*init) (void);
-	int (*shutdown) (void);
 
 	void * (*map_flash_region) (const char *descr, unsigned long phys_addr,
 				    size_t len);
@@ -239,7 +238,7 @@ int rpci_write_long(struct pci_dev *dev, int reg, uint32_t data);
 void print_supported_pcidevs(const struct pcidev_status *devs);
 #endif
 
-#if CONFIG_INTERNAL
+#if CONFIG_INTERNAL == 1
 /* board_enable.c */
 void w836xx_ext_enter(uint16_t port);
 void w836xx_ext_leave(uint16_t port);
@@ -262,6 +261,7 @@ int processor_flash_enable(void);
 void *physmap(const char *descr, unsigned long phys_addr, size_t len);
 void *physmap_try_ro(const char *descr, unsigned long phys_addr, size_t len);
 void physunmap(void *virt_addr, size_t len);
+#if CONFIG_INTERNAL == 1
 int setup_cpu_msr(int cpu);
 void cleanup_cpu_msr(void);
 
@@ -277,7 +277,6 @@ void dmi_init(void);
 int dmi_match(const char *pattern);
 
 /* internal.c */
-#if NEED_PCI == 1
 struct superio {
 	uint16_t vendor;
 	uint16_t port;
@@ -287,8 +286,10 @@ extern struct superio superios[];
 extern int superio_count;
 #define SUPERIO_VENDOR_NONE	0x0
 #define SUPERIO_VENDOR_ITE	0x1
+#endif
+#if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
-struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t class);
+struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t devclass);
 struct pci_dev *pci_dev_find(uint16_t vendor, uint16_t device);
 struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 			      uint16_t card_vendor, uint16_t card_device);
@@ -303,7 +304,6 @@ extern int force_boardmismatch;
 void probe_superio(void);
 int register_superio(struct superio s);
 int internal_init(void);
-int internal_shutdown(void);
 void internal_chip_writeb(uint8_t val, chipaddr addr);
 void internal_chip_writew(uint16_t val, chipaddr addr);
 void internal_chip_writel(uint32_t val, chipaddr addr);
@@ -361,7 +361,6 @@ void fallback_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 /* dummyflasher.c */
 #if CONFIG_DUMMY == 1
 int dummy_init(void);
-int dummy_shutdown(void);
 void *dummy_map(const char *descr, unsigned long phys_addr, size_t len);
 void dummy_unmap(void *virt_addr, size_t len);
 void dummy_chip_writeb(uint8_t val, chipaddr addr);
@@ -377,7 +376,6 @@ void dummy_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 /* nic3com.c */
 #if CONFIG_NIC3COM == 1
 int nic3com_init(void);
-int nic3com_shutdown(void);
 void nic3com_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nic3com_chip_readb(const chipaddr addr);
 extern const struct pcidev_status nics_3com[];
@@ -386,7 +384,6 @@ extern const struct pcidev_status nics_3com[];
 /* gfxnvidia.c */
 #if CONFIG_GFXNVIDIA == 1
 int gfxnvidia_init(void);
-int gfxnvidia_shutdown(void);
 void gfxnvidia_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t gfxnvidia_chip_readb(const chipaddr addr);
 extern const struct pcidev_status gfx_nvidia[];
@@ -395,7 +392,6 @@ extern const struct pcidev_status gfx_nvidia[];
 /* drkaiser.c */
 #if CONFIG_DRKAISER == 1
 int drkaiser_init(void);
-int drkaiser_shutdown(void);
 void drkaiser_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t drkaiser_chip_readb(const chipaddr addr);
 extern const struct pcidev_status drkaiser_pcidev[];
@@ -404,7 +400,6 @@ extern const struct pcidev_status drkaiser_pcidev[];
 /* nicrealtek.c */
 #if CONFIG_NICREALTEK == 1
 int nicrealtek_init(void);
-int nicrealtek_shutdown(void);
 void nicrealtek_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nicrealtek_chip_readb(const chipaddr addr);
 extern const struct pcidev_status nics_realtek[];
@@ -413,7 +408,6 @@ extern const struct pcidev_status nics_realtek[];
 /* nicnatsemi.c */
 #if CONFIG_NICNATSEMI == 1
 int nicnatsemi_init(void);
-int nicnatsemi_shutdown(void);
 void nicnatsemi_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nicnatsemi_chip_readb(const chipaddr addr);
 extern const struct pcidev_status nics_natsemi[];
@@ -422,7 +416,6 @@ extern const struct pcidev_status nics_natsemi[];
 /* nicintel.c */
 #if CONFIG_NICINTEL == 1
 int nicintel_init(void);
-int nicintel_shutdown(void);
 void nicintel_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t nicintel_chip_readb(const chipaddr addr);
 extern const struct pcidev_status nics_intel[];
@@ -431,7 +424,6 @@ extern const struct pcidev_status nics_intel[];
 /* nicintel_spi.c */
 #if CONFIG_NICINTEL_SPI == 1
 int nicintel_spi_init(void);
-int nicintel_spi_shutdown(void);
 int nicintel_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	const unsigned char *writearr, unsigned char *readarr);
 void nicintel_spi_chip_writeb(uint8_t val, chipaddr addr);
@@ -441,14 +433,12 @@ extern const struct pcidev_status nics_intel_spi[];
 /* ogp_spi.c */
 #if CONFIG_OGP_SPI == 1
 int ogp_spi_init(void);
-int ogp_spi_shutdown(void);
 extern const struct pcidev_status ogp_spi[];
 #endif
 
 /* satamv.c */
 #if CONFIG_SATAMV == 1
 int satamv_init(void);
-int satamv_shutdown(void);
 void satamv_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t satamv_chip_readb(const chipaddr addr);
 extern const struct pcidev_status satas_mv[];
@@ -457,7 +447,6 @@ extern const struct pcidev_status satas_mv[];
 /* satasii.c */
 #if CONFIG_SATASII == 1
 int satasii_init(void);
-int satasii_shutdown(void);
 void satasii_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t satasii_chip_readb(const chipaddr addr);
 extern const struct pcidev_status satas_sii[];
@@ -466,7 +455,6 @@ extern const struct pcidev_status satas_sii[];
 /* atahpt.c */
 #if CONFIG_ATAHPT == 1
 int atahpt_init(void);
-int atahpt_shutdown(void);
 void atahpt_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t atahpt_chip_readb(const chipaddr addr);
 extern const struct pcidev_status ata_hpt[];
@@ -491,28 +479,19 @@ void print_supported_usbdevs(const struct usbdev_status *devs);
 int rayer_spi_init(void);
 #endif
 
-/* mcp6x_spi.c */
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-int mcp6x_spi_init(int want_spi);
-#endif
-#endif
-
 /* bitbang_spi.c */
 int bitbang_spi_init(const struct bitbang_spi_master *master, int halfperiod);
 int bitbang_spi_shutdown(const struct bitbang_spi_master *master);
 
 /* buspirate_spi.c */
-struct buspirate_spispeeds {
-	const char *name;
-	const int speed;
-};
+#if CONFIG_BUSPIRATE_SPI == 1
 int buspirate_spi_init(void);
-int buspirate_spi_shutdown(void);
+#endif
 
 /* dediprog.c */
+#if CONFIG_DEDIPROG == 1
 int dediprog_init(void);
-int dediprog_shutdown(void);
+#endif
 
 /* flashrom.c */
 struct decode_sizes {
@@ -526,7 +505,7 @@ extern int programmer_may_write;
 extern unsigned long flashbase;
 void check_chip_supported(const struct flashchip *flash);
 int check_max_decode(enum chipbustype buses, uint32_t size);
-char *extract_programmer_param(char *param_name);
+char *extract_programmer_param(const char *param_name);
 
 /* layout.c */
 int show_id(uint8_t *bios, int size, int force);
@@ -593,11 +572,9 @@ extern uint32_t ichspi_bbar;
 int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
 		    int ich_generation);
 int via_init_spi(struct pci_dev *dev);
-#endif
 
 /* it85spi.c */
 int it85xx_spi_init(struct superio s);
-int it85xx_shutdown(void);
 
 /* it87spi.c */
 void enter_conf_mode_ite(uint16_t port);
@@ -605,23 +582,24 @@ void exit_conf_mode_ite(uint16_t port);
 void probe_superio_ite(void);
 int init_superio_ite(void);
 
+/* mcp6x_spi.c */
+int mcp6x_spi_init(int want_spi);
+
 /* sb600spi.c */
-#if CONFIG_INTERNAL == 1
 int sb600_probe_spi(struct pci_dev *dev);
-#endif
 
 /* wbsio_spi.c */
-#if CONFIG_INTERNAL == 1
 int wbsio_check_for_spi(void);
 #endif
 
 /* serprog.c */
+#if CONFIG_SERPROG == 1
 int serprog_init(void);
-int serprog_shutdown(void);
 void serprog_chip_writeb(uint8_t val, chipaddr addr);
 uint8_t serprog_chip_readb(const chipaddr addr);
 void serprog_chip_readn(uint8_t *buf, const chipaddr addr, size_t len);
 void serprog_delay(int delay);
+#endif
 
 /* serial.c */
 #if _WIN32
@@ -634,7 +612,8 @@ void sp_flush_incoming(void);
 fdtype sp_openserport(char *dev, unsigned int baud);
 void __attribute__((noreturn)) sp_die(char *msg);
 extern fdtype sp_fd;
-int serialport_shutdown(void);
+/* expose serialport_shutdown as it's currently used by buspirate */
+int serialport_shutdown(void *data);
 int serialport_write(unsigned char *buf, unsigned int writecnt);
 int serialport_read(unsigned char *buf, unsigned int readcnt);
 

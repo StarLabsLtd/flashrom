@@ -117,6 +117,7 @@ int cli_classic(int argc, char *argv[])
 #endif
 	int operation_specified = 0;
 	int i;
+	int ret = 0;
 
 	static const char optstring[] = "r:Rw:v:nVEfc:m:l:i:p:Lzh";
 	static const struct option long_options[] = {
@@ -232,8 +233,14 @@ int cli_classic(int argc, char *argv[])
 				cli_classic_abort_usage();
 			break;
 		case 'i':
+			/* FIXME: -l has to be specified before -i. */
 			tempstr = strdup(optarg);
-			find_romentry(tempstr);
+			if (find_romentry(tempstr) < 0) {
+				fprintf(stderr, "Error: image %s not found in "
+					"layout file or -i specified before "
+					"-l\n", tempstr);
+				cli_classic_abort_usage();
+			}
 			break;
 		case 'L':
 			if (++operation_specified > 1) {
@@ -313,6 +320,11 @@ int cli_classic(int argc, char *argv[])
 		}
 	}
 
+	if (optind < argc) {
+		fprintf(stderr, "Error: Extra parameter found.\n");
+		cli_classic_abort_usage();
+	}
+
 	/* FIXME: Print the actions flashrom will take. */
 
 	if (list_supported) {
@@ -326,11 +338,6 @@ int cli_classic(int argc, char *argv[])
 		exit(0);
 	}
 #endif
-
-	if (optind < argc) {
-		fprintf(stderr, "Error: Extra parameter found.\n");
-		cli_classic_abort_usage();
-	}
 
 #if CONFIG_INTERNAL == 1
 	if ((programmer != PROGRAMMER_INTERNAL) && (lb_part || lb_vendor)) {
@@ -360,7 +367,8 @@ int cli_classic(int argc, char *argv[])
 
 	if (programmer_init(pparam)) {
 		fprintf(stderr, "Error: Programmer initialization failed.\n");
-		exit(1);
+		ret = 1;
+		goto out_shutdown;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(flashes); i++) {
@@ -372,12 +380,13 @@ int cli_classic(int argc, char *argv[])
 	}
 
 	if (chipcount > 1) {
-		printf("Multiple flash chips were detected:");
-		for (i = 0; i < chipcount; i++)
-			printf(" %s", flashes[i].name);
+		printf("Multiple flash chips were detected: \"%s\"",
+			flashes[0].name);
+		for (i = 1; i < chipcount; i++)
+			printf(", \"%s\"", flashes[i].name);
 		printf("\nPlease specify which chip to use with the -c <chipname> option.\n");
-		programmer_shutdown();
-		exit(1);
+		ret = 1;
+		goto out_shutdown;
 	} else if (!chipcount) {
 		printf("No EEPROM/flash device found.\n");
 		if (!force || !chip_to_probe) {
@@ -388,15 +397,14 @@ int cli_classic(int argc, char *argv[])
 			startchip = probe_flash(0, &flashes[0], 1);
 			if (startchip == -1) {
 				printf("Probing for flash chip '%s' failed.\n", chip_to_probe);
-				programmer_shutdown();
-				exit(1);
+				ret = 1;
+				goto out_shutdown;
 			}
 			printf("Please note that forced reads most likely contain garbage.\n");
 			return read_flash_to_file(&flashes[0], filename);
 		}
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(1);
+		ret = 1;
+		goto out_shutdown;
 	}
 
 	fill_flash = &flashes[0];
@@ -408,22 +416,19 @@ int cli_classic(int argc, char *argv[])
 	    (!force)) {
 		fprintf(stderr, "Chip is too big for this programmer "
 			"(-V gives details). Use --force to override.\n");
-		programmer_shutdown();
-		return 1;
+		ret = 1;
+		goto out_shutdown;
 	}
 
 	if (!(read_it | write_it | verify_it | erase_it)) {
 		printf("No operations were specified.\n");
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(0);
+		goto out_shutdown;
 	}
 
 	if (!filename && !erase_it) {
 		printf("Error: No filename specified.\n");
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(1);
+		ret = 1;
+		goto out_shutdown;
 	}
 
 	/* Always verify write operations unless -n is used. */
@@ -436,4 +441,8 @@ int cli_classic(int argc, char *argv[])
 	 */
 	programmer_delay(100000);
 	return doit(fill_flash, force, filename, read_it, write_it, erase_it, verify_it);
+
+out_shutdown:
+	programmer_shutdown();
+	return ret;
 }

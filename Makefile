@@ -37,7 +37,10 @@ ifeq ($(WARNERROR), yes)
 CFLAGS += -Werror
 endif
 
-# FIXME We have to differentiate between host and target arch.
+# Determine the destination processor architecture
+override ARCH = $(strip $(shell LC_ALL=C $(CC) -E arch.h|grep -v '^\#'))
+
+# FIXME We have to differentiate between host and target OS architecture.
 OS_ARCH	?= $(shell uname)
 ifneq ($(OS_ARCH), SunOS)
 STRIP_ARGS = -s
@@ -81,6 +84,88 @@ ifeq ($(CONFIG_FT2232_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_FT2232_SPI=yes
 else
 override CONFIG_FT2232_SPI = no
+endif
+endif
+
+ifeq ($(OS_ARCH), MINGW32_NT-5.1)
+# Explicitly set CC = gcc on MinGW, otherwise: "cc: command not found".
+CC = gcc
+# MinGW doesn't have the ffs() function, but we can use gcc's __builtin_ffs().
+CFLAGS += -Dffs=__builtin_ffs
+# libusb-win32/libftdi stuff is usually installed in /usr/local.
+CPPFLAGS += -I/usr/local/include
+LDFLAGS += -L/usr/local/lib
+# Serprog is not supported under Windows/MinGW (missing sockets support).
+ifeq ($(CONFIG_SERPROG), yes)
+UNSUPPORTED_FEATURES += CONFIG_SERPROG=yes
+else
+override CONFIG_SERPROG = no
+endif
+# For now we disable all PCI-based programmers on Windows/MinGW (no libpci).
+ifeq ($(CONFIG_INTERNAL), yes)
+UNSUPPORTED_FEATURES += CONFIG_INTERNAL=yes
+else
+override CONFIG_INTERNAL = no
+endif
+ifeq ($(CONFIG_RAYER_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_RAYER_SPI=yes
+else
+override CONFIG_RAYER_SPI = no
+endif
+ifeq ($(CONFIG_NIC3COM), yes)
+UNSUPPORTED_FEATURES += CONFIG_NIC3COM=yes
+else
+override CONFIG_NIC3COM = no
+endif
+ifeq ($(CONFIG_GFXNVIDIA), yes)
+UNSUPPORTED_FEATURES += CONFIG_GFXNVIDIA=yes
+else
+override CONFIG_GFXNVIDIA = no
+endif
+ifeq ($(CONFIG_SATASII), yes)
+UNSUPPORTED_FEATURES += CONFIG_SATASII=yes
+else
+override CONFIG_SATASII = no
+endif
+ifeq ($(CONFIG_ATAHPT), yes)
+UNSUPPORTED_FEATURES += CONFIG_ATAHPT=yes
+else
+override CONFIG_ATAHPT = no
+endif
+ifeq ($(CONFIG_DRKAISER), yes)
+UNSUPPORTED_FEATURES += CONFIG_DRKAISER=yes
+else
+override CONFIG_DRKAISER = no
+endif
+ifeq ($(CONFIG_NICREALTEK), yes)
+UNSUPPORTED_FEATURES += CONFIG_NICREALTEK=yes
+else
+override CONFIG_NICREALTEK = no
+endif
+ifeq ($(CONFIG_NICNATSEMI), yes)
+UNSUPPORTED_FEATURES += CONFIG_NICNATSEMI=yes
+else
+override CONFIG_NICNATSEMI = no
+endif
+ifeq ($(CONFIG_NICINTEL), yes)
+UNSUPPORTED_FEATURES += CONFIG_NICINTEL=yes
+else
+override CONFIG_NICINTEL = no
+endif
+ifeq ($(CONFIG_NICINTEL_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_NICINTEL_SPI=yes
+else
+override CONFIG_NICINTEL_SPI = no
+endif
+ifeq ($(CONFIG_OGP_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_OGP_SPI=yes
+else
+override CONFIG_OGP_SPI = no
+endif
+ifeq ($(CONFIG_SATAMV), yes)
+UNSUPPORTED_FEATURES += CONFIG_SATAMV=yes
+else
+override CONFIG_SATAMV = no
 endif
 endif
 
@@ -134,9 +219,9 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := $(shell LC_ALL=C svnversion -cn . 2>/dev/null | sed -e "s/.*://" -e "s/\([0-9]*\).*/\1/" | grep "[0-9]" || LC_ALL=C svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || LC_ALL=C git svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || echo unknown)
+SVNVERSION := 1394
 
-RELEASE := 0.9.3
+RELEASE := 0.9.4
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
@@ -222,8 +307,10 @@ endif
 ifeq ($(CONFIG_INTERNAL), yes)
 FEATURE_CFLAGS += -D'CONFIG_INTERNAL=1'
 PROGRAMMER_OBJS += processor_enable.o chipset_enable.o board_enable.o cbtable.o dmi.o internal.o
-# FIXME: The PROGRAMMER_OBJS below should only be included on x86.
+ifeq ($(ARCH),"x86")
 PROGRAMMER_OBJS += it87spi.o it85spi.o ichspi.o sb600spi.o wbsio_spi.o mcp6x_spi.o
+else
+endif
 NEED_PCI := yes
 endif
 
@@ -413,11 +500,16 @@ strip: $(PROGRAM)$(EXEC_SUFFIX)
 compiler: featuresavailable
 	@printf "Checking for a C compiler... "
 	@$(shell ( echo "int main(int argc, char **argv)"; \
-		   echo "{ return 0; }"; ) > .test.c )
+		   echo "{ (void) argc; (void) argv; return 0; }"; ) > .test.c )
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .test.c -o .test$(EXEC_SUFFIX) >/dev/null &&	\
 		echo "found." || ( echo "not found."; \
 		rm -f .test.c .test$(EXEC_SUFFIX); exit 1)
 	@rm -f .test.c .test$(EXEC_SUFFIX)
+	@printf "ARCH is "
+	@# FreeBSD wc will output extraneous whitespace.
+	@echo $(ARCH)|wc -l|grep -q '^[[:blank:]]*1[[:blank:]]*$$' ||	\
+		( echo "unknown. Aborting."; exit 1)
+	@printf "%s\n" '$(ARCH)'
 
 ifeq ($(CHECK_LIBPCI), yes)
 pciutils: compiler
@@ -427,7 +519,7 @@ pciutils: compiler
 		   echo "#include <pci/pci.h>";		   \
 		   echo "struct pci_access *pacc;";	   \
 		   echo "int main(int argc, char **argv)"; \
-		   echo "{ pacc = pci_alloc(); return 0; }"; ) > .test.c )
+		   echo "{ (void) argc; (void) argv; pacc = pci_alloc(); return 0; }"; ) > .test.c )
 	@$(CC) -c $(CPPFLAGS) $(CFLAGS) .test.c -o .test.o >/dev/null 2>&1 &&		\
 		echo "found." || ( echo "not found."; echo;			\
 		echo "Please install libpci headers (package pciutils-devel).";	\
@@ -469,7 +561,7 @@ features: compiler
 	@$(shell ( echo "#include <ftdi.h>";		   \
 		   echo "struct ftdi_context *ftdic = NULL;";	   \
 		   echo "int main(int argc, char **argv)"; \
-		   echo "{ return ftdi_init(ftdic); }"; ) > .featuretest.c )
+		   echo "{ (void) argc; (void) argv; return ftdi_init(ftdic); }"; ) > .featuretest.c )
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) $(FTDILIBS) $(LIBS) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "FTDISUPPORT := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp )
@@ -477,7 +569,7 @@ features: compiler
 	@$(shell ( echo "#include <sys/utsname.h>";		   \
 		   echo "struct utsname osinfo;";	   \
 		   echo "int main(int argc, char **argv)"; \
-		   echo "{ uname (&osinfo); return 0; }"; ) > .featuretest.c )
+		   echo "{ (void) argc; (void) argv; uname (&osinfo); return 0; }"; ) > .featuretest.c )
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "UTSNAME := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "UTSNAME := no" >> .features.tmp )
@@ -490,7 +582,7 @@ features: compiler
 	@$(shell ( echo "#include <sys/utsname.h>";		   \
 		   echo "struct utsname osinfo;";	   \
 		   echo "int main(int argc, char **argv)"; \
-		   echo "{ uname (&osinfo); return 0; }"; ) > .featuretest.c )
+		   echo "{ (void) argc; (void) argv; uname (&osinfo); return 0; }"; ) > .featuretest.c )
 	@$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) .featuretest.c -o .featuretest$(EXEC_SUFFIX) >/dev/null 2>&1 &&	\
 		( echo "found."; echo "UTSNAME := yes" >> .features.tmp ) ||	\
 		( echo "not found."; echo "UTSNAME := no" >> .features.tmp )
