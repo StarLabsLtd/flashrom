@@ -100,6 +100,15 @@ const struct spi_programmer spi_programmer[] = {
 	},
 #endif
 
+#if BUSPIRATE_SPI_SUPPORT == 1
+	{ /* SPI_CONTROLLER_BUSPIRATE */
+		.command = buspirate_spi_send_command,
+		.multicommand = default_spi_send_multicommand,
+		.read = buspirate_spi_read,
+		.write_256 = spi_chip_write_1,
+	},
+#endif
+
 	{}, /* This entry corresponds to SPI_CONTROLLER_INVALID. */
 };
 
@@ -281,6 +290,11 @@ static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 	    GENERIC_DEVICE_ID == flash->model_id)
 		return 1;
 
+	/* Test if there is any vendor ID. */
+	if (GENERIC_MANUF_ID == flash->manufacture_id &&
+	    id1 != 0xff)
+		return 1;
+
 	return 0;
 }
 
@@ -304,6 +318,9 @@ int probe_spi_rdid4(struct flashchip *flash)
 #endif
 #if DUMMY_SUPPORT == 1
 	case SPI_CONTROLLER_DUMMY:
+#endif
+#if BUSPIRATE_SPI_SUPPORT == 1
+	case SPI_CONTROLLER_BUSPIRATE:
 #endif
 		return probe_spi_rdid_generic(flash, 4);
 	default:
@@ -338,6 +355,11 @@ int probe_spi_rems(struct flashchip *flash)
 	/* Test if this is a pure vendor match. */
 	if (id1 == flash->manufacture_id &&
 	    GENERIC_DEVICE_ID == flash->model_id)
+		return 1;
+
+	/* Test if there is any vendor ID. */
+	if (GENERIC_MANUF_ID == flash->manufacture_id &&
+	    id1 != 0xff)
 		return 1;
 
 	return 0;
@@ -615,8 +637,8 @@ int spi_block_erase_52(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
-			__func__);
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -659,7 +681,8 @@ int spi_block_erase_d8(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n", __func__);
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -721,8 +744,8 @@ int spi_block_erase_20(struct flashchip *flash, unsigned int addr, unsigned int 
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
-			__func__);
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
 		return result;
 	}
 	/* Wait until the Write-In-Progress bit is cleared.
@@ -827,21 +850,21 @@ int spi_byte_program(int addr, uint8_t byte)
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
-			__func__);
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
 	}
 	return result;
 }
 
-int spi_nbyte_program(int address, uint8_t *bytes, int len)
+int spi_nbyte_program(int addr, uint8_t *bytes, int len)
 {
 	int result;
 	/* FIXME: Switch to malloc based on len unless that kills speed. */
 	unsigned char cmd[JEDEC_BYTE_PROGRAM_OUTSIZE - 1 + 256] = {
 		JEDEC_BYTE_PROGRAM,
-		(address >> 16) & 0xff,
-		(address >> 8) & 0xff,
-		(address >> 0) & 0xff,
+		(addr >> 16) & 0xff,
+		(addr >> 8) & 0xff,
+		(addr >> 0) & 0xff,
 	};
 	struct spi_command cmds[] = {
 	{
@@ -874,8 +897,8 @@ int spi_nbyte_program(int address, uint8_t *bytes, int len)
 
 	result = spi_send_multicommand(cmds);
 	if (result) {
-		fprintf(stderr, "%s failed during command execution\n",
-			__func__);
+		fprintf(stderr, "%s failed during command execution at address 0x%x\n",
+			__func__, addr);
 	}
 	return result;
 }
@@ -970,7 +993,7 @@ int spi_chip_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 {
 	int total_size = 1024 * flash->total_size;
-	int i;
+	int i, result = 0;
 
 	spi_disable_blockprotect();
 	/* Erase first */
@@ -981,7 +1004,9 @@ int spi_chip_write_1(struct flashchip *flash, uint8_t *buf)
 	}
 	printf("done.\n");
 	for (i = 0; i < total_size; i++) {
-		spi_byte_program(i, buf[i]);
+		result = spi_byte_program(i, buf[i]);
+		if (result)
+			return 1;
 		while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 			programmer_delay(10);
 	}

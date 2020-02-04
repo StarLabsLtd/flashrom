@@ -34,6 +34,7 @@
  * SPI parts have 16-bit device IDs if they support RDID.
  */
 
+#define GENERIC_MANUF_ID	0xffff	/* Check if there is a vendor ID */
 #define GENERIC_DEVICE_ID	0xffff	/* Only match the vendor ID */
 
 #define ALLIANCE_ID		0x52	/* Alliance Semiconductor */
@@ -251,11 +252,11 @@
  * and use the same set of IDs.
  */
 #define MX_ID			0xC2	/* Macronix (MX) */
-#define MX_25L512		0x2010	/* 2^19 kbit or 2^16 kByte */
+#define MX_25L512		0x2010	/* Same as MX25V512 */
 #define MX_25L1005		0x2011
 #define MX_25L2005		0x2012
 #define MX_25L4005		0x2013	/* MX25L4005{,A} */
-#define MX_25L8005		0x2014
+#define MX_25L8005		0x2014	/* Same as MX25V8005 */
 #define MX_25L1605		0x2015	/* MX25L1605{,A,D} */
 #define MX_25L3205		0x2016	/* MX25L3205{,A} */
 #define MX_25L6405		0x2017	/* MX25L3205{,D} */
@@ -324,6 +325,14 @@
 #define PMC_39F040		0x4E
 #define PMC_49FL002		0x6D
 #define PMC_49FL004		0x6E
+
+/* 
+ * The Sanyo chip found so far uses SPI, first byte is manufacture code,
+ * second byte is the device code,
+ * third byte is a dummy byte.
+ */
+#define SANYO_ID		0x62
+#define SANYO_LE25FW203A	0x1600
 
 #define SHARP_ID		0xB0	/* Sharp */
 #define SHARP_LH28F008BJxxPT	0xEC

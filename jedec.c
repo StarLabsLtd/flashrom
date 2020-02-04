@@ -64,25 +64,11 @@ void data_polling_jedec(chipaddr dst, uint8_t data)
 	}
 }
 
-void unprotect_jedec(chipaddr bios)
-{
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0x80, bios + 0x5555);
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0x20, bios + 0x5555);
-
-	programmer_delay(200);
-}
-
-void protect_jedec(chipaddr bios)
+void start_program_jedec(chipaddr bios)
 {
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xA0, bios + 0x5555);
-
-	programmer_delay(200);
 }
 
 int probe_jedec(struct flashchip *flash)
@@ -114,9 +100,6 @@ int probe_jedec(struct flashchip *flash)
 	chip_writeb(0x55, bios + 0x2AAA);
 	programmer_delay(10);
 	chip_writeb(0x90, bios + 0x5555);
-	/* Older chips may need up to 100 us to respond. The ATMEL 29C020
-	 * needs 10 ms according to the data sheet.
-	 */
 	programmer_delay(probe_timing_enter);
 
 	/* Read product ID */
@@ -265,7 +248,7 @@ int erase_chip_jedec(struct flashchip *flash)
 int write_page_write_jedec(struct flashchip *flash, uint8_t *src,
 			   int start, int page_size)
 {
-	int i, tried = 0, start_index = 0, ok;
+	int i, tried = 0, failed;
 	uint8_t *s = src;
 	chipaddr bios = flash->virtual_memory;
 	chipaddr dst = bios + start;
@@ -273,12 +256,10 @@ int write_page_write_jedec(struct flashchip *flash, uint8_t *src,
 
 retry:
 	/* Issue JEDEC Data Unprotect comand */
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0xA0, bios + 0x5555);
+	start_program_jedec(bios);
 
 	/* transfer data from source to destination */
-	for (i = start_index; i < page_size; i++) {
+	for (i = 0; i < page_size; i++) {
 		/* If the data is 0xFF, don't program it */
 		if (*src != 0xFF)
 			chip_writeb(*src, dst);
@@ -290,34 +271,32 @@ retry:
 
 	dst = d;
 	src = s;
-	ok = !verify_range(flash, src, start, page_size, NULL);
+	failed = verify_range(flash, src, start, page_size, NULL);
 
-	if (!ok && tried++ < MAX_REFLASH_TRIES) {
-		start_index = i;
+	if (failed && tried++ < MAX_REFLASH_TRIES) {
+		fprintf(stderr, "retrying.\n");
 		goto retry;
 	}
-	if (!ok) {
+	if (failed) {
 		fprintf(stderr, " page 0x%lx failed!\n",
 			(d - bios) / page_size);
 	}
-	return !ok;
+	return failed;
 }
 
 int write_byte_program_jedec(chipaddr bios, uint8_t *src,
 			     chipaddr dst)
 {
-	int tried = 0, ok = 1;
+	int tried = 0, failed = 0;
 
-	/* If the data is 0xFF, don't program it */
+	/* If the data is 0xFF, don't program it and don't complain. */
 	if (*src == 0xFF) {
-		return -1;
+		return 0;
 	}
 
 retry:
 	/* Issue JEDEC Byte Program command */
-	chip_writeb(0xAA, bios + 0x5555);
-	chip_writeb(0x55, bios + 0x2AAA);
-	chip_writeb(0xA0, bios + 0x5555);
+	start_program_jedec(bios);
 
 	/* transfer data from source to destination */
 	chip_writeb(*src, dst);
@@ -328,30 +307,34 @@ retry:
 	}
 
 	if (tried >= MAX_REFLASH_TRIES)
-		ok = 0;
+		failed = 1;
 
-	return !ok;
+	return failed;
 }
 
 int write_sector_jedec(chipaddr bios, uint8_t *src,
 		       chipaddr dst, unsigned int page_size)
 {
-	int i;
+	int i, failed = 0;
+	chipaddr olddst;
 
+	olddst = dst;
 	for (i = 0; i < page_size; i++) {
-		write_byte_program_jedec(bios, src, dst);
+		if (write_byte_program_jedec(bios, src, dst))
+			failed = 1;
 		dst++, src++;
 	}
+	if (failed)
+		fprintf(stderr, " writing sector at 0x%lx failed!\n", olddst);
 
-	return 0;
+	return failed;
 }
 
 int write_jedec(struct flashchip *flash, uint8_t *buf)
 {
-	int i;
+	int i, failed = 0;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	chipaddr bios = flash->virtual_memory;
 
 	if (erase_chip_jedec(flash)) {
 		fprintf(stderr,"ERASE FAILED!\n");
@@ -361,12 +344,39 @@ int write_jedec(struct flashchip *flash, uint8_t *buf)
 	printf("Programming page: ");
 	for (i = 0; i < total_size / page_size; i++) {
 		printf("%04d at address: 0x%08x", i, i * page_size);
-		write_page_write_jedec(flash, buf + i * page_size,
-				       i * page_size, page_size);
+		if (write_page_write_jedec(flash, buf + i * page_size,
+					   i * page_size, page_size))
+			failed = 1;
 		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	}
 	printf("\n");
-	protect_jedec(bios);
 
+	return failed;
+}
+
+int write_jedec_1(struct flashchip *flash, uint8_t * buf)
+{
+	int i;
+	chipaddr bios = flash->virtual_memory;
+	chipaddr dst = bios;
+
+	programmer_delay(10);
+	if (erase_flash(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
+
+	printf("Programming page: ");
+	for (i = 0; i < flash->total_size; i++) {
+		if ((i & 0x3) == 0)
+			printf("address: 0x%08lx", (unsigned long)i * 1024);
+
+                write_sector_jedec(bios, buf + i * 1024, dst + i * 1024, 1024);
+
+		if ((i & 0x3) == 0)
+			printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+	}
+
+	printf("\n");
 	return 0;
 }

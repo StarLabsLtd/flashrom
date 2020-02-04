@@ -1,4 +1,766 @@
 ------------------------------------------------------------------------
+r792 | libv | 2009-12-03 13:25:34 +0100 (Thu, 03 Dec 2009) | 7 lines
+
+Boards: Add general nVidia MCP gpio routine.
+
+Turns out that the AMD 8111 datasheet describes this bit of the MCP
+perfectly.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r791 | uwe | 2009-12-01 13:55:18 +0100 (Tue, 01 Dec 2009) | 15 lines
+
+Mark the following boards as OK (no board-enable needed):
+
+ - AsRock K8S8X (reported by Adrian Glaubitz <adrian.glaubitz@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-November/000937.html
+
+ - ASUS K8V-X SE (reported by Adrian Glaubitz <adrian.glaubitz@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-November/000965.html
+
+ - DFI Blood-Iron P35 T2RL (reported by Erno Vaurio <ernovaur@gmail.com>)
+   http://www.flashrom.org/pipermail/flashrom/2009-November/001059.html
+
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r790 | libv | 2009-11-29 02:19:25 +0100 (Sun, 29 Nov 2009) | 11 lines
+
+Board enable for Shuttle AK31.
+
+All AK31 versions, 1.x, 2.x and 3.x are supported by this board enable.
+Sadly this board can not be autodetected.
+
+Re-uses the epox ep 8k5a2 board enable, which now lost its check for
+the VT8235 ISA bridge and got renamed to w836xx_memw_enable_2e.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Mateusz Murawski <matowy@tlen.pl>
+------------------------------------------------------------------------
+r789 | libv | 2009-11-28 22:12:58 +0100 (Sat, 28 Nov 2009) | 7 lines
+
+Boards: Fix up MSI KT4V board enable.
+
+* Add autodetection and remove match strings.
+* Make use of vt823x_set_all_writes_to_lpc.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r788 | libv | 2009-11-28 19:26:21 +0100 (Sat, 28 Nov 2009) | 4 lines
+
+Boards: Add Asus P4B266LM (Sony Vaio PCV-RX650).
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Allan Bjorklund <abjork@speakeasy.net>
+------------------------------------------------------------------------
+r787 | libv | 2009-11-28 19:16:31 +0100 (Sat, 28 Nov 2009) | 4 lines
+
+Boards: Add board match for Asrock P4i65GV.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+------------------------------------------------------------------------
+r786 | libv | 2009-11-28 19:07:51 +0100 (Sat, 28 Nov 2009) | 7 lines
+
+Boards: provide enormous intel_ich_gpio_set function.
+
+This code sets gpio lines on random intel ichs. Detects all currently
+known intel ICHs, checks gpio lines, and then sets them accordingly.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+------------------------------------------------------------------------
+r785 | hailfinger | 2009-11-27 18:49:42 +0100 (Fri, 27 Nov 2009) | 31 lines
+
+Use common jedec functionality where appropriate. The deleted function
+in en29f002a.c is reintroduced as write_by_byte_jedec in jedec.c as it
+contains no chip-specific instructions. It is not yet used in other
+chip drivers, as key addresses (0x2AAA/0x5555) are often specified with
+less bits. After crosschecking datasheets, most of the fixmes can
+probably be resolved as indicated in them, causing significant code
+reduction.
+
+The common JEDEC code for bytewise programming does not program 0xFF at
+all.
+The chips that had a dedicated bytewise flash function which has been
+changed to write_jedec_1 thus changed flashing behaviour and the
+"write" test flag has been removed. This applies to:
+  AMD Am29F002BB/Am29F002NBB
+  AMD Am29F002BT/Am29F002NBT (TEST_OK_PREW before)
+  AMIC A29002B
+  AMIC A29002T (TEST_OK_PREW before)
+  EON EN29F002(A)(N)B
+  EON EN29F002(A)(N)T (TEST_OK_PREW before)
+  Macronix MX29F001B (TEST_OK_PREW before)
+  Macronix MX29F001T (TEST_OK_PREW before)
+  Macronix MX29F002B
+  Macronix MX29F002T (TEST_OK_PREW before)
+  Macronix MX29LV040
+
+Similar analysis should be performed for the read id stuff.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r784 | hailfinger | 2009-11-26 17:51:39 +0100 (Thu, 26 Nov 2009) | 12 lines
+
+Add support for Intel 3400 series / 5 series chipset.
+Found in Intel document 322170 (Intel 5 Series Chipset and Intel 3400
+Series Chipset Specification Update).
+According to http://pciids.sourceforge.net/ we probably should match all
+IDs from 0x3b00-0x3b1f, but so far I didn't find an Intel doc saying the
+same.
+If anybody has contacts at Intel and can check, I'd be happy to add the
+rest of the IDs.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r783 | hailfinger | 2009-11-26 15:50:52 +0100 (Thu, 26 Nov 2009) | 28 lines
+
+This patch removes the extremely dangerous unprotect_jedec function
+which is not used at all within flashrom code, and renames the
+misleadingly named protect_jedec function to start_program_jedec. Calls
+to protect_jedec after flashing are removed, because
+ a) on LPC chips, the command sent by protoct_jedec is not even in the
+datasheet and
+ b) on parallel chips, the block write command issued before already
+contained the software protection sequence, so software protection is
+definitely enabled.
+
+This patch also removes two clones of protect_jedec
+
+Background: JEDEC Software Data Protection started as an optional
+feature, which was disabled on the first single-voltage-flash chips. The
+software data protection is the need to prefix a write with a magic
+"write enable" command, while without write protection every write
+access into the chip's address space modifies flash content. This magic
+write enable command also tells the flash chip that the programmer
+obviously support sending write-enable commands and turns off the "any
+write modifies flash content" mode. There also exist a two-command (6
+writes) sequence that disables Software Data Protection completey, which
+should only ever be used to prepare updating with a device that can't
+handle software data protection.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r782 | hailfinger | 2009-11-26 12:05:01 +0100 (Thu, 26 Nov 2009) | 9 lines
+
+Add entries of W25x32 and W25x64. The model_ids are already in the
+header.
+
+W25x32 has been successfully probed.
+W25x64 is not available, the entry is based on the datasheet.
+
+Signed-off-by: Zheng Bao <zheng.bao@amd.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r781 | hailfinger | 2009-11-25 18:05:52 +0100 (Wed, 25 Nov 2009) | 5 lines
+
+Clarify a comment about verification routine usage.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r780 | hailfinger | 2009-11-25 17:58:17 +0100 (Wed, 25 Nov 2009) | 10 lines
+
+Reduce realloc syscall overhead for FT2232 and bitbang.
+
+FT2232 ran realloc() for every executed command. Start with a big enough
+buffer and don't touch buffer size unless it needs to grow.
+Bitbang was slightly better: It only ran realloc() if buffer size
+changed. Still, the solution above improves performance and reliability.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r779 | hailfinger | 2009-11-25 17:41:50 +0100 (Wed, 25 Nov 2009) | 7 lines
+
+jedec.c was missing error handling in a few cases. Fix.
+jedec.c error handling used double negation in too many places for no
+good reason. Clean up.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r778 | hailfinger | 2009-11-25 16:04:28 +0100 (Wed, 25 Nov 2009) | 7 lines
+
+Optimized write_sst_fwhub for safety and speed:
+Now uses block erase instead of chip erase. Also introduced auto skip
+feature.
+
+Signed-off-by: Adam Jurkowski <adam.jurkowski@kontron.pl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r777 | hailfinger | 2009-11-25 03:07:30 +0100 (Wed, 25 Nov 2009) | 9 lines
+
+Kill hardcoded block erase on ICH SPI.
+The existing code does not work for all SPI chips, and it just was a
+band-aid to cope with locked down chipsets back in a time when there was
+no eraseblock infrastructure.
+Basically, this unbreaks a few SPI chips on ICH.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+
+------------------------------------------------------------------------
+r776 | hailfinger | 2009-11-24 19:27:10 +0100 (Tue, 24 Nov 2009) | 19 lines
+
+Add the ability to set Bus Pirate SPI speed via the command line.
+Example usage:
+flashrom -p buspiratespi:spispeed=2.6MHz,dev=/dev/foo
+flashrom -p buspiratespi:dev=/dev/foo,spispeed=2.6M
+
+Refactor programmer option parsing (this allows cleanups in other
+programmers as well).
+
+Increase SPI read size from 8 to 12 bytes (current single-transaction
+limit of the Bus Pirate raw SPI protocol).
+
+Add Bus Pirate to the list of programmers supporting 4 byte RDID.
+
+Add Bus Pirate syntax to the man page.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Tested-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r775 | hailfinger | 2009-11-24 03:11:08 +0100 (Tue, 24 Nov 2009) | 6 lines
+
+Add Sanyo LF25FW203A support.
+This chip is sometimes labeled as 25FW203T.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r774 | hailfinger | 2009-11-24 03:08:11 +0100 (Tue, 24 Nov 2009) | 5 lines
+
+Add Generic SPI RDID detection for Sanyo chips.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r773 | hailfinger | 2009-11-24 01:23:33 +0100 (Tue, 24 Nov 2009) | 5 lines
+
+Revert debug compilation which was committed in r772 by accident.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r772 | hailfinger | 2009-11-24 01:20:03 +0100 (Tue, 24 Nov 2009) | 16 lines
+
+Add Bus Pirate SPI support to flashrom.
+
+The code should work on Linux/*BSD/MacOSX and relies on the serial code
+implementation in serial.c. Support for additional platforms (Windows)
+will have to be added to serial.c for this to work. For tests without a
+Bus Pirate (or with non-functional serial code) it is possible to
+#define FAKE_COMMUNICATION in buspirate_spi.c.
+Thanks to Sean Nelson for the SPI mode settings code. I tweaked it a bit
+to make configuration from a commandline easier should anybody want that
+feature.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Tested-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r771 | hailfinger | 2009-11-23 20:20:11 +0100 (Mon, 23 Nov 2009) | 10 lines
+
+Move serial handling from serprog.c to serial.c.
+This is the first step in enabling platform independent serprog and it
+also allows other drivers to use serial port functionality without
+requiring serprog.
+
+Pure code move, no code changed.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r770 | hailfinger | 2009-11-23 13:55:31 +0100 (Mon, 23 Nov 2009) | 15 lines
+
+Add the ability to generate test patterns for write testing. This will
+be useful once we create a --test function for flashrom.
+
+The test patterns make it easy to find skipped and duplicated bytes, are
+human readable, and the first 8 of them have block numbers to detect
+aliasing or wraparounds. Current size limit for aliasing detection
+is 16 MByte, but since neither LPC nor FWH nor SPI chips exist with
+bigger sizes, this is reasonably safe.
+
+Detailed documentation is available as source code comments above the
+new function generate_testpattern().
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+
+------------------------------------------------------------------------
+r769 | hailfinger | 2009-11-22 02:33:40 +0100 (Sun, 22 Nov 2009) | 17 lines
+
+Pretty much everybody who used the FT2232 SPI driver in flashrom had
+problems with incorrect reads from time to time.
+One reason was that the hardware is pretty timing sensitive even for
+reads.
+
+The other reason was that the code silently ignored errors. This patch
+doesn't add any error recovery, but it will emit error messages if
+FT2232 communication goes wrong. That allows us to track down errors
+without investing hours in driver debugging.
+
+Thanks to Jeremy Buseman <naviathan@gmail.com> for testing. He found
+out that certain libftdi/libusb/kernel/hardware combinations drop
+some bytes without returning any error codes.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Paul Fox <pgf@laptop.org>
+
+------------------------------------------------------------------------
+r768 | hailfinger | 2009-11-21 12:02:48 +0100 (Sat, 21 Nov 2009) | 9 lines
+
+Bus Pirate support needs serial communication. Serprog already has such
+functionality, so it makes sense to share that.
+TODO: Factor out serial communication into a separate file, have that
+code be available even if serprog is not selected and make it portable
+(it is very Linux-centric right now).
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r767 | hailfinger | 2009-11-20 02:12:45 +0100 (Fri, 20 Nov 2009) | 11 lines
+
+If a chip is not on the RDID generic vendor list nor on the REMS
+specific ID list, flashrom will claim that no chip is there. Handle
+these cases gracefully. flashrom will ignore generic matches if a
+specific chip was found, so this will have no impact on supported chips,
+but help a lot for a first quick analysis by the user or developer. The
+only drawback is that unknown chips may be recognized multiple times
+until they are added to flashchips.[ch].
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Marc Jones <marcj303@gmail.com>
+
+------------------------------------------------------------------------
+r766 | hailfinger | 2009-11-17 10:57:34 +0100 (Tue, 17 Nov 2009) | 12 lines
+
+To prepare for libflashrom I wanted to make the main loop more readable
+and more correct and factor out stuff which can be useful in
+libflashrom.
+
+- Factor out printing of supported devices to print.c.
+- Adjust name of wiki printing function to fit the pattern.
+- Abort if the user specified --verify and --noverify at the same time.
+- Check for extra parameters which don't fit commandline syntax.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r765 | hailfinger | 2009-11-16 22:22:24 +0100 (Mon, 16 Nov 2009) | 7 lines
+
+Fix incorrect comment about wiki printing in Makefile.
+
+Spotted by Benjamin BELLEC <b.bellec@gmail.com>
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r764 | hailfinger | 2009-11-16 16:03:35 +0100 (Mon, 16 Nov 2009) | 9 lines
+
+If a SPI command taking an address does fail, we want to know the
+address for easier debugging.
+
+Vincent wrote: This patch provided help to debug the partial write on
+ICH in descriptor mode.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Vincent S. Cojot <openlook@cojot.name> 
+
+------------------------------------------------------------------------
+r763 | hailfinger | 2009-11-16 15:13:09 +0100 (Mon, 16 Nov 2009) | 9 lines
+
+Add URLs for boards ASUS K8V, ASUS K8V SE Deluxe, Elitegroup K7S5A.
+Add a note for ASUS M2N-E.
+Change "iff" to "if". Most people don't understand what "iff" means and
+the meaning of both words is close enough to hopefully give users the
+right idea.
+
+Signed-off-by: Idwer Vollering <vidwer@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r762 | hailfinger | 2009-11-16 15:05:13 +0100 (Mon, 16 Nov 2009) | 13 lines
+
+Retrieve the proper linker flags for libftdi via pkg-config and fall
+back if pkg-config isn't available or if it doesn't know libftdi.
+
+Fix $LIBS and $FEATURE_LIBS to honor dependency order.
+
+The original patch is from J?\195?\182rg, it has been updated by Carl-Daniel to
+work on the current tree and to have a fallback in case pkg-config is
+not available or not working.
+
+Signed-off-by: J?\195?\182rg Mayer <jmayer@loplof.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: J?\195?\182rg Mayer <jmayer@loplof.de>
+
+------------------------------------------------------------------------
+r761 | hailfinger | 2009-11-15 18:23:59 +0100 (Sun, 15 Nov 2009) | 5 lines
+
+svn:ignore .libdeps
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r760 | hailfinger | 2009-11-15 18:20:21 +0100 (Sun, 15 Nov 2009) | 10 lines
+
+Mark Elitegroup K7S5A as supported.
+Mark SiS 735 as supported.
+
+Remove "SiS" from the model number to avoid printing it twice.
+
+Reported by Adrian Glaubitz.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r759 | hailfinger | 2009-11-15 18:13:29 +0100 (Sun, 15 Nov 2009) | 18 lines
+
+Add support for every single SiS chipset out there.
+The two existing SiS chipset enables (compared to the 28 in this patch)
+were refactored, and one of them was fixed.
+
+A function to match PCI vendor/class combinations was added to generic
+code.
+
+Tested on the "Elitegroup K7S5A". Results are somewhat unexpected (some
+PCI settings seem to be inaccessible, but it still works).
+
+This is not based on any docs, but rather on detailed analysis
+of existing opensource code for some of the chipsets.
+
+Thanks to for Adrian Glaubitz testing.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
+
+------------------------------------------------------------------------
+r758 | hailfinger | 2009-11-14 04:58:58 +0100 (Sat, 14 Nov 2009) | 9 lines
+
+Mark "Asus K8V" as supported. Reported by
+martin f krafft <madduck@madduck.net>
+
+Mark "Asus K8V SE Deluxe" as supported. Reported by
+Luke Dashjr <luke_coreboot@dashjr.org>
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r757 | hailfinger | 2009-11-14 04:48:33 +0100 (Sat, 14 Nov 2009) | 11 lines
+
+The automatic retry in write_page_write_jedec didn't retry flashing the
+correct range, essentially rendering the functionality useless. This
+patch simplifies the code and fixes the bug.
+
+Thanks to Luke Dashjr for testing.
+
+Mark Winbond W29C040P as supported.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Luke Dashjr <luke_coreboot@dashjr.org>
+
+------------------------------------------------------------------------
+r756 | hailfinger | 2009-11-06 19:09:42 +0100 (Fri, 06 Nov 2009) | 5 lines
+
+Fix incorrect comment in SST49LF004A/B description.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r755 | hailfinger | 2009-10-31 02:53:09 +0100 (Sat, 31 Oct 2009) | 30 lines
+
+Add infrastructure to check and report to the user the maximum supported
+decode size for chipsets and tested mainboards.
+
+The rationale is to warn users when they, for example, try to flash
+a 512KB parallel flash chip but their chipset only supports 256KB,
+or they try to flash 512KB and the chipset _does_ theoretically
+support 512KB but their special board doesn't wire all address lines
+and thus supports only 256 KB ROM chips at maximum.
+
+This has cost Uwe hours of debugging on some board already, until he
+figured out what was going on. We should try warn our users where
+possible about this.
+
+The chipset and the chip may have more than one bus in common (e.g.
+SB600 and Pm49* can both speak LPC+FWH) and on SB600/SB7x0/SB8x0 there
+are different limits for LPC and FWH. The only way to tell the user
+about the exact circumstances is to spew error messages per bus.
+
+The code will issue a warning during probe (which does fail for some
+chips if the size is too big) and abort before the first real
+read/write/erase action. If no action is specified, the warning is
+printed anyway.
+That way, a user can find out why probe might not have worked, and will
+be stopped before he/she gets incorrect results.
+
+Add a bitcount function to the infrastructure.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r754 | hailfinger | 2009-10-30 22:12:39 +0100 (Fri, 30 Oct 2009) | 6 lines
+
+Adjust a help text for external PCI programmers to the new parameter
+scheme. Pointed out by Maciej Pijanka.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r753 | hailfinger | 2009-10-22 17:07:30 +0200 (Thu, 22 Oct 2009) | 12 lines
+
+Since we don't have any debug level printing infrastructure yet, I
+propose to kill the obnoxious debug message in ichspi.c which was added
+to check for correct PREOP handling. We know the code works fine (after
+getting a few reports over 100 MB long) and there's no point in keeping
+it around anymore.
+If there is any desire, we can reinstate it as print_spew or whatever
+once the debug level infrastructure is merged, but at that point we
+probably just are happy that the debug output isn't there anymore.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+------------------------------------------------------------------------
+r752 | libv | 2009-10-21 14:05:50 +0200 (Wed, 21 Oct 2009) | 13 lines
+
+Board enable for Shuttle FN25 (SN25P).
+
+Shuttle SFF PC is SN25P, board FN25, AMD socket 939 with an nForce4
+chipset.
+
+Config register 0x92 on the ISA bridge needs to be cleared for TBL#
+to be raised. No information about individual bits of this register
+is currently available.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Ulf Mehlig <ulf@ufpa.br>
+
+
+------------------------------------------------------------------------
+r751 | hailfinger | 2009-10-19 20:15:36 +0200 (Mon, 19 Oct 2009) | 5 lines
+
+Remove confusing out-of-date comment.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r750 | uwe | 2009-10-06 22:25:48 +0200 (Tue, 06 Oct 2009) | 6 lines
+
+Add missing NVIDIA PCI IDs to wiki output.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r749 | uwe | 2009-10-06 22:23:29 +0200 (Tue, 06 Oct 2009) | 14 lines
+
+Mark the following boards as supported (no board-enable needed):
+
+ - MSI MS-6153 (reported by Uwe Hermann <uwe@hermann-uwe.de>)
+   Tested by me on hardware. The board decodes max. 256 KB.
+
+ - MSI MS-6156 (reported by Uwe Hermann <uwe@hermann-uwe.de>)
+   Tested by me on hardware. The board decodes max. 256 KB.
+
+Also, fix Dell PowerEdge 1850 name and add some more board URLs.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r748 | uwe | 2009-10-06 15:00:00 +0200 (Tue, 06 Oct 2009) | 6 lines
+
+Upon popular request, move board support tables to print.c.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r747 | libv | 2009-10-06 13:32:21 +0200 (Tue, 06 Oct 2009) | 7 lines
+
+Mark NVIDIA Nforce4/MCP04 as tested.
+
+Oops.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+------------------------------------------------------------------------
+r746 | libv | 2009-10-05 20:46:35 +0200 (Mon, 05 Oct 2009) | 11 lines
+
+Board enable for EPoX EP-8RDA3+.
+
+SocketA + nForce2 + MCP2.
+
+Motherboard includes a second ethernet controller and an Agere
+firewire controller with valid subsystem ids, so these are used for
+matching the board.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Eddie Vanhove <moonraket@hotmail.com>
+
+------------------------------------------------------------------------
+r745 | libv | 2009-10-05 18:07:00 +0200 (Mon, 05 Oct 2009) | 12 lines
+
+Board enable for ASUS P5ND2-SLI Deluxe.
+
+This patch reorganises the board_ga_k8n_sli to create
+nvidia_mcp_gpio_raise, a more general routine to set these bits.
+Without docs, i can only assume that these memory area are gpio
+lines.
+
+Then it becomes easy to add support for this nForce4 SLI board.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Martin Szulecki <opensuse@sukimashita.com>
+
+------------------------------------------------------------------------
+r744 | libv | 2009-10-05 18:04:47 +0200 (Mon, 05 Oct 2009) | 8 lines
+
+Chipset support for the nVidia nForce 4.
+
+Add pciids for the new isa bridge, and hook it to the nforce2
+chipset enable.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Martin Szulecki <opensuse@sukimashita.com>
+
+------------------------------------------------------------------------
+r743 | hailfinger | 2009-10-03 19:08:02 +0200 (Sat, 03 Oct 2009) | 13 lines
+
+There is no need to tell people to install libz if flashrom doesn't need
+libz. So far, the only case where libz is needed is when a library
+(libpci) pulls in libz and even then it only happens if libpci is
+available in a static version only and said static version has libz
+requirements.
+
+Check for libpci separately and don't require libz if it isn't needed.
+
+Clarify the README.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r742 | uwe | 2009-10-01 20:40:02 +0200 (Thu, 01 Oct 2009) | 8 lines
+
+Cosmetics and small coding style fixes (trivial).
+
+Also, introduce BITMODE_BITBANG_SPI to eliminate a magic value.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r741 | hailfinger | 2009-10-01 16:51:25 +0200 (Thu, 01 Oct 2009) | 5 lines
+
+Make bitbang_spi naming consistent.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r740 | uwe | 2009-10-01 16:11:43 +0200 (Thu, 01 Oct 2009) | 8 lines
+
+Disable NVIDIA flashing support for now, erase/write is not properly
+working, yet. This needs more testing and investigation (partly timing
+related, it seems). Reads did work in multiple cases, though.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
+r739 | hailfinger | 2009-10-01 15:16:32 +0200 (Thu, 01 Oct 2009) | 5 lines
+
+Introduce proper error checking for SPI programming.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r738 | hailfinger | 2009-10-01 15:15:01 +0200 (Thu, 01 Oct 2009) | 12 lines
+
+Add comments about the meaning of block erase related struct flashchip
+members.
+Cosmetics: Place curly brackets on a common line.
+Add MX25V512 as alias name to MX25L512.
+Add MX25V8005 as alias name to MX25L8005.
+Add erase block definitions for
+MX25L2005, MX25L4005, MX25L8005, MX25L1605
+and change their status to TEST_OK_PRW where applicable.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r737 | uwe | 2009-09-30 20:29:55 +0200 (Wed, 30 Sep 2009) | 19 lines
+
+Add initial support for flashing some NVIDIA graphics cards.
+
+The new option is '-p gfxnvidia', rest of the interface is as usual.
+
+I tested a successful identify and read on a "RIVA TNT2 Model 64/Model 64 Pro"
+card for now, erase and write did NOT work properly so far!
+
+Please do not attempt to write/erase cards yet, unless you can recover!
+
+In addition to the NVIDIA handling code it was required to call
+programmer_shutdown() in a lot more places, otherwise the graphics card
+will be disabled in the init function, but never enabled again as the
+shutdown function is not called.
+The shutdown handling may be changed to use atexit() later.
+
+Signed-off-by: Uwe Hermann <uwe@hermann-uwe.de>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+
+------------------------------------------------------------------------
 r736 | hailfinger | 2009-09-28 15:15:16 +0200 (Mon, 28 Sep 2009) | 11 lines
 
 This is the bitbanging SPI driver infrastructure.
