@@ -15,8 +15,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
- *
- *
+ */
+
+/*
  * Header file for hardware access and OS abstraction. Included from flash.h.
  */
 
@@ -67,12 +68,30 @@
   #define INW  inw
   #define INL  inl
 #else
+
+#ifdef __DJGPP__
+
+#include <pc.h>
+
+  #define OUTB(x,y) outportb(y, x)
+  #define OUTW(x,y) outportw(y, x)
+  #define OUTL(x,y) outportl(y, x)
+
+  #define INB  inportb
+  #define INW  inportw
+  #define INL  inportl
+
+#else 
+
   #define OUTB outb
   #define OUTW outw
   #define OUTL outl
   #define INB  inb
   #define INW  inw
   #define INL  inl
+
+#endif
+
 #endif
 #endif
 
@@ -89,52 +108,42 @@
     #endif
   #include <stdint.h>
 
-static inline void
-outb(uint8_t value, uint16_t port)
+static inline void outb(uint8_t value, uint16_t port)
 {
 	asm volatile ("outb %b0,%w1": :"a" (value), "Nd" (port));
 }
 
-static inline uint8_t
-inb(uint16_t port)
+static inline uint8_t inb(uint16_t port)
 {
 	uint8_t value;
 	asm volatile ("inb %w1,%0":"=a" (value):"Nd" (port));
 	return value;
 }
 
-static inline void
-outw(uint16_t value, uint16_t port)
+static inline void outw(uint16_t value, uint16_t port)
 {
 	asm volatile ("outw %w0,%w1": :"a" (value), "Nd" (port));
 }
 
-static inline uint16_t
-inw(uint16_t port)
+static inline uint16_t inw(uint16_t port)
 {
 	uint16_t value;
 	asm volatile ("inw %w1,%0":"=a" (value):"Nd" (port));
 	return value;
 }
 
-static inline void
-outl(uint32_t value, uint16_t port)
+static inline void outl(uint32_t value, uint16_t port)
 {
 	asm volatile ("outl %0,%w1": :"a" (value), "Nd" (port));
 }
 
-static inline uint32_t
-inl(uint16_t port)
+static inline uint32_t inl(uint16_t port)
 {
 	uint32_t value;
 	asm volatile ("inl %1,%0":"=a" (value):"Nd" (port));
 	return value;
 }
   #endif
-#endif
-
-#if defined(__FreeBSD__) || defined(__DragonFly__)
-extern int io_fd;
 #endif
 
 #if !defined(__DARWIN__) && !defined(__FreeBSD__) && !defined(__DragonFly__)

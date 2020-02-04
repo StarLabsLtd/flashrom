@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2005 coresystems GmbH <stepan@openbios.org>
+ * Copyright (C) 2009 Sean Nelson <audiohacked@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,6 +21,7 @@
  */
 
 #include "flash.h"
+#include "chipdrivers.h"
 
 #define AUTO_PG_ERASE1		0x20
 #define AUTO_PG_ERASE2		0xD0
@@ -50,7 +52,7 @@ static void unprotect_28sf040(chipaddr bios)
 	chip_readb(bios + 0x041A);
 }
 
-static int erase_sector_28sf040(struct flashchip *flash, unsigned long address, int sector_size)
+int erase_sector_28sf040(struct flashchip *flash, unsigned int address, unsigned int sector_size)
 {
 	chipaddr bios = flash->virtual_memory;
 
@@ -67,7 +69,7 @@ static int erase_sector_28sf040(struct flashchip *flash, unsigned long address, 
 	return 0;
 }
 
-static int write_sector_28sf040(chipaddr bios, uint8_t *src, chipaddr dst,
+int write_sector_28sf040(chipaddr bios, uint8_t *src, chipaddr dst,
 				unsigned int page_size)
 {
 	int i;
@@ -86,30 +88,6 @@ static int write_sector_28sf040(chipaddr bios, uint8_t *src, chipaddr dst,
 		/* wait for Toggle bit ready */
 		toggle_ready_jedec(bios);
 	}
-
-	return 0;
-}
-
-int probe_28sf040(struct flashchip *flash)
-{
-	chipaddr bios = flash->virtual_memory;
-	uint8_t id1, id2;
-
-	chip_writeb(RESET, bios);
-	programmer_delay(10);
-
-	chip_writeb(READ_ID, bios);
-	programmer_delay(10);
-	id1 = chip_readb(bios);
-	programmer_delay(10);
-	id2 = chip_readb(bios + 0x01);
-
-	chip_writeb(RESET, bios);
-	programmer_delay(10);
-
-	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __func__, id1, id2);
-	if (id1 == flash->manufacture_id && id2 == flash->model_id)
-		return 1;
 
 	return 0;
 }
@@ -161,4 +139,14 @@ int write_28sf040(struct flashchip *flash, uint8_t *buf)
 	protect_28sf040(bios);
 
 	return 0;
+}
+
+int erase_chip_28sf040(struct flashchip *flash, unsigned int addr, unsigned int blocklen)
+{
+	if ((addr != 0) || (blocklen != flash->total_size * 1024)) {
+		fprintf(stderr, "%s called with incorrect arguments\n",
+			__func__);
+		return -1;
+	}
+	return erase_28sf040(flash);
 }

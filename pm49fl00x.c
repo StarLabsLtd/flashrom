@@ -21,6 +21,7 @@
  */
 
 #include "flash.h"
+#include "chipdrivers.h"
 
 void write_lockbits_49fl00x(chipaddr bios, int size,
 			    unsigned char bits, int block_size)
@@ -36,71 +37,14 @@ void write_lockbits_49fl00x(chipaddr bios, int size,
 	}
 }
 
-int erase_49fl00x(struct flashchip *flash)
+int unlock_49fl00x(struct flashchip *flash)
 {
-	int i;
-	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
-
-	/* unprotected */
-	write_lockbits_49fl00x(flash->virtual_registers,
-			       total_size, 0, page_size);
-
-	/*
-	 * erase_chip_jedec() will not work... Datasheet says
-	 * "Chip erase is available in A/A Mux Mode only".
-	 */
-	printf("Erasing page: ");
-	for (i = 0; i < total_size / page_size; i++) {
-		/* erase the page */
-		if (erase_block_jedec(flash, i * page_size, page_size)) {
-			fprintf(stderr, "ERASE FAILED!\n");
-			return -1;
-		}
-		printf("%04d at address: 0x%08x", i, i * page_size);
-		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
-		fflush(stdout);
-	}
-	printf("\n");
-
-	/* protected */
-	write_lockbits_49fl00x(flash->virtual_registers,
-			       total_size, 1, page_size);
-
+	write_lockbits_49fl00x(flash->virtual_registers, flash->total_size * 1024, 0, flash->page_size);
 	return 0;
 }
 
-int write_49fl00x(struct flashchip *flash, uint8_t *buf)
+int lock_49fl00x(struct flashchip *flash)
 {
-	int i;
-	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
-	chipaddr bios = flash->virtual_memory;
-
-	/* unprotected */
-	write_lockbits_49fl00x(flash->virtual_registers, total_size, 0,
-			       page_size);
-
-	printf("Programming page: ");
-	for (i = 0; i < total_size / page_size; i++) {
-		/* erase the page before programming */
-		if (erase_block_jedec(flash, i * page_size, page_size)) {
-			fprintf(stderr, "ERASE FAILED!\n");
-			return -1;
-		}
-
-		/* write to the sector */
-		printf("%04d at address: 0x%08x", i, i * page_size);
-		write_sector_jedec_common(flash, buf + i * page_size,
-				   bios + i * page_size, page_size, 0xffff);
-		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
-		fflush(stdout);
-	}
-	printf("\n");
-
-	/* protected */
-	write_lockbits_49fl00x(flash->virtual_registers, total_size, 1,
-			       page_size);
-
+	write_lockbits_49fl00x(flash->virtual_registers, flash->total_size * 1024, 1, flash->page_size);
 	return 0;
 }
