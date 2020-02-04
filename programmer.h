@@ -54,6 +54,12 @@ enum programmer {
 #if CONFIG_ATAHPT == 1
 	PROGRAMMER_ATAHPT,
 #endif
+#if CONFIG_ATAVIA == 1
+	PROGRAMMER_ATAVIA,
+#endif
+#if CONFIG_IT8212 == 1
+	PROGRAMMER_IT8212,
+#endif
 #if CONFIG_FT2232_SPI == 1
 	PROGRAMMER_FT2232_SPI,
 #endif
@@ -77,6 +83,9 @@ enum programmer {
 #endif
 #if CONFIG_NICINTEL_SPI == 1
 	PROGRAMMER_NICINTEL_SPI,
+#endif
+#if CONFIG_NICINTEL_EEPROM == 1
+	PROGRAMMER_NICINTEL_EEPROM,
 #endif
 #if CONFIG_OGP_SPI == 1
 	PROGRAMMER_OGP_SPI,
@@ -167,8 +176,7 @@ struct bitbang_spi_master {
 struct pci_dev;
 
 /* pcidev.c */
-// FIXME: These need to be local, not global
-extern uint32_t io_base_addr;
+// FIXME: This needs to be local, not global(?)
 extern struct pci_access *pacc;
 int pci_init_common(void);
 uintptr_t pcidev_readbar(struct pci_dev *dev, int bar);
@@ -255,6 +263,7 @@ void internal_delay(unsigned int usecs);
 
 #if CONFIG_INTERNAL == 1
 /* board_enable.c */
+int selfcheck_board_enables(void);
 int board_parse_parameter(const char *boardstring, const char **vendor, const char **model);
 void w836xx_ext_enter(uint16_t port);
 void w836xx_ext_leave(uint16_t port);
@@ -410,6 +419,12 @@ int nicintel_spi_init(void);
 extern const struct dev_entry nics_intel_spi[];
 #endif
 
+/* nicintel_eeprom.c */
+#if CONFIG_NICINTEL_EEPROM == 1
+int nicintel_ee_init(void);
+extern const struct dev_entry nics_intel_ee[];
+#endif
+
 /* ogp_spi.c */
 #if CONFIG_OGP_SPI == 1
 int ogp_spi_init(void);
@@ -432,6 +447,19 @@ extern const struct dev_entry satas_sii[];
 #if CONFIG_ATAHPT == 1
 int atahpt_init(void);
 extern const struct dev_entry ata_hpt[];
+#endif
+
+/* atavia.c */
+#if CONFIG_ATAVIA == 1
+int atavia_init(void);
+void *atavia_map(const char *descr, uintptr_t phys_addr, size_t len);
+extern const struct dev_entry ata_via[];
+#endif
+
+/* it8212.c */
+#if CONFIG_IT8212 == 1
+int it8212_init(void);
+extern const struct dev_entry devs_it8212[];
 #endif
 
 /* ft2232_spi.c */
@@ -457,7 +485,7 @@ int pony_spi_init(void);
 #endif
 
 /* bitbang_spi.c */
-int bitbang_spi_init(const struct bitbang_spi_master *master);
+int register_spi_bitbang_master(const struct bitbang_spi_master *master);
 
 /* buspirate_spi.c */
 #if CONFIG_BUSPIRATE_SPI == 1
@@ -485,8 +513,7 @@ struct decode_sizes {
 extern struct decode_sizes max_rom_decode;
 extern int programmer_may_write;
 extern unsigned long flashbase;
-void check_chip_supported(const struct flashchip *chip);
-int check_max_decode(enum chipbustype buses, uint32_t size);
+unsigned int count_max_decode_exceedings(const struct flashctx *flash);
 char *extract_programmer_param(const char *param_name);
 
 /* spi.c */
@@ -499,6 +526,7 @@ enum spi_controller {
 	SPI_CONTROLLER_IT85XX,
 	SPI_CONTROLLER_IT87XX,
 	SPI_CONTROLLER_SB600,
+	SPI_CONTROLLER_YANGTZE,
 	SPI_CONTROLLER_VIA,
 	SPI_CONTROLLER_WBSIO,
 #endif
@@ -532,7 +560,7 @@ enum spi_controller {
 #define MAX_DATA_UNSPECIFIED 0
 #define MAX_DATA_READ_UNLIMITED 64 * 1024
 #define MAX_DATA_WRITE_UNLIMITED 256
-struct spi_programmer {
+struct spi_master {
 	enum spi_controller type;
 	unsigned int max_data_read;
 	unsigned int max_data_write;
@@ -540,10 +568,10 @@ struct spi_programmer {
 		   const unsigned char *writearr, unsigned char *readarr);
 	int (*multicommand)(struct flashctx *flash, struct spi_command *cmds);
 
-	/* Optimized functions for this programmer */
+	/* Optimized functions for this master */
 	int (*read)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-	int (*write_256)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-	int (*write_aai)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	int (*write_256)(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
+	int (*write_aai)(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
 	const void *data;
 };
 
@@ -551,9 +579,9 @@ int default_spi_send_command(struct flashctx *flash, unsigned int writecnt, unsi
 			     const unsigned char *writearr, unsigned char *readarr);
 int default_spi_send_multicommand(struct flashctx *flash, struct spi_command *cmds);
 int default_spi_read(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-int default_spi_write_256(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-int default_spi_write_aai(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-int register_spi_programmer(const struct spi_programmer *programmer);
+int default_spi_write_256(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
+int default_spi_write_aai(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
+int register_spi_master(const struct spi_master *mst);
 
 /* The following enum is needed by ich_descriptor_tool and ich* code as well as in chipset_enable.c. */
 enum ich_chipset {
@@ -572,8 +600,10 @@ enum ich_chipset {
 	CHIPSET_6_SERIES_COUGAR_POINT,
 	CHIPSET_7_SERIES_PANTHER_POINT,
 	CHIPSET_8_SERIES_LYNX_POINT,
+	CHIPSET_BAYTRAIL, /* Actually all with Silvermont architecture: Bay Trail, Avoton/Rangeley */
 	CHIPSET_8_SERIES_LYNX_POINT_LP,
 	CHIPSET_8_SERIES_WELLSBURG,
+	CHIPSET_9_SERIES_WILDCAT_POINT,
 };
 
 /* ichspi.c */
@@ -605,17 +635,17 @@ int wbsio_check_for_spi(void);
 #endif
 
 /* opaque.c */
-struct opaque_programmer {
+struct opaque_master {
 	int max_data_read;
 	int max_data_write;
-	/* Specific functions for this programmer */
+	/* Specific functions for this master */
 	int (*probe) (struct flashctx *flash);
 	int (*read) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
-	int (*write) (struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	int (*write) (struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
 	int (*erase) (struct flashctx *flash, unsigned int blockaddr, unsigned int blocklen);
 	const void *data;
 };
-int register_opaque_programmer(const struct opaque_programmer *pgm);
+int register_opaque_master(const struct opaque_master *mst);
 
 /* programmer.c */
 int noop_shutdown(void);
@@ -624,33 +654,33 @@ void fallback_unmap(void *virt_addr, size_t len);
 void noop_chip_writeb(const struct flashctx *flash, uint8_t val, chipaddr addr);
 void fallback_chip_writew(const struct flashctx *flash, uint16_t val, chipaddr addr);
 void fallback_chip_writel(const struct flashctx *flash, uint32_t val, chipaddr addr);
-void fallback_chip_writen(const struct flashctx *flash, uint8_t *buf, chipaddr addr, size_t len);
+void fallback_chip_writen(const struct flashctx *flash, const uint8_t *buf, chipaddr addr, size_t len);
 uint16_t fallback_chip_readw(const struct flashctx *flash, const chipaddr addr);
 uint32_t fallback_chip_readl(const struct flashctx *flash, const chipaddr addr);
 void fallback_chip_readn(const struct flashctx *flash, uint8_t *buf, const chipaddr addr, size_t len);
-struct par_programmer {
+struct par_master {
 	void (*chip_writeb) (const struct flashctx *flash, uint8_t val, chipaddr addr);
 	void (*chip_writew) (const struct flashctx *flash, uint16_t val, chipaddr addr);
 	void (*chip_writel) (const struct flashctx *flash, uint32_t val, chipaddr addr);
-	void (*chip_writen) (const struct flashctx *flash, uint8_t *buf, chipaddr addr, size_t len);
+	void (*chip_writen) (const struct flashctx *flash, const uint8_t *buf, chipaddr addr, size_t len);
 	uint8_t (*chip_readb) (const struct flashctx *flash, const chipaddr addr);
 	uint16_t (*chip_readw) (const struct flashctx *flash, const chipaddr addr);
 	uint32_t (*chip_readl) (const struct flashctx *flash, const chipaddr addr);
 	void (*chip_readn) (const struct flashctx *flash, uint8_t *buf, const chipaddr addr, size_t len);
 	const void *data;
 };
-int register_par_programmer(const struct par_programmer *pgm, const enum chipbustype buses);
-struct registered_programmer {
+int register_par_master(const struct par_master *mst, const enum chipbustype buses);
+struct registered_master {
 	enum chipbustype buses_supported;
 	union {
-		struct par_programmer par;
-		struct spi_programmer spi;
-		struct opaque_programmer opaque;
+		struct par_master par;
+		struct spi_master spi;
+		struct opaque_master opaque;
 	};
 };
-extern struct registered_programmer registered_programmers[];
-extern int registered_programmer_count;
-int register_programmer(struct registered_programmer *pgm);
+extern struct registered_master registered_masters[];
+extern int registered_master_count;
+int register_master(struct registered_master *mst);
 
 /* serprog.c */
 #if CONFIG_SERPROG == 1
@@ -673,8 +703,8 @@ int serialport_config(fdtype fd, unsigned int baud);
 extern fdtype sp_fd;
 /* expose serialport_shutdown as it's currently used by buspirate */
 int serialport_shutdown(void *data);
-int serialport_write(unsigned char *buf, unsigned int writecnt);
-int serialport_write_nonblock(unsigned char *buf, unsigned int writecnt, unsigned int timeout, unsigned int *really_wrote);
+int serialport_write(const unsigned char *buf, unsigned int writecnt);
+int serialport_write_nonblock(const unsigned char *buf, unsigned int writecnt, unsigned int timeout, unsigned int *really_wrote);
 int serialport_read(unsigned char *buf, unsigned int readcnt);
 int serialport_read_nonblock(unsigned char *c, unsigned int readcnt, unsigned int timeout, unsigned int *really_read);
 

@@ -91,10 +91,9 @@ static int check_filename(char *filename, char *type)
 
 int main(int argc, char *argv[])
 {
-	unsigned long size;
 	/* Probe for up to three flash chips. */
 	const struct flashchip *chip = NULL;
-	struct flashctx flashes[3] = {{0}};
+	struct flashctx flashes[6] = {{0}};
 	struct flashctx *fill_flash;
 	const char *name;
 	int namelen, opt, i, j;
@@ -338,8 +337,7 @@ int main(int argc, char *argv[])
 	if (logfile && check_filename(logfile, "log"))
 		cli_classic_abort_usage();
 	if (logfile && open_logfile(logfile))
-		return 1;
-	free(logfile);
+		cli_classic_abort_usage();
 #endif /* !STANDALONE */
 
 #if CONFIG_PRINT_WIKI == 1
@@ -397,8 +395,10 @@ int main(int argc, char *argv[])
 	if (prog == PROGRAMMER_INVALID) {
 		if (CONFIG_DEFAULT_PROGRAMMER != PROGRAMMER_INVALID) {
 			prog = CONFIG_DEFAULT_PROGRAMMER;
-			msg_pinfo("Using default programmer \"%s\".\n",
-				  programmer_table[CONFIG_DEFAULT_PROGRAMMER].name);
+			/* We need to strdup here because we free(pparam) unconditionally later. */
+			pparam = strdup(CONFIG_DEFAULT_PROGRAMMER_ARGS);
+			msg_pinfo("Using default programmer \"%s\" with arguments \"%s\".\n",
+				  programmer_table[CONFIG_DEFAULT_PROGRAMMER].name, pparam);
 		} else {
 			msg_perr("Please select a programmer with the --programmer parameter.\n"
 				 "Previously this was not necessary because there was a default set.\n"
@@ -425,10 +425,10 @@ int main(int argc, char *argv[])
 	msg_pdbg("The following protocols are supported: %s.\n", tempstr);
 	free(tempstr);
 
-	for (j = 0; j < registered_programmer_count; j++) {
+	for (j = 0; j < registered_master_count; j++) {
 		startchip = 0;
 		while (chipcount < ARRAY_SIZE(flashes)) {
-			startchip = probe_flash(&registered_programmers[j], startchip, &flashes[chipcount], 0);
+			startchip = probe_flash(&registered_masters[j], startchip, &flashes[chipcount], 0);
 			if (startchip == -1)
 				break;
 			chipcount++;
@@ -451,27 +451,27 @@ int main(int argc, char *argv[])
 				  "automatically.\n");
 		}
 		if (force && read_it && chip_to_probe) {
-			struct registered_programmer *pgm;
-			int compatible_programmers = 0;
+			struct registered_master *mst;
+			int compatible_masters = 0;
 			msg_cinfo("Force read (-f -r -c) requested, pretending the chip is there:\n");
 			/* This loop just counts compatible controllers. */
-			for (j = 0; j < registered_programmer_count; j++) {
-				pgm = &registered_programmers[j];
+			for (j = 0; j < registered_master_count; j++) {
+				mst = &registered_masters[j];
 				/* chip is still set from the chip_to_probe earlier in this function. */
-				if (pgm->buses_supported & chip->bustype)
-					compatible_programmers++;
+				if (mst->buses_supported & chip->bustype)
+					compatible_masters++;
 			}
-			if (!compatible_programmers) {
+			if (!compatible_masters) {
 				msg_cinfo("No compatible controller found for the requested flash chip.\n");
 				ret = 1;
 				goto out_shutdown;
 			}
-			if (compatible_programmers > 1)
+			if (compatible_masters > 1)
 				msg_cinfo("More than one compatible controller found for the requested flash "
 					  "chip, using the first one.\n");
-			for (j = 0; j < registered_programmer_count; j++) {
-				pgm = &registered_programmers[j];
-				startchip = probe_flash(pgm, 0, &flashes[0], 1);
+			for (j = 0; j < registered_master_count; j++) {
+				mst = &registered_masters[j];
+				startchip = probe_flash(mst, 0, &flashes[0], 1);
 				if (startchip != -1)
 					break;
 			}
@@ -481,8 +481,14 @@ int main(int argc, char *argv[])
 				ret = 1;
 				goto out_shutdown;
 			}
+			if (map_flash(&flashes[0]) != 0) {
+				free(flashes[0].chip);
+				ret = 1;
+				goto out_shutdown;
+			}
 			msg_cinfo("Please note that forced reads most likely contain garbage.\n");
 			ret = read_flash_to_file(&flashes[0], filename);
+			unmap_flash(&flashes[0]);
 			free(flashes[0].chip);
 			goto out_shutdown;
 		}
@@ -498,11 +504,20 @@ int main(int argc, char *argv[])
 
 	fill_flash = &flashes[0];
 
-	check_chip_supported(fill_flash->chip);
+	print_chip_support_status(fill_flash->chip);
 
-	size = fill_flash->chip->total_size * 1024;
-	if (check_max_decode(fill_flash->pgm->buses_supported & fill_flash->chip->bustype, size) && (!force)) {
-		msg_cerr("Chip is too big for this programmer (-V gives details). Use --force to override.\n");
+	unsigned int limitexceeded = count_max_decode_exceedings(fill_flash);
+	if (limitexceeded > 0 && !force) {
+		enum chipbustype commonbuses = fill_flash->mst->buses_supported & fill_flash->chip->bustype;
+
+		/* Sometimes chip and programmer have more than one bus in common,
+		 * and the limit is not exceeded on all buses. Tell the user. */
+		if ((bitcount(commonbuses) > limitexceeded)) {
+			msg_pdbg("There is at least one interface available which could support the size of\n"
+				 "the selected flash chip.\n");
+		}
+		msg_cerr("This flash chip is too big for this programmer (--verbose/-V gives details).\n"
+			 "Use --force/-f to override at your own risk.\n");
 		ret = 1;
 		goto out_shutdown;
 	}
@@ -516,15 +531,20 @@ int main(int argc, char *argv[])
 	if (write_it && !dont_verify_it)
 		verify_it = 1;
 
+	/* Map the selected flash chip again. */
+	if (map_flash(fill_flash) != 0) {
+		ret = 1;
+		goto out_shutdown;
+	}
+
 	/* FIXME: We should issue an unconditional chip reset here. This can be
 	 * done once we have a .reset function in struct flashchip.
 	 * Give the chip time to settle.
 	 */
 	programmer_delay(100000);
 	ret |= doit(fill_flash, force, filename, read_it, write_it, erase_it, verify_it);
-	/* Note: doit() already calls programmer_shutdown(). */
-	goto out;
 
+	unmap_flash(fill_flash);
 out_shutdown:
 	programmer_shutdown();
 out:
@@ -539,6 +559,7 @@ out:
 	free((char *)chip_to_probe); /* Silence! Freeing is not modifying contents. */
 	chip_to_probe = NULL;
 #ifndef STANDALONE
+	free(logfile);
 	ret |= close_logfile();
 #endif /* !STANDALONE */
 	return ret;

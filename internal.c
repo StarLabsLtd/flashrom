@@ -145,7 +145,7 @@ static uint32_t internal_chip_readl(const struct flashctx *flash,
 				    const chipaddr addr);
 static void internal_chip_readn(const struct flashctx *flash, uint8_t *buf,
 				const chipaddr addr, size_t len);
-static const struct par_programmer par_programmer_internal = {
+static const struct par_master par_master_internal = {
 		.chip_readb		= internal_chip_readb,
 		.chip_readw		= internal_chip_readw,
 		.chip_readl		= internal_chip_readl,
@@ -157,11 +157,6 @@ static const struct par_programmer par_programmer_internal = {
 };
 
 enum chipbustype internal_buses_supported = BUS_NONE;
-
-static int internal_shutdown(void *data)
-{
-	return 0;
-}
 
 int internal_init(void)
 {
@@ -236,8 +231,6 @@ int internal_init(void)
 	free(arg);
 
 	if (rget_io_perms())
-		return 1;
-	if (register_shutdown(internal_shutdown, NULL))
 		return 1;
 
 	/* Default to Parallel/LPC/FWH flash devices. If a known host controller
@@ -342,7 +335,7 @@ int internal_init(void)
 	}
 
 #if defined(__i386__) || defined(__x86_64__) || defined (__mips)
-	register_par_programmer(&par_programmer_internal, internal_buses_supported);
+	register_par_master(&par_master_internal, internal_buses_supported);
 	return 0;
 #else
 	msg_perr("Your platform is not supported yet for the internal "

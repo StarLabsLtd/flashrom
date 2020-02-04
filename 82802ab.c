@@ -44,7 +44,7 @@ int probe_82802ab(struct flashctx *flash)
 {
 	chipaddr bios = flash->virtual_memory;
 	uint8_t id1, id2, flashcontent1, flashcontent2;
-	int shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED) != 0;
+	int shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED) ? 1 : 0;
 
 	/* Reset to get a clean state */
 	chip_writeb(flash, 0xFF, bios);
@@ -83,9 +83,6 @@ int probe_82802ab(struct flashctx *flash)
 	if (id1 != flash->chip->manufacture_id || id2 != flash->chip->model_id)
 		return 0;
 
-	if (flash->chip->feature_bits & FEATURE_REGISTERMAP)
-		map_flash_registers(flash);
-
 	return 1;
 }
 
@@ -106,17 +103,6 @@ uint8_t wait_82802ab(struct flashctx *flash)
 	chip_writeb(flash, 0xFF, bios);
 
 	return status;
-}
-
-int unlock_82802ab(struct flashctx *flash)
-{
-	int i;
-	//chipaddr wrprotect = flash->virtual_registers + page + 2;
-
-	for (i = 0; i < flash->chip->total_size * 1024; i+= flash->chip->page_size)
-		chip_writeb(flash, 0, flash->virtual_registers + i + 2);
-
-	return 0;
 }
 
 int erase_block_82802ab(struct flashctx *flash, unsigned int page,
@@ -142,8 +128,7 @@ int erase_block_82802ab(struct flashctx *flash, unsigned int page,
 }
 
 /* chunksize is 1 */
-int write_82802ab(struct flashctx *flash, uint8_t *src, unsigned int start,
-		  unsigned int len)
+int write_82802ab(struct flashctx *flash, const uint8_t *src, unsigned int start, unsigned int len)
 {
 	int i;
 	chipaddr dst = flash->virtual_memory + start;

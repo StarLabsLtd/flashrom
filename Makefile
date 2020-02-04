@@ -52,6 +52,11 @@ DOSLIBS_BASE ?= ..
 # evaluated below, namely those that enable/disable the various programmers).
 # Compilation will fail for unspecified values.
 CONFIG_DEFAULT_PROGRAMMER ?= PROGRAMMER_INVALID
+# The following adds a default parameter for the default programmer set above (only).
+CONFIG_DEFAULT_PROGRAMMER_ARGS ?= ''
+# Example: compiling with
+#   make CONFIG_DEFAULT_PROGRAMMER=PROGRAMMER_SERPROG CONFIG_DEFAULT_PROGRAMMER_ARGS="dev=/dev/ttyUSB0:1500000"
+# would make executing './flashrom' (almost) equivialent to './flashrom -p serprog:dev=/dev/ttyUSB0:1500000'.
 
 # If your compiler spits out excessive warnings, run make WARNERROR=no
 # You shouldn't have to change this flag.
@@ -192,6 +197,16 @@ UNSUPPORTED_FEATURES += CONFIG_ATAHPT=yes
 else
 override CONFIG_ATAHPT = no
 endif
+ifeq ($(CONFIG_ATAVIA), yes)
+UNSUPPORTED_FEATURES += CONFIG_ATAVIA=yes
+else
+override CONFIG_ATAVIA = no
+endif
+ifeq ($(CONFIG_IT8212), yes)
+UNSUPPORTED_FEATURES += CONFIG_IT8212=yes
+else
+override CONFIG_IT8212 = no
+endif
 ifeq ($(CONFIG_DRKAISER), yes)
 UNSUPPORTED_FEATURES += CONFIG_DRKAISER=yes
 else
@@ -211,6 +226,11 @@ ifeq ($(CONFIG_NICINTEL), yes)
 UNSUPPORTED_FEATURES += CONFIG_NICINTEL=yes
 else
 override CONFIG_NICINTEL = no
+endif
+ifeq ($(CONFIG_NICINTEL_EEPROM), yes)
+UNSUPPORTED_FEATURES += CONFIG_NICINTEL_EEPROM=yes
+else
+override CONFIG_NICINTEL_EEPROM = no
 endif
 ifeq ($(CONFIG_NICINTEL_SPI), yes)
 UNSUPPORTED_FEATURES += CONFIG_NICINTEL_SPI=yes
@@ -331,19 +351,19 @@ endif
 # Flash chip drivers and bus support infrastructure.
 
 CHIP_OBJS = jedec.o stm50.o w39.o w29ee011.o \
-	sst28sf040.o m29f400bt.o 82802ab.o pm49fl00x.o \
+	sst28sf040.o 82802ab.o \
 	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o spi25_statusreg.o \
 	opaque.o sfdp.o en29lv640b.o at45db.o
 
 ###############################################################################
 # Library code.
 
-LIB_OBJS = layout.o flashrom.o udelay.o programmer.o
+LIB_OBJS = layout.o flashrom.o udelay.o programmer.o helpers.o
 
 ###############################################################################
 # Frontend related stuff.
 
-CLI_OBJS = cli_classic.o cli_output.o print.o
+CLI_OBJS = cli_classic.o cli_output.o cli_common.o print.o
 
 # Set the flashrom version string from the highest revision number of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
@@ -384,6 +404,9 @@ CONFIG_SATASII ?= yes
 # IMPORTANT: This code is not yet working!
 CONFIG_ATAHPT ?= no
 
+# VIA VT6421A LPC memory support
+CONFIG_ATAVIA ?= yes
+
 # Always enable FT2232 SPI dongles for now.
 CONFIG_FT2232_SPI ?= yes
 
@@ -408,6 +431,9 @@ CONFIG_NICINTEL ?= yes
 # Always enable SPI on Intel NICs for now.
 CONFIG_NICINTEL_SPI ?= yes
 
+# Always enable EEPROM on Intel NICs for now.
+CONFIG_NICINTEL_EEPROM ?= yes
+
 # Always enable SPI on OGP cards for now.
 CONFIG_OGP_SPI ?= yes
 
@@ -422,6 +448,9 @@ CONFIG_SATAMV ?= yes
 
 # Enable Linux spidev interface by default. We disable it on non-Linux targets.
 CONFIG_LINUX_SPI ?= yes
+
+# Always enable ITE IT8212F PATA controllers for now.
+CONFIG_IT8212 ?= yes
 
 # Disable wiki printing by default. It is only useful if you have wiki access.
 CONFIG_PRINT_WIKI ?= no
@@ -471,6 +500,7 @@ CONFIG_INTERNAL_DMI ?= yes
 # Depending on the CONFIG_* variables set and verified above we set compiler flags and parameters below.
 
 FEATURE_CFLAGS += -D'CONFIG_DEFAULT_PROGRAMMER=$(CONFIG_DEFAULT_PROGRAMMER)'
+FEATURE_CFLAGS += -D'CONFIG_DEFAULT_PROGRAMMER_ARGS="$(CONFIG_DEFAULT_PROGRAMMER_ARGS)"'
 
 ifeq ($(CONFIG_INTERNAL), yes)
 FEATURE_CFLAGS += -D'CONFIG_INTERNAL=1'
@@ -535,6 +565,18 @@ PROGRAMMER_OBJS += atahpt.o
 NEED_PCI := yes
 endif
 
+ifeq ($(CONFIG_ATAVIA), yes)
+FEATURE_CFLAGS += -D'CONFIG_ATAVIA=1'
+PROGRAMMER_OBJS += atavia.o
+NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_IT8212), yes)
+FEATURE_CFLAGS += -D'CONFIG_IT8212=1'
+PROGRAMMER_OBJS += it8212.o
+NEED_PCI := yes
+endif
+
 ifeq ($(CONFIG_FT2232_SPI), yes)
 # This is a totally ugly hack.
 FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'CONFIG_FT2232_SPI=1'")
@@ -589,6 +631,12 @@ endif
 ifeq ($(CONFIG_NICINTEL_SPI), yes)
 FEATURE_CFLAGS += -D'CONFIG_NICINTEL_SPI=1'
 PROGRAMMER_OBJS += nicintel_spi.o
+NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_NICINTEL_EEPROM), yes)
+FEATURE_CFLAGS += -D'CONFIG_NICINTEL_EEPROM=1'
+PROGRAMMER_OBJS += nicintel_eeprom.o
 NEED_PCI := yes
 endif
 

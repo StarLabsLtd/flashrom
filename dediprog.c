@@ -306,7 +306,7 @@ static int dediprog_spi_read(struct flashctx *flash, uint8_t *buf,
  * @dedi_spi_cmd    dediprog specific write command for spi bus
  * @return          0 on success, 1 on failure
  */
-static int dediprog_spi_bulk_write(struct flashctx *flash, uint8_t *buf, unsigned int chunksize,
+static int dediprog_spi_bulk_write(struct flashctx *flash, const uint8_t *buf, unsigned int chunksize,
 				   unsigned int start, unsigned int len, uint8_t dedi_spi_cmd)
 {
 	int ret;
@@ -366,7 +366,7 @@ static int dediprog_spi_bulk_write(struct flashctx *flash, uint8_t *buf, unsigne
 	return 0;
 }
 
-static int dediprog_spi_write(struct flashctx *flash, uint8_t *buf,
+static int dediprog_spi_write(struct flashctx *flash, const uint8_t *buf,
 			      unsigned int start, unsigned int len, uint8_t dedi_spi_cmd)
 {
 	int ret;
@@ -418,12 +418,12 @@ static int dediprog_spi_write(struct flashctx *flash, uint8_t *buf,
 	return 0;
 }
 
-static int dediprog_spi_write_256(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len)
+static int dediprog_spi_write_256(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len)
 {
 	return dediprog_spi_write(flash, buf, start, len, DEDI_SPI_CMD_PAGEWRITE);
 }
 
-static int dediprog_spi_write_aai(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len)
+static int dediprog_spi_write_aai(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len)
 {
 	return dediprog_spi_write(flash, buf, start, len, DEDI_SPI_CMD_AAIWRITE);
 }
@@ -750,7 +750,7 @@ static int dediprog_setup(long target)
 	return 0;
 }
 
-static const struct spi_programmer spi_programmer_dediprog = {
+static const struct spi_master spi_master_dediprog = {
 	.type		= SPI_CONTROLLER_DEDIPROG,
 	.max_data_read	= MAX_DATA_UNSPECIFIED,
 	.max_data_write	= MAX_DATA_UNSPECIFIED,
@@ -929,7 +929,7 @@ int dediprog_init(void)
 		return 1;
 	}
 
-	register_spi_programmer(&spi_programmer_dediprog);
+	register_spi_master(&spi_master_dediprog);
 
 	/* RE leftover, leave in until the driver is complete. */
 #if 0

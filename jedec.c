@@ -4,8 +4,9 @@
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2006 Giampiero Giancipoli <gianci@email.it>
  * Copyright (C) 2006 coresystems GmbH <info@coresystems.de>
- * Copyright (C) 2007 Carl-Daniel Hailfinger
+ * Copyright (C) 2007-2012 Carl-Daniel Hailfinger
  * Copyright (C) 2009 Sean Nelson <audiohacked@gmail.com>
+ * Copyright (C) 2014 Stefan Tauner
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +24,7 @@
  */
 
 #include "flash.h"
+#include "chipdrivers.h"
 
 #define MAX_REFLASH_TRIES 0x10
 #define MASK_FULL 0xffff
@@ -111,19 +113,67 @@ static unsigned int getaddrmask(const struct flashchip *chip)
 	}
 }
 
-static void start_program_jedec_common(struct flashctx *flash,
-				       unsigned int mask)
+static void start_program_jedec_common(const struct flashctx *flash, unsigned int mask)
 {
 	chipaddr bios = flash->virtual_memory;
+	bool shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED);
+
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
+	chip_writeb(flash, 0xA0, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
+}
+
+int probe_jedec_29gl(struct flashctx *flash)
+{
+	unsigned int mask = getaddrmask(flash->chip);
+	chipaddr bios = flash->virtual_memory;
+	const struct flashchip *chip = flash->chip;
+
+	/* Reset chip to a clean slate */
+	chip_writeb(flash, 0xF0, bios + (0x5555 & mask));
+
+	/* Issue JEDEC Product ID Entry command */
 	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
 	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
-	chip_writeb(flash, 0xA0, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x90, bios + (0x5555 & mask));
+
+	/* Read product ID */
+	// FIXME: Continuation loop, second byte is at word 0x100/byte 0x200
+	uint32_t man_id = chip_readb(flash, bios + 0x00);
+	uint32_t dev_id = (chip_readb(flash, bios + 0x01) << 16) |
+			  (chip_readb(flash, bios + 0x0E) <<  8) |
+			  (chip_readb(flash, bios + 0x0F) <<  0);
+
+	/* Issue JEDEC Product ID Exit command */
+	chip_writeb(flash, 0xF0, bios + (0x5555 & mask));
+
+	msg_cdbg("%s: man_id 0x%02x, dev_id 0x%06x", __func__, man_id, dev_id);
+	if (!oddparity(man_id))
+		msg_cdbg(", man_id parity violation");
+
+	/* Read the product ID location again. We should now see normal flash contents. */
+	uint32_t flashcontent1 = chip_readb(flash, bios + 0x00); // FIXME: Continuation loop
+	uint32_t flashcontent2 = (chip_readb(flash, bios + 0x01) << 16) |
+				 (chip_readb(flash, bios + 0x0E) <<  8) |
+				 (chip_readb(flash, bios + 0x0F) <<  0);
+
+	if (man_id == flashcontent1)
+		msg_cdbg(", man_id seems to be normal flash content");
+	if (dev_id == flashcontent2)
+		msg_cdbg(", dev_id seems to be normal flash content");
+
+	msg_cdbg("\n");
+	if (man_id != chip->manufacture_id || dev_id != chip->model_id)
+		return 0;
+
+	return 1;
 }
 
 static int probe_jedec_common(struct flashctx *flash, unsigned int mask)
 {
 	chipaddr bios = flash->virtual_memory;
 	const struct flashchip *chip = flash->chip;
+	bool shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED);
 	uint8_t id1, id2;
 	uint32_t largeid1, largeid2;
 	uint32_t flashcontent1, flashcontent2;
@@ -153,31 +203,31 @@ static int probe_jedec_common(struct flashctx *flash, unsigned int mask)
 	/* Reset chip to a clean slate */
 	if ((chip->feature_bits & FEATURE_RESET_MASK) == FEATURE_LONG_RESET)
 	{
-		chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+		chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 		if (probe_timing_exit)
 			programmer_delay(10);
-		chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+		chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 		if (probe_timing_exit)
 			programmer_delay(10);
 	}
-	chip_writeb(flash, 0xF0, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xF0, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	if (probe_timing_exit)
 		programmer_delay(probe_timing_exit);
 
 	/* Issue JEDEC Product ID Entry command */
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	if (probe_timing_enter)
 		programmer_delay(10);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	if (probe_timing_enter)
 		programmer_delay(10);
-	chip_writeb(flash, 0x90, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x90, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	if (probe_timing_enter)
 		programmer_delay(probe_timing_enter);
 
 	/* Read product ID */
-	id1 = chip_readb(flash, bios);
-	id2 = chip_readb(flash, bios + 0x01);
+	id1 = chip_readb(flash, bios + (0x00 << shifted));
+	id2 = chip_readb(flash, bios + (0x01 << shifted));
 	largeid1 = id1;
 	largeid2 = id2;
 
@@ -196,14 +246,14 @@ static int probe_jedec_common(struct flashctx *flash, unsigned int mask)
 	/* Issue JEDEC Product ID Exit command */
 	if ((chip->feature_bits & FEATURE_RESET_MASK) == FEATURE_LONG_RESET)
 	{
-		chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+		chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 		if (probe_timing_exit)
 			programmer_delay(10);
-		chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+		chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 		if (probe_timing_exit)
 			programmer_delay(10);
 	}
-	chip_writeb(flash, 0xF0, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xF0, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	if (probe_timing_exit)
 		programmer_delay(probe_timing_exit);
 
@@ -212,8 +262,8 @@ static int probe_jedec_common(struct flashctx *flash, unsigned int mask)
 		msg_cdbg(", id1 parity violation");
 
 	/* Read the product ID location again. We should now see normal flash contents. */
-	flashcontent1 = chip_readb(flash, bios);
-	flashcontent2 = chip_readb(flash, bios + 0x01);
+	flashcontent1 = chip_readb(flash, bios + (0x00 << shifted));
+	flashcontent2 = chip_readb(flash, bios + (0x01 << shifted));
 
 	/* Check if it is a continuation ID, this should be a while loop. */
 	if (flashcontent1 == 0x7F) {
@@ -234,9 +284,6 @@ static int probe_jedec_common(struct flashctx *flash, unsigned int mask)
 	if (largeid1 != chip->manufacture_id || largeid2 != chip->model_id)
 		return 0;
 
-	if (chip->feature_bits & FEATURE_REGISTERMAP)
-		map_flash_registers(flash);
-
 	return 1;
 }
 
@@ -244,21 +291,23 @@ static int erase_sector_jedec_common(struct flashctx *flash, unsigned int page,
 				     unsigned int pagesize, unsigned int mask)
 {
 	chipaddr bios = flash->virtual_memory;
+	bool shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED);
 	unsigned int delay_us = 0;
+
 	if(flash->chip->probe_timing != TIMING_ZERO)
 		delay_us = 10;
 
 	/*  Issue the Sector Erase command   */
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x80, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x80, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
 
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
 	chip_writeb(flash, 0x30, bios + page);
 	programmer_delay(delay_us);
@@ -274,21 +323,23 @@ static int erase_block_jedec_common(struct flashctx *flash, unsigned int block,
 				    unsigned int blocksize, unsigned int mask)
 {
 	chipaddr bios = flash->virtual_memory;
+	bool shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED);
 	unsigned int delay_us = 0;
+
 	if(flash->chip->probe_timing != TIMING_ZERO)
 		delay_us = 10;
 
 	/*  Issue the Sector Erase command   */
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x80, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x80, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
 
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
 	chip_writeb(flash, 0x50, bios + block);
 	programmer_delay(delay_us);
@@ -303,23 +354,25 @@ static int erase_block_jedec_common(struct flashctx *flash, unsigned int block,
 static int erase_chip_jedec_common(struct flashctx *flash, unsigned int mask)
 {
 	chipaddr bios = flash->virtual_memory;
+	bool shifted = (flash->chip->feature_bits & FEATURE_ADDR_SHIFTED);
 	unsigned int delay_us = 0;
+
 	if(flash->chip->probe_timing != TIMING_ZERO)
 		delay_us = 10;
 
 	/*  Issue the JEDEC Chip Erase command   */
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x80, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x80, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
 
-	chip_writeb(flash, 0xAA, bios + (0x5555 & mask));
+	chip_writeb(flash, 0xAA, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x55, bios + (0x2AAA & mask));
+	chip_writeb(flash, 0x55, bios + ((shifted ? 0x5555 : 0x2AAA) & mask));
 	programmer_delay(delay_us);
-	chip_writeb(flash, 0x10, bios + (0x5555 & mask));
+	chip_writeb(flash, 0x10, bios + ((shifted ? 0x2AAA : 0x5555) & mask));
 	programmer_delay(delay_us);
 
 	toggle_ready_jedec_slow(flash, bios);
@@ -328,7 +381,7 @@ static int erase_chip_jedec_common(struct flashctx *flash, unsigned int mask)
 	return 0;
 }
 
-static int write_byte_program_jedec_common(struct flashctx *flash, uint8_t *src,
+static int write_byte_program_jedec_common(const struct flashctx *flash, const uint8_t *src,
 					   chipaddr dst, unsigned int mask)
 {
 	int tried = 0, failed = 0;
@@ -358,7 +411,7 @@ retry:
 }
 
 /* chunksize is 1 */
-int write_jedec_1(struct flashctx *flash, uint8_t *src, unsigned int start,
+int write_jedec_1(struct flashctx *flash, const uint8_t *src, unsigned int start,
 		  unsigned int len)
 {
 	int i, failed = 0;
@@ -380,11 +433,11 @@ int write_jedec_1(struct flashctx *flash, uint8_t *src, unsigned int start,
 	return failed;
 }
 
-static int write_page_write_jedec_common(struct flashctx *flash, uint8_t *src,
+static int write_page_write_jedec_common(struct flashctx *flash, const uint8_t *src,
 					 unsigned int start, unsigned int page_size)
 {
 	int i, tried = 0, failed;
-	uint8_t *s = src;
+	const uint8_t *s = src;
 	chipaddr bios = flash->virtual_memory;
 	chipaddr dst = bios + start;
 	chipaddr d = dst;
@@ -428,7 +481,7 @@ retry:
  * This function is a slightly modified copy of spi_write_chunked.
  * Each page is written separately in chunks with a maximum size of chunksize.
  */
-int write_jedec(struct flashctx *flash, uint8_t *buf, unsigned int start,
+int write_jedec(struct flashctx *flash, const uint8_t *buf, unsigned int start,
 		int unsigned len)
 {
 	unsigned int i, starthere, lenhere;
@@ -510,3 +563,185 @@ int erase_chip_jedec(struct flashctx *flash)
 	mask = getaddrmask(flash->chip);
 	return erase_chip_jedec_common(flash, mask);
 }
+
+struct unlockblock {
+	unsigned int size;
+	unsigned int count;
+};
+
+typedef int (*unlockblock_func)(const struct flashctx *flash, chipaddr offset);
+static int regspace2_walk_unlockblocks(const struct flashctx *flash, const struct unlockblock *block, unlockblock_func func)
+{
+	chipaddr off = flash->virtual_registers + 2;
+	while (block->count != 0) {
+		unsigned int j;
+		for (j = 0; j < block->count; j++) {
+			if (func(flash, off))
+				return -1;
+			off += block->size;
+		}
+		block++;
+	}
+	return 0;
+}
+
+#define REG2_RWLOCK ((1 << 2) | (1 << 0))
+#define REG2_LOCKDOWN (1 << 1)
+#define REG2_MASK (REG2_RWLOCK | REG2_LOCKDOWN)
+
+static int printlock_regspace2_block(const struct flashctx *flash, chipaddr offset)
+{
+	chipaddr wrprotect = flash->virtual_registers + offset + 2;
+	uint8_t state = chip_readb(flash, wrprotect);
+	msg_cdbg("Lock status of block at 0x%0*" PRIxPTR " is ", PRIxPTR_WIDTH, offset);
+	switch (state & REG2_MASK) {
+	case 0:
+		msg_cdbg("Full Access.\n");
+		break;
+	case 1:
+		msg_cdbg("Write Lock (Default State).\n");
+		break;
+	case 2:
+		msg_cdbg("Locked Open (Full Access, Locked Down).\n");
+		break;
+	case 3:
+		msg_cdbg("Write Lock, Locked Down.\n");
+		break;
+	case 4:
+		msg_cdbg("Read Lock.\n");
+		break;
+	case 5:
+		msg_cdbg("Read/Write Lock.\n");
+		break;
+	case 6:
+		msg_cdbg("Read Lock, Locked Down.\n");
+		break;
+	case 7:
+		msg_cdbg("Read/Write Lock, Locked Down.\n");
+		break;
+	}
+	return 0;
+}
+
+int printlock_regspace2_blocks(const struct flashctx *flash, const struct unlockblock *blocks)
+{
+	return regspace2_walk_unlockblocks(flash, blocks, &printlock_regspace2_block);
+}
+
+static int printlock_regspace2_uniform(struct flashctx *flash, unsigned long block_size)
+{
+	const unsigned int elems = flash->chip->total_size * 1024 / block_size;
+	struct unlockblock blocks[2] = {{.size = block_size, .count = elems}};
+	return regspace2_walk_unlockblocks(flash, blocks, &printlock_regspace2_block);
+}
+
+int printlock_regspace2_uniform_64k(struct flashctx *flash)
+{
+	return printlock_regspace2_uniform(flash, 64 * 1024);
+}
+
+int printlock_regspace2_block_eraser_0(struct flashctx *flash)
+{
+	// FIXME: this depends on the eraseblocks not to be filled up completely (i.e. to be null-terminated).
+	const struct unlockblock *unlockblocks =
+		(const struct unlockblock *)flash->chip->block_erasers[0].eraseblocks;
+	return regspace2_walk_unlockblocks(flash, unlockblocks, &printlock_regspace2_block);
+}
+
+int printlock_regspace2_block_eraser_1(struct flashctx *flash)
+{
+	// FIXME: this depends on the eraseblocks not to be filled up completely (i.e. to be null-terminated).
+	const struct unlockblock *unlockblocks =
+		(const struct unlockblock *)flash->chip->block_erasers[1].eraseblocks;
+	return regspace2_walk_unlockblocks(flash, unlockblocks, &printlock_regspace2_block);
+}
+
+static int changelock_regspace2_block(const struct flashctx *flash, chipaddr offset, uint8_t new_bits)
+{
+	chipaddr wrprotect = flash->virtual_registers + offset + 2;
+	uint8_t old;
+
+	if (new_bits & ~REG2_MASK) {
+		msg_cerr("Invalid locking change 0x%02x requested at 0x%0*" PRIxPTR "! "
+			 "Please report a bug at flashrom@flashrom.org\n",
+			 new_bits, PRIxPTR_WIDTH, offset);
+		return -1;
+	}
+	old = chip_readb(flash, wrprotect);
+	/* Early exist if no change (of read/write/lockdown) was requested. */
+	if (((old ^ new_bits) & REG2_MASK) == 0) {
+		msg_cdbg2("Locking status at 0x%0*" PRIxPTR " not changed\n", PRIxPTR_WIDTH, offset);
+		return 0;
+	}
+	/* Normally lockdowns can not be cleared. Try nevertheless if requested. */
+	if ((old & REG2_LOCKDOWN) && !(new_bits & REG2_LOCKDOWN)) {
+		chip_writeb(flash, old & ~REG2_LOCKDOWN, wrprotect);
+		if (chip_readb(flash, wrprotect) != (old & ~REG2_LOCKDOWN)) {
+			msg_cerr("Lockdown can't be removed at 0x%0*" PRIxPTR "!\n", PRIxPTR_WIDTH, offset);
+			return -1;
+		}
+	}
+	/* Change read or write lock? */
+	if ((old ^ new_bits) & REG2_RWLOCK) {
+		/* Do not lockdown yet. */
+		msg_cdbg("Changing locking status at 0x%0*" PRIxPTR " to 0x%02x\n", PRIxPTR_WIDTH, offset, new_bits & REG2_RWLOCK);
+		chip_writeb(flash, new_bits & REG2_RWLOCK, wrprotect);
+		if (chip_readb(flash, wrprotect) != (new_bits & REG2_RWLOCK)) {
+			msg_cerr("Locking status change FAILED at 0x%0*" PRIxPTR "!\n", PRIxPTR_WIDTH, offset);
+			return -1;
+		}
+	}
+	/* Enable lockdown if requested. */
+	if (!(old & REG2_LOCKDOWN) && (new_bits & REG2_LOCKDOWN)) {
+		msg_cdbg("Enabling lockdown at 0x%0*" PRIxPTR "\n", PRIxPTR_WIDTH, offset);
+		chip_writeb(flash, new_bits, wrprotect);
+		if (chip_readb(flash, wrprotect) != new_bits) {
+			msg_cerr("Enabling lockdown FAILED at 0x%0*" PRIxPTR "!\n", PRIxPTR_WIDTH, offset);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+int unlock_regspace2_block(const struct flashctx *flash, chipaddr off)
+{
+	chipaddr wrprotect = flash->virtual_registers + off + 2;
+	uint8_t old = chip_readb(flash, wrprotect);
+	/* We don't care for the lockdown bit as long as the RW locks are 0 after we're done */
+	return changelock_regspace2_block(flash, off, old & ~REG2_RWLOCK);
+}
+
+static int unlock_regspace2_uniform(struct flashctx *flash, unsigned long block_size)
+{
+	const unsigned int elems = flash->chip->total_size * 1024 / block_size;
+	struct unlockblock blocks[2] = {{.size = block_size, .count = elems}};
+	return regspace2_walk_unlockblocks(flash, blocks, &unlock_regspace2_block);
+}
+
+int unlock_regspace2_uniform_64k(struct flashctx *flash)
+{
+	return unlock_regspace2_uniform(flash, 64 * 1024);
+}
+
+int unlock_regspace2_uniform_32k(struct flashctx *flash)
+{
+	return unlock_regspace2_uniform(flash, 32 * 1024);
+}
+
+int unlock_regspace2_block_eraser_0(struct flashctx *flash)
+{
+	// FIXME: this depends on the eraseblocks not to be filled up completely (i.e. to be null-terminated).
+	const struct unlockblock *unlockblocks =
+		(const struct unlockblock *)flash->chip->block_erasers[0].eraseblocks;
+	return regspace2_walk_unlockblocks(flash, unlockblocks, &unlock_regspace2_block);
+}
+
+int unlock_regspace2_block_eraser_1(struct flashctx *flash)
+{
+	// FIXME: this depends on the eraseblocks not to be filled up completely (i.e. to be null-terminated).
+	const struct unlockblock *unlockblocks =
+		(const struct unlockblock *)flash->chip->block_erasers[1].eraseblocks;
+	return regspace2_walk_unlockblocks(flash, unlockblocks, &unlock_regspace2_block);
+}
+
