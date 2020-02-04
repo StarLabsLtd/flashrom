@@ -23,27 +23,27 @@
 int probe_winbond_fwhub(struct flashchip *flash)
 {
 	chipaddr bios = flash->virtual_memory;
-	uint8_t vid, did;
+	uint8_t id1, id2;
 
 	/* Product Identification Entry */
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0x90, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	/* Read product ID */
-	vid = chip_readb(bios);
-	did = chip_readb(bios + 0x01);
+	id1 = chip_readb(bios);
+	id2 = chip_readb(bios + 0x01);
 
 	/* Product Identifixation Exit */
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xF0, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
-	printf_debug("%s: vid 0x%x, did 0x%x\n", __FUNCTION__, vid, did);
+	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
 
-	if (vid != flash->manufacture_id || did != flash->model_id)
+	if (id1 != flash->manufacture_id || id2 != flash->model_id)
 		return 0;
 
 	map_flash_registers(flash);
@@ -108,7 +108,7 @@ int unlock_winbond_fwhub(struct flashchip *flash)
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0x90, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	/* Read Hardware Lock Bits */
 	locking = chip_readb(bios + 0xffff2);
@@ -117,7 +117,7 @@ int unlock_winbond_fwhub(struct flashchip *flash)
 	chip_writeb(0xAA, bios + 0x5555);
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xF0, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("Lockout bits:\n");
 
@@ -142,9 +142,10 @@ int unlock_winbond_fwhub(struct flashchip *flash)
 	return 0;
 }
 
-static int erase_sector_winbond_fwhub(chipaddr bios,
+static int erase_sector_winbond_fwhub(struct flashchip *flash,
 				      unsigned int sector)
 {
+	chipaddr bios = flash->virtual_memory;
 	/* Remember: too much sleep can waste your day. */
 
 	printf("0x%08x\b\b\b\b\b\b\b\b\b\b", sector);
@@ -161,29 +162,29 @@ static int erase_sector_winbond_fwhub(chipaddr bios,
 	/* wait for Toggle bit ready */
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, sector, flash->page_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
 int erase_winbond_fwhub(struct flashchip *flash)
 {
 	int i, total_size = flash->total_size * 1024;
-	chipaddr bios = flash->virtual_memory;
 
 	unlock_winbond_fwhub(flash);
 
 	printf("Erasing:     ");
 
-	for (i = 0; i < total_size; i += flash->page_size)
-		erase_sector_winbond_fwhub(bios, i);
-
-	printf("\n");
-
-	for (i = 0; i < total_size; i++) {
-		if (chip_readb(bios + i) != 0xff) {
-			fprintf(stderr, "Error: Flash chip erase failed at 0x%08x(0x%02x)\n", i, chip_readb(bios + i));
+	for (i = 0; i < total_size; i += flash->page_size) {
+		if (erase_sector_winbond_fwhub(flash, i)) {
+			fprintf(stderr, "ERASE FAILED!\n");
 			return -1;
 		}
 	}
+
+	printf("\n");
 
 	return 0;
 }

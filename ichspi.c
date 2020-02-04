@@ -148,8 +148,6 @@ static int generate_opcodes(OPCODES * op);
 static int program_opcodes(OPCODES * op);
 static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data);
-static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf,
-			     int offset, int maxdata);
 static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
 			      int offset, int maxdata);
 
@@ -179,7 +177,7 @@ OPCODES O_ST_M25P = {
 	 {JEDEC_READ, SPI_OPCODE_TYPE_READ_WITH_ADDRESS, 0},	// Read Data
 	 {JEDEC_BE_D8, SPI_OPCODE_TYPE_WRITE_WITH_ADDRESS, 1},	// Erase Sector
 	 {JEDEC_RDSR, SPI_OPCODE_TYPE_READ_NO_ADDRESS, 0},	// Read Device Status Reg
-	 {JEDEC_RES, SPI_OPCODE_TYPE_READ_WITH_ADDRESS, 0},	// Resume Deep Power-Down
+	 {JEDEC_REMS, SPI_OPCODE_TYPE_READ_WITH_ADDRESS, 0},	// Read Electronic Manufacturer Signature
 	 {JEDEC_WRSR, SPI_OPCODE_TYPE_WRITE_NO_ADDRESS, 1},	// Write Status Register
 	 {JEDEC_RDID, SPI_OPCODE_TYPE_READ_NO_ADDRESS, 0},	// Read JDEC ID
 	 {JEDEC_CE_C7, SPI_OPCODE_TYPE_WRITE_NO_ADDRESS, 1},	// Bulk erase
@@ -223,15 +221,15 @@ static int generate_opcodes(OPCODES * op)
 		return -1;
 	}
 
-	switch (flashbus) {
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_VIA_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_VIA:
 		preop = REGREAD16(ICH7_REG_PREOP);
 		optype = REGREAD16(ICH7_REG_OPTYPE);
 		opmenu[0] = REGREAD32(ICH7_REG_OPMENU);
 		opmenu[1] = REGREAD32(ICH7_REG_OPMENU + 4);
 		break;
-	case BUS_TYPE_ICH9_SPI:
+	case SPI_CONTROLLER_ICH9:
 		preop = REGREAD16(ICH9_REG_PREOP);
 		optype = REGREAD16(ICH9_REG_OPTYPE);
 		opmenu[0] = REGREAD32(ICH9_REG_OPMENU);
@@ -305,15 +303,15 @@ int program_opcodes(OPCODES * op)
 	}
 
 	printf_debug("\n%s: preop=%04x optype=%04x opmenu=%08x%08x\n", __func__, preop, optype, opmenu[0], opmenu[1]);
-	switch (flashbus) {
-	case BUS_TYPE_ICH7_SPI:
-	case BUS_TYPE_VIA_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_ICH7:
+	case SPI_CONTROLLER_VIA:
 		REGWRITE16(ICH7_REG_PREOP, preop);
 		REGWRITE16(ICH7_REG_OPTYPE, optype);
 		REGWRITE32(ICH7_REG_OPMENU, opmenu[0]);
 		REGWRITE32(ICH7_REG_OPMENU + 4, opmenu[1]);
 		break;
-	case BUS_TYPE_ICH9_SPI:
+	case SPI_CONTROLLER_ICH9:
 		REGWRITE16(ICH9_REG_PREOP, preop);
 		REGWRITE16(ICH9_REG_OPTYPE, optype);
 		REGWRITE32(ICH9_REG_OPMENU, opmenu[0]);
@@ -453,7 +451,7 @@ static int ich7_run_opcode(OPCODE op, uint32_t offset,
 	/* wait for cycle complete */
 	timeout = 100 * 1000 * 60;	// 60s is a looong timeout.
 	while (((REGREAD16(ICH7_REG_SPIS) & SPIS_CDS) == 0) && --timeout) {
-		myusec_delay(10);
+		programmer_delay(10);
 	}
 	if (!timeout) {
 		printf_debug("timeout\n");
@@ -570,7 +568,7 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 	/*wait for cycle complete */
 	timeout = 100 * 1000 * 60;	// 60s is a looong timeout.
 	while (((REGREAD32(ICH9_REG_SSFS) & SSFS_CDS) == 0) && --timeout) {
-		myusec_delay(10);
+		programmer_delay(10);
 	}
 	if (!timeout) {
 		printf_debug("timeout\n");
@@ -599,12 +597,12 @@ static int ich9_run_opcode(OPCODE op, uint32_t offset,
 static int run_opcode(OPCODE op, uint32_t offset,
 		      uint8_t datalength, uint8_t * data)
 {
-	switch (flashbus) {
-	case BUS_TYPE_VIA_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_VIA:
 		return ich7_run_opcode(op, offset, datalength, data, 16);
-	case BUS_TYPE_ICH7_SPI:
+	case SPI_CONTROLLER_ICH7:
 		return ich7_run_opcode(op, offset, datalength, data, 64);
-	case BUS_TYPE_ICH9_SPI:
+	case SPI_CONTROLLER_ICH9:
 		return ich9_run_opcode(op, offset, datalength, data);
 	default:
 		printf_debug("%s: unsupported chipset\n", __FUNCTION__);
@@ -614,90 +612,36 @@ static int run_opcode(OPCODE op, uint32_t offset,
 	return -1;
 }
 
-static int ich_spi_read_page(struct flashchip *flash, uint8_t * buf, int offset,
-			     int maxdata)
-{
-	int page_size = flash->page_size;
-	uint32_t remaining = flash->page_size;
-	int a;
-
-	printf_debug("ich_spi_read_page: offset=%d, number=%d, buf=%p\n",
-		     offset, page_size, buf);
-
-	for (a = 0; a < page_size; a += maxdata) {
-		if (remaining < maxdata) {
-
-			if (spi_nbyte_read(offset + (page_size - remaining),
-				&buf[page_size - remaining], remaining)) {
-				printf_debug("Error reading");
-				return 1;
-			}
-			remaining = 0;
-		} else {
-			if (spi_nbyte_read(offset + (page_size - remaining),
-				&buf[page_size - remaining], maxdata)) {
-				printf_debug("Error reading");
-				return 1;
-			}
-			remaining -= maxdata;
-		}
-	}
-
-	return 0;
-}
-
 static int ich_spi_write_page(struct flashchip *flash, uint8_t * bytes,
 			      int offset, int maxdata)
 {
 	int page_size = flash->page_size;
 	uint32_t remaining = page_size;
-	int a;
+	int towrite;
 
 	printf_debug("ich_spi_write_page: offset=%d, number=%d, buf=%p\n",
 		     offset, page_size, bytes);
 
-	for (a = 0; a < page_size; a += maxdata) {
-		if (remaining < maxdata) {
-			if (run_opcode
-			    (curopcodes->opcode[0],
-			     offset + (page_size - remaining), remaining,
-			     &bytes[page_size - remaining]) != 0) {
-				printf_debug("Error writing");
-				return 1;
-			}
-			remaining = 0;
-		} else {
-			if (run_opcode
-			    (curopcodes->opcode[0],
-			     offset + (page_size - remaining), maxdata,
-			     &bytes[page_size - remaining]) != 0) {
-				printf_debug("Error writing");
-				return 1;
-			}
-			remaining -= maxdata;
+	for (; remaining > 0; remaining -= towrite) {
+		towrite = min(remaining, maxdata);
+		if (spi_nbyte_program(offset + (page_size - remaining),
+				      &bytes[page_size - remaining], towrite)) {
+			printf_debug("Error writing");
+			return 1;
 		}
 	}
 
 	return 0;
 }
 
-int ich_spi_read(struct flashchip *flash, uint8_t * buf)
+int ich_spi_read(struct flashchip *flash, uint8_t * buf, int start, int len)
 {
-	int i, rc = 0;
-	int total_size = flash->total_size * 1024;
-	int page_size = flash->page_size;
 	int maxdata = 64;
 
-	if (flashbus == BUS_TYPE_VIA_SPI) {
+	if (spi_controller == SPI_CONTROLLER_VIA)
 		maxdata = 16;
-	}
 
-	for (i = 0; (i < total_size / page_size) && (rc == 0); i++) {
-		rc = ich_spi_read_page(flash, (void *)(buf + i * page_size),
-				       i * page_size, maxdata);
-	}
-
-	return rc;
+	return spi_read_chunked(flash, buf, start, len, maxdata);
 }
 
 int ich_spi_write_256(struct flashchip *flash, uint8_t * buf)
@@ -717,13 +661,13 @@ int ich_spi_write_256(struct flashchip *flash, uint8_t * buf)
 		 * For this, we need to add a block erase function to
 		 * struct flashchip.
 		 */
-		rc = spi_block_erase_d8(flash, i * erase_size);
+		rc = spi_block_erase_d8(flash, i * erase_size, erase_size);
 		if (rc) {
 			printf("Error erasing block at 0x%x\n", i);
 			break;
 		}
 
-		if (flashbus == BUS_TYPE_VIA_SPI)
+		if (spi_controller == SPI_CONTROLLER_VIA)
 			maxdata = 16;
 
 		for (j = 0; j < erase_size / page_size; j++) {

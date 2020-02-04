@@ -28,9 +28,9 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include "flash.h"
+#include "flashchips.h"
 
 char *chip_to_probe = NULL;
-int exclude_start_page, exclude_end_page;
 int verbose = 0;
 int programmer = PROGRAMMER_INTERNAL;
 
@@ -43,9 +43,12 @@ const struct programmer_entry programmer_table[] = {
 		.chip_readb		= internal_chip_readb,
 		.chip_readw		= internal_chip_readw,
 		.chip_readl		= internal_chip_readl,
+		.chip_readn		= internal_chip_readn,
 		.chip_writeb		= internal_chip_writeb,
 		.chip_writew		= internal_chip_writew,
 		.chip_writel		= internal_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
 	},
 
 	{
@@ -56,9 +59,12 @@ const struct programmer_entry programmer_table[] = {
 		.chip_readb		= dummy_chip_readb,
 		.chip_readw		= dummy_chip_readw,
 		.chip_readl		= dummy_chip_readl,
+		.chip_readn		= dummy_chip_readn,
 		.chip_writeb		= dummy_chip_writeb,
 		.chip_writew		= dummy_chip_writew,
 		.chip_writel		= dummy_chip_writel,
+		.chip_writen		= dummy_chip_writen,
+		.delay			= internal_delay,
 	},
 
 	{
@@ -69,9 +75,12 @@ const struct programmer_entry programmer_table[] = {
 		.chip_readb		= nic3com_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
 		.chip_writeb		= nic3com_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
 	},
 
 	{
@@ -82,9 +91,59 @@ const struct programmer_entry programmer_table[] = {
 		.chip_readb		= satasii_chip_readb,
 		.chip_readw		= fallback_chip_readw,
 		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
 		.chip_writeb		= satasii_chip_writeb,
 		.chip_writew		= fallback_chip_writew,
 		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+
+	{
+		.init			= it87spi_init,
+		.shutdown		= dummy_shutdown,
+		.map_flash_region	= dummy_map,
+		.unmap_flash_region	= dummy_unmap,
+		.chip_readb		= dummy_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= dummy_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+
+	{
+		.init			= ft2232_spi_init,
+		.shutdown		= dummy_shutdown,
+		.map_flash_region	= dummy_map,
+		.unmap_flash_region	= dummy_unmap,
+		.chip_readb		= dummy_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= dummy_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+	{
+		.init			= serprog_init,
+		.shutdown		= serprog_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= serprog_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= serprog_chip_readn,
+		.chip_writeb		= serprog_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= serprog_delay,
 	},
 
 	{},
@@ -127,6 +186,11 @@ void chip_writel(uint32_t val, chipaddr addr)
 	programmer_table[programmer].chip_writel(val, addr);
 }
 
+void chip_writen(uint8_t *buf, chipaddr addr, size_t len)
+{
+	programmer_table[programmer].chip_writen(buf, addr, len);
+}
+
 uint8_t chip_readb(const chipaddr addr)
 {
 	return programmer_table[programmer].chip_readb(addr);
@@ -142,6 +206,17 @@ uint32_t chip_readl(const chipaddr addr)
 	return programmer_table[programmer].chip_readl(addr);
 }
 
+void chip_readn(uint8_t *buf, chipaddr addr, size_t len)
+{
+	programmer_table[programmer].chip_readn(buf, addr, len);
+	return;
+}
+
+void programmer_delay(int usecs)
+{
+	programmer_table[programmer].delay(usecs);
+}
+
 void map_flash_registers(struct flashchip *flash)
 {
 	size_t size = flash->total_size * 1024;
@@ -149,22 +224,120 @@ void map_flash_registers(struct flashchip *flash)
 	flash->virtual_registers = (chipaddr)programmer_map_flash_region("flash chip registers", (0xFFFFFFFF - 0x400000 - size + 1), size);
 }
 
-int read_memmapped(struct flashchip *flash, uint8_t *buf)
+int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len)
 {
-	int i;
-
-	/* We could do a memcpy as optimization if the flash is onboard */
-	//memcpy(buf, (const char *)flash->virtual_memory, flash->total_size * 1024);
-	for (i = 0; i < flash->total_size * 1024; i++)
-		buf[i] = chip_readb(flash->virtual_memory + i);
+	chip_readn(buf, flash->virtual_memory + start, len);
 		
 	return 0;
+}
+
+int min(int a, int b)
+{
+	return (a < b) ? a : b;
+}
+
+int max(int a, int b)
+{
+	return (a > b) ? a : b;
+}
+
+char *strcat_realloc(char *dest, const char *src)
+{
+	dest = realloc(dest, strlen(dest) + strlen(src) + 1);
+	if (!dest)
+		return NULL;
+	strcat(dest, src);
+	return dest;
+}
+
+/* start is an offset to the base address of the flash chip */
+int check_erased_range(struct flashchip *flash, int start, int len)
+{
+	int ret;
+	uint8_t *cmpbuf = malloc(len);
+
+	if (!cmpbuf) {
+		fprintf(stderr, "Could not allocate memory!\n");
+		exit(1);
+	}
+	memset(cmpbuf, 0xff, len);
+	ret = verify_range(flash, cmpbuf, start, len, "ERASE");
+	free(cmpbuf);
+	return ret;
+}
+
+/**
+ * @cmpbuf	buffer to compare against
+ * @start	offset to the base address of the flash chip
+ * @len		length of the verified area
+ * @message	string to print in the "FAILED" message
+ * @return	0 for success, -1 for failure
+ */
+int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message)
+{
+	int i, j, starthere, lenhere, ret = 0;
+	int page_size = flash->page_size;
+	uint8_t *readbuf = malloc(page_size);
+
+	if (!len)
+		goto out_free;
+
+	if (!flash->read) {
+		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
+		return 1;
+	}
+	if (!readbuf) {
+		fprintf(stderr, "Could not allocate memory!\n");
+		exit(1);
+	}
+
+	if (start + len > flash->total_size * 1024) {
+		fprintf(stderr, "Error: %s called with start 0x%x + len 0x%x >"
+			" total_size 0x%x\n", __func__, start, len,
+			flash->total_size * 1024);
+		ret = -1;
+		goto out_free;
+	}
+	if (!message)
+		message = "VERIFY";
+	
+	/* Warning: This loop has a very unusual condition and body.
+	 * The loop needs to go through each page with at least one affected
+	 * byte. The lowest page number is (start / page_size) since that
+	 * division rounds down. The highest page number we want is the page
+	 * where the last byte of the range lives. That last byte has the
+	 * address (start + len - 1), thus the highest page number is
+	 * (start + len - 1) / page_size. Since we want to include that last
+	 * page as well, the loop condition uses <=.
+	 */
+	for (i = start / page_size; i <= (start + len - 1) / page_size; i++) {
+		/* Byte position of the first byte in the range in this page. */
+		starthere = max(start, i * page_size);
+		/* Length of bytes in the range in this page. */
+		lenhere = min(start + len, (i + 1) * page_size) - starthere;
+		flash->read(flash, readbuf, starthere, lenhere);
+		for (j = 0; j < lenhere; j++) {
+			if (cmpbuf[starthere - start + j] != readbuf[j]) {
+				fprintf(stderr, "%s FAILED at 0x%08x! "
+					"Expected=0x%02x, Read=0x%02x\n",
+					message, starthere + j,
+					cmpbuf[starthere - start + j], readbuf[j]);
+				ret = -1;
+				goto out_free;
+			}
+		}
+	}
+
+out_free:
+	free(readbuf);
+	return ret;
 }
 
 struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 {
 	struct flashchip *flash;
 	unsigned long base = 0, size;
+	char *tmp;
 
 	for (flash = first_flash; flash && flash->name; flash++) {
 		if (chip_to_probe && strcmp(flash->name, chip_to_probe) != 0)
@@ -173,6 +346,15 @@ struct flashchip *probe_flash(struct flashchip *first_flash, int force)
 			     flash->vendor, flash->name, flash->total_size);
 		if (!flash->probe && !force) {
 			printf_debug("failed! flashrom has no probe function for this flash chip.\n");
+			continue;
+		}
+		if (!(buses_supported & flash->bustype)) {
+			tmp = flashbuses_to_text(buses_supported);
+			printf_debug("skipped. Host bus type %s ", tmp);
+			free(tmp);
+			tmp = flashbuses_to_text(flash->bustype);
+			printf_debug("and chip bus type %s are incompatible.\n", tmp);
+			free(tmp);
 			continue;
 		}
 
@@ -205,52 +387,30 @@ notfound:
 
 int verify_flash(struct flashchip *flash, uint8_t *buf)
 {
-	int idx;
+	int ret;
 	int total_size = flash->total_size * 1024;
-	uint8_t *buf2 = (uint8_t *) calloc(total_size, sizeof(char));
-	if (!flash->read) {
-		printf("FAILED!\n");
-		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
-		return 1;
-	} else
-		flash->read(flash, buf2);
 
 	printf("Verifying flash... ");
 
-	if (verbose)
-		printf("address: 0x00000000\b\b\b\b\b\b\b\b\b\b");
+	ret = verify_range(flash, buf, 0, total_size, NULL);
 
-	for (idx = 0; idx < total_size; idx++) {
-		if (verbose && ((idx & 0xfff) == 0xfff))
-			printf("0x%08x", idx);
+	if (!ret)
+		printf("VERIFIED.          \n");
 
-		if (*(buf2 + idx) != *(buf + idx)) {
-			if (verbose)
-				printf("0x%08x FAILED!", idx);
-			else
-				printf("FAILED at 0x%08x!", idx);
-			printf("  Expected=0x%02x, Read=0x%02x\n",
-			       *(buf + idx), *(buf2 + idx));
-			return 1;
-		}
-
-		if (verbose && ((idx & 0xfff) == 0xfff))
-			printf("\b\b\b\b\b\b\b\b\b\b");
-	}
-	if (verbose)
-		printf("\b\b\b\b\b\b\b\b\b\b ");
-
-	printf("VERIFIED.          \n");
-
-	return 0;
+	return ret;
 }
 
-int read_flash(struct flashchip *flash, char *filename, unsigned int exclude_start_position, unsigned int exclude_end_position)
+int read_flash(struct flashchip *flash, char *filename)
 {
 	unsigned long numbytes;
 	FILE *image;
 	unsigned long size = flash->total_size * 1024;
 	unsigned char *buf = calloc(size, sizeof(char));
+
+	if (!filename) {
+		printf("Error: No filename specified.\n");
+		return 1;
+	}
 	if ((image = fopen(filename, "w")) == NULL) {
 		perror(filename);
 		exit(1);
@@ -261,14 +421,11 @@ int read_flash(struct flashchip *flash, char *filename, unsigned int exclude_sta
 		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
 		return 1;
 	} else
-		flash->read(flash, buf);
-
-	if (exclude_end_position - exclude_start_position > 0)
-		memset(buf + exclude_start_position, 0,
-		       exclude_end_position - exclude_start_position);
+		flash->read(flash, buf, 0, size);
 
 	numbytes = fwrite(buf, 1, size, image);
 	fclose(image);
+	free(buf);
 	printf("%s.\n", numbytes == size ? "done" : "FAILED");
 	if (numbytes != size)
 		return 1;
@@ -288,12 +445,15 @@ int erase_flash(struct flashchip *flash)
 	}
 	flash->erase(flash);
 
+	/* FIXME: The lines below are superfluous. We should check the result
+	 * of flash->erase(flash) instead.
+	 */
 	if (!flash->read) {
 		printf("FAILED!\n");
 		fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
 		return 1;
 	} else
-		flash->read(flash, buf);
+		flash->read(flash, buf, 0, size);
 
 	for (erasedbytes = 0; erasedbytes < size; erasedbytes++)
 		if (0xff != buf[erasedbytes]) {
@@ -306,79 +466,10 @@ int erase_flash(struct flashchip *flash)
 	return 0;
 }
 
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
-#define POS_PRINT(x) do { pos += strlen(x); printf(x); } while (0)
-
-void print_supported_chips(void)
-{
-	int okcol = 0, pos = 0, i;
-	struct flashchip *f;
-
-	for (f = flashchips; f->name != NULL; f++) {
-		if (GENERIC_DEVICE_ID == f->model_id)
-			continue;
-		okcol = MAX(okcol, strlen(f->vendor) + 1 + strlen(f->name));
-	}
-	okcol = (okcol + 7) & ~7;
-
-	printf("Supported flash chips:\n\n");
-	POS_PRINT("Vendor:   Device:");
-	while (pos < okcol) {
-		printf("\t");
-		pos += 8 - (pos % 8);
-	}
-	printf("Tested OK operations:\tKnown BAD operations:\n\n");
-
-	for (f = flashchips; f->name != NULL; f++) {
-		/* Don't print "unknown XXXX SPI chip" entries. */
-		if (!strncmp(f->name, "unknown", 7))
-			continue;
-
-		printf("%s", f->vendor);
-		for (i = 0; i < 10 - strlen(f->vendor); i++)
-			printf(" ");
-		printf("%s", f->name);
-
-		pos = 10 + strlen(f->name);
-		while (pos < okcol) {
-			printf("\t");
-			pos += 8 - (pos % 8);
-		}
-		if ((f->tested & TEST_OK_MASK)) {
-			if ((f->tested & TEST_OK_PROBE))
-				POS_PRINT("PROBE ");
-			if ((f->tested & TEST_OK_READ))
-				POS_PRINT("READ ");
-			if ((f->tested & TEST_OK_ERASE))
-				POS_PRINT("ERASE ");
-			if ((f->tested & TEST_OK_WRITE))
-				POS_PRINT("WRITE");
-		}
-		while (pos < okcol + 24) {
-			printf("\t");
-			pos += 8 - (pos % 8);
-		}
-		if ((f->tested & TEST_BAD_MASK)) {
-			if ((f->tested & TEST_BAD_PROBE))
-				printf("PROBE ");
-			if ((f->tested & TEST_BAD_READ))
-				printf("READ ");
-			if ((f->tested & TEST_BAD_ERASE))
-				printf("ERASE ");
-			if ((f->tested & TEST_BAD_WRITE))
-				printf("WRITE");
-		}
-		printf("\n");
-	}
-}
-
 void usage(const char *name)
 {
-	printf("usage: %s [-EVfLhR] [-r file] [-w file] [-v file] [-c chipname] [-s addr]\n"
-	       "       [-e addr] [-m [vendor:]part] [-l file] [-i image] [-p programmer] [file]\n\n",
-	       name);
+	printf("usage: %s [-VfLzhR] [-E|-r file|-w file|-v file] [-c chipname]\n"
+              "       [-m [vendor:]part] [-l file] [-i image] [-p programmer]\n\n", name);
 
 	printf("Please note that the command line interface for flashrom will "
 		"change before\nflashrom 1.0. Do not use flashrom in scripts "
@@ -389,22 +480,23 @@ void usage(const char *name)
 	    ("   -r | --read:                      read flash and save into file\n"
 	     "   -w | --write:                     write file into flash\n"
 	     "   -v | --verify:                    verify flash against file\n"
+	     "   -n | --noverify:                  don't verify flash against file\n"
 	     "   -E | --erase:                     erase flash device\n"
 	     "   -V | --verbose:                   more verbose output\n"
 	     "   -c | --chip <chipname>:           probe only for specified flash chip\n"
-	     "   -s | --estart <addr>:             exclude start position\n"
-	     "   -e | --eend <addr>:               exclude end postion\n"
 	     "   -m | --mainboard <[vendor:]part>: override mainboard settings\n"
 	     "   -f | --force:                     force write without checking image\n"
 	     "   -l | --layout <file.layout>:      read ROM layout from file\n"
 	     "   -i | --image <name>:              only flash image name from flash layout\n"
 	     "   -L | --list-supported:            print supported devices\n"
+	     "   -z | --list-supported-wiki:       print supported devices in wiki syntax\n"
 	     "   -p | --programmer <name>:         specify the programmer device\n"
-	     "                                     (internal, dummy, nic3com, satasii)\n"
+	     "                                     (internal, dummy, nic3com, satasii,\n"
+	     "                                     it87spi, ft2232spi, serprog)\n"
 	     "   -h | --help:                      print this help text\n"
 	     "   -R | --version:                   print the version (release)\n"
-	     "\nIf no file is specified, then all that happens"
-	     " is that flash info is dumped.\n\n");
+	     "\nYou can specify one of -E, -r, -w, -v or no operation. If no operation is\n"
+	     "specified, then all that happens is that flash info is dumped.\n\n");
 	exit(1);
 }
 
@@ -424,7 +516,8 @@ int main(int argc, char *argv[])
 	int option_index = 0;
 	int force = 0;
 	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
-	int list_supported = 0;
+	int dont_verify_it = 0, list_supported = 0, list_supported_wiki = 0;
+	int operation_specified = 0;
 	int ret = 0, i;
 
 	static struct option long_options[] = {
@@ -432,15 +525,15 @@ int main(int argc, char *argv[])
 		{"write", 0, 0, 'w'},
 		{"erase", 0, 0, 'E'},
 		{"verify", 0, 0, 'v'},
+		{"noverify", 0, 0, 'n'},
 		{"chip", 1, 0, 'c'},
-		{"estart", 1, 0, 's'},
-		{"eend", 1, 0, 'e'},
 		{"mainboard", 1, 0, 'm'},
 		{"verbose", 0, 0, 'V'},
 		{"force", 0, 0, 'f'},
 		{"layout", 1, 0, 'l'},
 		{"image", 1, 0, 'i'},
 		{"list-supported", 0, 0, 'L'},
+		{"list-supported-wiki", 0, 0, 'z'},
 		{"programmer", 1, 0, 'p'},
 		{"help", 0, 0, 'h'},
 		{"version", 0, 0, 'R'},
@@ -449,7 +542,6 @@ int main(int argc, char *argv[])
 
 	char *filename = NULL;
 
-	unsigned int exclude_start_position = 0, exclude_end_position = 0;	// [x,y)
 	char *tempstr = NULL, *tempstr2 = NULL;
 
 	print_version();
@@ -463,17 +555,35 @@ int main(int argc, char *argv[])
 	}
 
 	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:p:Lh",
+	while ((opt = getopt_long(argc, argv, "rRwvnVEfc:m:l:i:p:Lzh",
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'r':
+			if (++operation_specified > 1) {
+				fprintf(stderr, "More than one operation "
+					"specified. Aborting.\n");
+				exit(1);
+			}
 			read_it = 1;
 			break;
 		case 'w':
+			if (++operation_specified > 1) {
+				fprintf(stderr, "More than one operation "
+					"specified. Aborting.\n");
+				exit(1);
+			}
 			write_it = 1;
 			break;
 		case 'v':
+			if (++operation_specified > 1) {
+				fprintf(stderr, "More than one operation "
+					"specified. Aborting.\n");
+				exit(1);
+			}
 			verify_it = 1;
+			break;
+		case 'n':
+			dont_verify_it = 1;
 			break;
 		case 'c':
 			chip_to_probe = strdup(optarg);
@@ -482,15 +592,12 @@ int main(int argc, char *argv[])
 			verbose = 1;
 			break;
 		case 'E':
+			if (++operation_specified > 1) {
+				fprintf(stderr, "More than one operation "
+					"specified. Aborting.\n");
+				exit(1);
+			}
 			erase_it = 1;
-			break;
-		case 's':
-			tempstr = strdup(optarg);
-			sscanf(tempstr, "%x", &exclude_start_position);
-			break;
-		case 'e':
-			tempstr = strdup(optarg);
-			sscanf(tempstr, "%x", &exclude_end_position);
 			break;
 		case 'm':
 			tempstr = strdup(optarg);
@@ -519,11 +626,16 @@ int main(int argc, char *argv[])
 		case 'L':
 			list_supported = 1;
 			break;
+		case 'z':
+			list_supported_wiki = 1;
+			break;
 		case 'p':
 			if (strncmp(optarg, "internal", 8) == 0) {
 				programmer = PROGRAMMER_INTERNAL;
 			} else if (strncmp(optarg, "dummy", 5) == 0) {
 				programmer = PROGRAMMER_DUMMY;
+				if (optarg[5] == '=')
+					dummytype = strdup(optarg + 6);
 			} else if (strncmp(optarg, "nic3com", 7) == 0) {
 				programmer = PROGRAMMER_NIC3COM;
 				if (optarg[7] == '=')
@@ -532,6 +644,14 @@ int main(int argc, char *argv[])
 				programmer = PROGRAMMER_SATASII;
 				if (optarg[7] == '=')
 					pcidev_bdf = strdup(optarg + 8);
+			} else if (strncmp(optarg, "it87spi", 7) == 0) {
+				programmer = PROGRAMMER_IT87SPI;
+			} else if (strncmp(optarg, "ft2232spi", 9) == 0) {
+				programmer = PROGRAMMER_FT2232SPI;
+ 			} else if (strncmp(optarg, "serprog", 7) == 0) {
+ 				programmer = PROGRAMMER_SERPROG;
+ 				if (optarg[7] == '=')
+ 					serprog_param = strdup(optarg + 8);
 			} else {
 				printf("Error: Unknown programmer.\n");
 				exit(1);
@@ -556,6 +676,11 @@ int main(int argc, char *argv[])
 		       "as programmer:\n\n");
 		print_supported_pcidevs(nics_3com);
 		print_supported_pcidevs(satas_sii);
+		exit(0);
+	}
+
+	if (list_supported_wiki) {
+		print_wiki_tables();
 		exit(0);
 	}
 
@@ -602,35 +727,7 @@ int main(int argc, char *argv[])
 				printf("Run flashrom -L to view the hardware supported in this flashrom version.\n");
 				exit(1);
 			}
-			if (!filename) {
-				printf("Error: No filename specified.\n");
-				exit(1);
-			}
-			size = flashes[0]->total_size * 1024;
-			buf = (uint8_t *) calloc(size, sizeof(char));
-
-			if ((image = fopen(filename, "w")) == NULL) {
-				perror(filename);
-				exit(1);
-			}
-			printf("Force reading flash... ");
-			if (!flashes[0]->read) {
-				printf("FAILED!\n");
-				fprintf(stderr, "ERROR: flashrom has no read function for this flash chip.\n");
-				return 1;
-			} else
-				flashes[0]->read(flashes[0], buf);
-
-			if (exclude_end_position - exclude_start_position > 0)
-				memset(buf + exclude_start_position, 0,
-				       exclude_end_position -
-				       exclude_start_position);
-
-			numbytes = fwrite(buf, 1, size, image);
-			fclose(image);
-			printf("%s.\n", numbytes == size ? "done" : "FAILED");
-			free(buf);
-			return numbytes != size;
+			return read_flash(flashes[0], filename);
 		}
 		// FIXME: flash writes stay enabled!
 		exit(1);
@@ -687,6 +784,10 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	/* Always verify write operations unless -n is used. */
+	if (write_it && !dont_verify_it)
+		verify_it = 1;
+
 	size = flash->total_size * 1024;
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
@@ -694,7 +795,7 @@ int main(int argc, char *argv[])
 		if (erase_flash(flash))
 			return 1;
 	} else if (read_it) {
-		if (read_flash(flash, filename, exclude_start_position, exclude_end_position))
+		if (read_flash(flash, filename))
 			return 1;
 	} else {
 		struct stat image_stat;
@@ -721,42 +822,21 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	/* exclude range stuff. Nice idea, but at the moment it is only
-	 * supported in hardware by the pm49fl004 chips. 
-	 * Instead of implementing this for all chips I suggest advancing
-	 * it to the rom layout feature below and drop exclude range
-	 * completely once all flash chips can do rom layouts. stepan
-	 */
-
-	// ////////////////////////////////////////////////////////////
-	/* FIXME: This memcpy will not work for SPI nor external flashers.
-	 * Convert to chip_readb.
-	 */
-	if (exclude_end_position - exclude_start_position > 0)
-		memcpy(buf + exclude_start_position,
-		       (const char *)flash->virtual_memory +
-		       exclude_start_position,
-		       exclude_end_position - exclude_start_position);
-
-	exclude_start_page = exclude_start_position / flash->page_size;
-	if ((exclude_start_position % flash->page_size) != 0) {
-		exclude_start_page++;
-	}
-	exclude_end_page = exclude_end_position / flash->page_size;
-	// ////////////////////////////////////////////////////////////
-
 	// This should be moved into each flash part's code to do it 
 	// cleanly. This does the job.
+	/* FIXME: Adapt to the external flasher infrastructure. */
 	handle_romentries(buf, (uint8_t *) flash->virtual_memory);
 
 	// ////////////////////////////////////////////////////////////
 
 	if (write_it) {
+		printf("Writing flash chip... ");
 		if (!flash->write) {
 			fprintf(stderr, "Error: flashrom has no write function for this flash chip.\n");
 			return 1;
 		}
 		ret |= flash->write(flash, buf);
+		if (!ret) printf("COMPLETE.\n");
 	}
 
 	if (verify_it)

@@ -26,22 +26,22 @@ int probe_w39v040c(struct flashchip *flash)
 	uint8_t id1, id2, lock;
 
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x90, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	id1 = chip_readb(bios);
 	id2 = chip_readb(bios + 1);
 	lock = chip_readb(bios + 0xfff2);
 
 	chip_writeb(0xAA, bios + 0x5555);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x55, bios + 0x2AAA);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0xF0, bios + 0x5555);
-	myusec_delay(40);
+	programmer_delay(40);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x", __func__, id1, id2);
 	if (!oddparity(id1))
@@ -60,16 +60,13 @@ int erase_w39v040c(struct flashchip *flash)
 {
 	int i;
 	unsigned int total_size = flash->total_size * 1024;
-	chipaddr bios = flash->virtual_memory;
 
-	for (i = 0; i < total_size; i += flash->page_size)
-		erase_sector_jedec(flash->virtual_memory, i);
-
-	for (i = 0; i < total_size; i++)
-		if (0xff != chip_readb(bios + i)) {
-			printf("ERASE FAILED at 0x%08x!  Expected=0xff, Read=0x%02x\n", i, chip_readb(bios + i));
+	for (i = 0; i < total_size; i += flash->page_size) {
+		if (erase_sector_jedec(flash, i, flash->page_size)) {
+			fprintf(stderr, "ERASE FAILED!\n");
 			return -1;
 		}
+	}
 
 	return 0;
 }
@@ -81,8 +78,10 @@ int write_w39v040c(struct flashchip *flash, uint8_t *buf)
 	int page_size = flash->page_size;
 	chipaddr bios = flash->virtual_memory;
 
-	if (flash->erase(flash))
+	if (flash->erase(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;
+	}
 
 	printf("Programming page: ");
 	for (i = 0; i < total_size / page_size; i++) {

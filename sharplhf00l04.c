@@ -46,9 +46,9 @@ int probe_lhf00l04(struct flashchip *flash)
 #endif
 
 	chip_writeb(0xff, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	chip_writeb(0x90, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	id1 = chip_readb(bios);
 	id2 = chip_readb(bios + 0x01);
@@ -58,7 +58,7 @@ int probe_lhf00l04(struct flashchip *flash)
 	chip_writeb(0x55, bios + 0x2AAA);
 	chip_writeb(0xF0, bios + 0x5555);
 
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 
@@ -85,7 +85,7 @@ uint8_t wait_lhf00l04(chipaddr bios)
 	// put another command to get out of status register mode
 
 	chip_writeb(0x90, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 
 	id1 = chip_readb(bios);
 	id2 = chip_readb(bios + 0x01);
@@ -118,12 +118,16 @@ int erase_lhf00l04_block(struct flashchip *flash, int offset)
 	// now start it
 	chip_writeb(0x20, bios);
 	chip_writeb(0xd0, bios);
-	myusec_delay(10);
+	programmer_delay(10);
 	// now let's see what the register is
 	status = wait_lhf00l04(flash->virtual_memory);
 	print_lhf00l04_status(status);
 	printf("DONE BLOCK 0x%x\n", offset);
 
+	if (check_erased_range(flash, offset, flash->page_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -135,7 +139,10 @@ int erase_lhf00l04(struct flashchip *flash)
 	printf("total_size is %d; flash->page_size is %d\n",
 	       total_size, flash->page_size);
 	for (i = 0; i < total_size; i += flash->page_size)
-		erase_lhf00l04_block(flash, i);
+		if (erase_lhf00l04_block(flash, i)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
 	printf("DONE ERASE\n");
 
 	return 0;
@@ -161,9 +168,8 @@ int write_lhf00l04(struct flashchip *flash, uint8_t *buf)
 	int page_size = flash->page_size;
 	chipaddr bios = flash->virtual_memory;
 
-	erase_lhf00l04(flash);
-	if (chip_readb(bios) != 0xff) {
-		printf("ERASE FAILED!\n");
+	if (erase_lhf00l04(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
 		return -1;
 	}
 	printf("Programming page: ");

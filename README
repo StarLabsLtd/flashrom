@@ -15,7 +15,26 @@ or SPI.
 (see http://coreboot.org for details on coreboot)
 
 
-Build Requirements
+Packaging
+---------
+
+To package flashrom and remove dependencies on subversion, either use
+make export
+or
+make tarball
+
+make export will export all flashrom files from the subversion repository at
+revision BASE into a directory named $EXPORTDIR/flashrom-$VERSION-r$SVNREVISION
+and will additionally modify the Makefile in that directory to contain the svn
+revision of the exported tree.
+
+make tarball will simply tar up the result of make export and gzip compress it.
+
+The snapshot tarballs are the result of make tarball and require no further
+processing.
+
+
+Build Instructions
 ------------------
 
 To build flashrom you need to install the following packages or ports:
@@ -55,6 +74,18 @@ To compile and run on Darwin/Mac OS X:
  DirectIO is available at http://www.coresystems.de/en/directio.
 
 
+Installation
+------------
+
+In order to install flashrom and the manpage into /usr/local, type:
+
+ sudo make install
+
+For installation in a different directory use DESTDIR, e.g. like this:
+
+ sudo make DESTDIR=/usr install
+
+
 Usage / Options
 ---------------
 
@@ -84,6 +115,7 @@ Supported Flash Chips / Chipsets / Mainboards
 
 Please check the output of 'flashrom -L' for the list of supported
 flash chips, chipsets/southbridges, mainboards, and flash programmers.
+
 
 Website
 -------

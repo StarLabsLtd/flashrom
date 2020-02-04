@@ -34,7 +34,7 @@ int probe_29f002(struct flashchip *flash)
 
 	chip_writeb(0xF0, bios);
 
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
@@ -55,22 +55,13 @@ int erase_29f002(struct flashchip *flash)
 	chip_writeb(0x55, bios + 0x2AA);
 	chip_writeb(0x10, bios + 0x555);
 
-	myusec_delay(100);
+	programmer_delay(100);
 	toggle_ready_jedec(bios);
 
-	//   while ((*bios & 0x40) != 0x40)
-	//;
-
-#if 0
-	toggle_ready_jedec(bios);
-	chip_writeb(0x30, bios + 0x0ffff);
-	chip_writeb(0x30, bios + 0x1ffff);
-	chip_writeb(0x30, bios + 0x2ffff);
-	chip_writeb(0x30, bios + 0x37fff);
-	chip_writeb(0x30, bios + 0x39fff);
-	chip_writeb(0x30, bios + 0x3bfff);
-#endif
-
+	if (check_erased_range(flash, 0, flash->total_size * 1024)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -82,10 +73,11 @@ int write_29f002(struct flashchip *flash, uint8_t *buf)
 	chipaddr dst = bios;
 
 	chip_writeb(0xF0, bios);
-	myusec_delay(10);
-	erase_29f002(flash);
-	//*bios = 0xF0;
-#if 1
+	programmer_delay(10);
+	if (erase_29f002(flash)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	printf("Programming page: ");
 	for (i = 0; i < total_size; i++) {
 		/* write to the sector */
@@ -102,7 +94,6 @@ int write_29f002(struct flashchip *flash, uint8_t *buf)
 		if ((i & 0xfff) == 0)
 			printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	}
-#endif
 	printf("\n");
 
 	return 0;

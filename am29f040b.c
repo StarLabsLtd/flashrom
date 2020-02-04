@@ -20,8 +20,11 @@
 
 #include "flash.h"
 
-static int erase_sector_29f040b(chipaddr bios, unsigned long address)
+static int erase_sector_29f040b(struct flashchip *flash, unsigned long address)
 {
+	int page_size = flash->page_size;
+	chipaddr bios = flash->virtual_memory;
+
 	chip_writeb(0xAA, bios + 0x555);
 	chip_writeb(0x55, bios + 0x2AA);
 	chip_writeb(0x80, bios + 0x555);
@@ -29,11 +32,15 @@ static int erase_sector_29f040b(chipaddr bios, unsigned long address)
 	chip_writeb(0x55, bios + 0x2AA);
 	chip_writeb(0x30, bios + address);
 
-	sleep(2);
+	programmer_delay(2 * 1000 * 1000);
 
 	/* wait for Toggle bit ready         */
 	toggle_ready_jedec(bios + address);
 
+	if (check_erased_range(flash, address, page_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -75,7 +82,7 @@ int probe_29f040b(struct flashchip *flash)
 
 	chip_writeb(0xF0, bios);
 
-	myusec_delay(10);
+	programmer_delay(10);
 
 	printf_debug("%s: id1 0x%02x, id2 0x%02x\n", __FUNCTION__, id1, id2);
 	if (id1 == flash->manufacture_id && id2 == flash->model_id)
@@ -86,6 +93,7 @@ int probe_29f040b(struct flashchip *flash)
 
 int erase_29f040b(struct flashchip *flash)
 {
+	int total_size = flash->total_size * 1024;
 	chipaddr bios = flash->virtual_memory;
 
 	chip_writeb(0xAA, bios + 0x555);
@@ -95,9 +103,13 @@ int erase_29f040b(struct flashchip *flash)
 	chip_writeb(0x55, bios + 0x2AA);
 	chip_writeb(0x10, bios + 0x555);
 
-	myusec_delay(10);
+	programmer_delay(10);
 	toggle_ready_jedec(bios);
 
+	if (check_erased_range(flash, 0, total_size)) {
+		fprintf(stderr, "ERASE FAILED!\n");
+		return -1;
+	}
 	return 0;
 }
 
@@ -111,7 +123,10 @@ int write_29f040b(struct flashchip *flash, uint8_t *buf)
 	printf("Programming page ");
 	for (i = 0; i < total_size / page_size; i++) {
 		/* erase the page before programming */
-		erase_sector_29f040b(bios, i * page_size);
+		if (erase_sector_29f040b(flash, i * page_size)) {
+			fprintf(stderr, "ERASE FAILED!\n");
+			return -1;
+		}
 
 		/* write to the sector */
 		printf("%04d at address: ", i);

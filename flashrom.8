@@ -2,9 +2,8 @@
 .SH NAME
 flashrom \- detect, read, write, verify and erase flash chips
 .SH SYNOPSIS
-.B flashrom \fR[\fB\-EVfLhR\fR] [\fB\-r\fR file] [\fB\-w\fR file] [\fB\-v\fR file]
-         [\fB\-c\fR chipname] [\fB\-s\fR addr] [\fB\-e\fR addr] [\fB\-m\fR [vendor:]part]
-         [\fB\-l\fR file] [\fB\-i\fR image] [\fB\-p\fR programmer] [file]
+.B flashrom \fR[\fB\-VfLzhRn\fR] [\fB\-E\fR|\fB\-r\fR file|\fB\-w\fR file|\fB\-v\fR file] [\fB\-c\fR chipname]
+         [\fB\-m\fR [vendor:]part] [\fB\-l\fR file] [\fB\-i\fR image] [\fB\-p\fR programmer]
 .SH DESCRIPTION
 .B flashrom
 is a utility for detecting, reading, writing, verifying and erasing flash
@@ -25,7 +24,8 @@ Please note that the command line interface for flashrom will change before
 flashrom 1.0. Do not use flashrom in scripts or other automated tools without
 checking that your flashrom version won't interpret options in a different way.
 .PP
-If no file is specified, then all that happens
+You can specify one of -E, -r, -w, -v or no operation.
+If no operation is specified, then all that happens
 is that flash info is dumped and the flash chip is set to writable.
 .TP
 .B "\-r, \-\-read <file>"
@@ -36,6 +36,21 @@ Read flash ROM contents and save them into the given
 Write file into flash ROM (default when
 .B <file>
 is specified).
+.TP
+.B "\-n, \-\-noverify"
+Do
+.B not
+verify the flash ROM contents after writing them to the chip. Using this
+option is
+.B not
+recommended, you should only use it if you know what you are doing and you
+feel that the time for verification takes too long.
+.sp
+Typical usage is:
+.B "flashrom -wn file"
+.sp
+This option is only useful in combination with
+.BR \-\-write .
 .TP
 .B "\-v, \-\-verify <file>"
 Verify the flash ROM contents against the given
@@ -49,9 +64,6 @@ More verbose output.
 .TP
 .B "\-c, \-\-chip" <chipname>
 Probe only for specified flash ROM chip.
-.TP
-.B "\-s, \-\-estart" <addr>
-Exclude start position (obsolete).
 .sp
 flashrom supports ROM layouts. This allows you to flash certain parts of
 the flash chip only. A ROM layout file looks like follows:
@@ -79,9 +91,6 @@ Currently overlapping sections are not supported.
 ROM layouts should replace the \-s and \-e option since they are more
 flexible and they should lead to a ROM update file format with the
 ROM layout and the ROM image in one file (cpio, zip or something?).
-.TP
-.B "\-e, \-\-eend" <addr> 
-Exclude end postion (obsolete).
 .TP
 .B "\-m, \-\-mainboard" <[vendor:]part>
 Override mainboard settings.
@@ -122,6 +131,12 @@ other boards work or do not work out of the box. For verification you have
 to test an ERASE and/or WRITE operation, so make sure you only do that
 if you have proper means to recover from failure!
 .TP
+.B "\-z, \-\-list\-supported-wiki"
+Same as
+.BR \-\-list\-supported ,
+but outputs the supported hardware in MediaWiki syntax, so that it can be
+easily pasted into the wiki page at http://coreboot.org/Flashrom.
+.TP
 .B "\-p, \-\-programmer <name>"
 Specify the programmer device. Currently supported are:
 .sp
@@ -132,6 +147,22 @@ Specify the programmer device. Currently supported are:
 .BR "* nic3com" " (for flash ROMs on 3COM network cards)"
 .sp
 .BR "* satasii" " (for flash ROMs on Silicon Image SATA/IDE controllers)"
+.sp
+.BR "* it87spi" " (for flash ROMs behind an ITE IT87xx Super I/O LPC/SPI translation unit)"
+.sp
+.BR "* ft2232spi" " (for flash ROMs attached to a FT2232H/FT4232H based USB SPI programmer)"
+.sp
+The dummy programmer has an optional parameter specifying the bus types it
+should support. For that you have to use the
+.B "flashrom -p dummy=type"
+syntax where
+.B type
+can be any comma-separated combination of
+.B parallel lpc fwh spi all
+in any order.
+.sp
+Example:
+.B "flashrom -p dummy=lpc,fwh"
 .sp
 If you have multiple supported PCI cards which can program flash chips
 (NICs, SATA/IDE controllers, etc.) in your system, you must use the

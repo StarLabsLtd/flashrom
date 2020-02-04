@@ -36,14 +36,12 @@
 unsigned long flashbase = 0;
 
 /**
- * flashrom defaults to LPC flash devices. If a known SPI controller is found
- * and the SPI strappings are set, this will be overwritten by the probing code.
- *
- * Eventually, this will become an array when multiple flash support works.
+ * flashrom defaults to Parallel/LPC/FWH flash devices. If a known host
+ * controller is found, the init routine sets the buses_supported bitfield to
+ * contain the supported buses for that controller.
  */
 
-flashbus_t flashbus = BUS_TYPE_LPC;
-void *spibar = NULL;
+enum chipbustype buses_supported = CHIP_BUSTYPE_NONSPI;
 
 extern int ichspi_lock;
 
@@ -218,7 +216,9 @@ static int enable_flash_vt8237s_spi(struct pci_dev *dev, const char *name)
 	printf_debug("0x6c: 0x%04x     (CLOCK/DEBUG)\n",
 		     mmio_readw(spibar + 0x6c));
 
-	flashbus = BUS_TYPE_VIA_SPI;
+	/* Not sure if it speaks all these bus protocols. */
+	buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
+	spi_controller = SPI_CONTROLLER_VIA;
 	ich_init_opcodes();
 
 	return 0;
@@ -263,23 +263,30 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	 */
 
 	if (ich_generation == 7 && bbs == ICH_STRAP_LPC) {
+		/* Not sure if it speaks LPC as well. */
+		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH;
 		/* No further SPI initialization required */
 		return ret;
 	}
 
 	switch (ich_generation) {
 	case 7:
-		flashbus = BUS_TYPE_ICH7_SPI;
+		buses_supported = CHIP_BUSTYPE_SPI;
+		spi_controller = SPI_CONTROLLER_ICH7;
 		spibar_offset = 0x3020;
 		break;
 	case 8:
-		flashbus = BUS_TYPE_ICH9_SPI;
+		/* Not sure if it speaks LPC as well. */
+		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
+		spi_controller = SPI_CONTROLLER_ICH9;
 		spibar_offset = 0x3020;
 		break;
 	case 9:
 	case 10:
 	default:		/* Future version might behave the same */
-		flashbus = BUS_TYPE_ICH9_SPI;
+		/* Not sure if it speaks LPC as well. */
+		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
+		spi_controller = SPI_CONTROLLER_ICH9;
 		spibar_offset = 0x3800;
 		break;
 	}
@@ -290,8 +297,8 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	/* Assign Virtual Address */
 	spibar = rcrb + spibar_offset;
 
-	switch (flashbus) {
-	case BUS_TYPE_ICH7_SPI:
+	switch (spi_controller) {
+	case SPI_CONTROLLER_ICH7:
 		printf_debug("0x00: 0x%04x     (SPIS)\n",
 			     mmio_readw(spibar + 0));
 		printf_debug("0x02: 0x%04x     (SPIC)\n",
@@ -329,7 +336,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		}
 		ich_init_opcodes();
 		break;
-	case BUS_TYPE_ICH9_SPI:
+	case SPI_CONTROLLER_ICH9:
 		tmp2 = mmio_readw(spibar + 4);
 		printf_debug("0x04: 0x%04x (HSFS)\n", tmp2);
 		printf_debug("FLOCKDN %i, ", (tmp2 >> 15 & 1));
@@ -728,8 +735,11 @@ static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 			has_spi = 0;
 	}
 
-	if (has_spi)
-		flashbus = BUS_TYPE_SB600_SPI;
+	buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH;
+	if (has_spi) {
+		buses_supported |= CHIP_BUSTYPE_SPI;
+		spi_controller = SPI_CONTROLLER_SB600;
+	}
 
 	/* Read ROM strap override register. */
 	OUTB(0x8f, 0xcd6);
@@ -765,6 +775,19 @@ static int enable_flash_sb600(struct pci_dev *dev, const char *name)
 	OUTB(0x8f, 0xcd6);
 	OUTB(0x0e, 0xcd7);
 	*/
+
+	return 0;
+}
+
+static int enable_flash_nvidia_nforce2(struct pci_dev *dev, const char *name)
+{
+	uint8_t tmp;
+
+	pci_write_byte(dev, 0x92, 0);
+
+	tmp = pci_read_byte(dev, 0x6d);
+	tmp |= 0x01;
+	pci_write_byte(dev, 0x6d, tmp);
 
 	return 0;
 }
@@ -925,9 +948,6 @@ static int get_flashbase_sc520(struct pci_dev *dev, const char *name)
 	return 0;
 }
 
-#define OK 0
-#define NT 1	/* Not tested */
-
 /* Please keep this list alphabetically sorted by vendor/device. */
 const struct penable chipset_enables[] = {
 	{0x10B9, 0x1533, OK, "ALi", "M1533",		enable_flash_ali_m1533},
@@ -981,6 +1001,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x122e, OK, "Intel", "PIIX",		enable_flash_piix4},
 	{0x10de, 0x0050, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* LPC */
 	{0x10de, 0x0051, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* Pro */
+	{0x10de, 0x0060, OK, "NVIDIA", "NForce2",       enable_flash_nvidia_nforce2},
 	/* Slave, should not be here, to fix known bug for A01. */
 	{0x10de, 0x00d3, OK, "NVIDIA", "CK804",		enable_flash_ck804},
 	{0x10de, 0x0260, NT, "NVIDIA", "MCP51",		enable_flash_ck804},
@@ -1000,35 +1021,17 @@ const struct penable chipset_enables[] = {
 	{0x1039, 0x0630, NT, "SiS", "SiS630",		enable_flash_sis630},
 	{0x1106, 0x8324, OK, "VIA", "CX700",		enable_flash_vt823x},
 	{0x1106, 0x8231, NT, "VIA", "VT8231",		enable_flash_vt823x},
+	{0x1106, 0x3074, NT, "VIA", "VT8233",		enable_flash_vt823x},
 	{0x1106, 0x3177, OK, "VIA", "VT8235",		enable_flash_vt823x},
 	{0x1106, 0x3227, OK, "VIA", "VT8237",		enable_flash_vt823x},
 	{0x1106, 0x3337, OK, "VIA", "VT8237A",		enable_flash_vt823x},
 	{0x1106, 0x3372, OK, "VIA", "VT8237S",		enable_flash_vt8237s_spi},
+	{0x1106, 0x8353, OK, "VIA", "VX800",		enable_flash_vt8237s_spi},
 	{0x1106, 0x0586, OK, "VIA", "VT82C586A/B",	enable_flash_amd8111},
 	{0x1106, 0x0686, NT, "VIA", "VT82C686A/B",	enable_flash_amd8111},
 
 	{},
 };
-
-void print_supported_chipsets(void)
-{
-	int i, j;
-	const struct penable *c = chipset_enables;
-
-	printf("\nSupported chipsets:\n\nVendor:                  Chipset:"
-	       "                 PCI IDs:\n\n");
-
-	for (i = 0; c[i].vendor_name != NULL; i++) {
-		printf("%s", c[i].vendor_name);
-		for (j = 0; j < 25 - strlen(c[i].vendor_name); j++)
-			printf(" ");
-		printf("%s", c[i].device_name);
-		for (j = 0; j < 25 - strlen(c[i].device_name); j++)
-			printf(" ");
-		printf("%04x:%04x%s\n", c[i].vendor_id, c[i].device_id,
-		       (c[i].status == OK) ? "" : " (untested)");
-	}
-}
 
 int chipset_flash_enable(void)
 {

@@ -20,17 +20,53 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include "flash.h"
 
+char *dummytype = NULL;
+
 int dummy_init(void)
 {
+	int i;
 	printf_debug("%s\n", __func__);
-	flashbus = BUS_TYPE_DUMMY_SPI;
-	return 0; 
+
+	/* "all" is equivalent to specifying no type. */
+	if (dummytype && (!strcmp(dummytype, "all"))) {
+		free(dummytype);
+		dummytype = NULL;
+	}
+	if (!dummytype)
+		dummytype = strdup("parallel,lpc,fwh,spi");
+	/* Convert the parameters to lowercase. */
+	for (i = 0; dummytype[i] != '\0'; i++)
+		dummytype[i] = (char)tolower(dummytype[i]);
+
+	buses_supported = CHIP_BUSTYPE_NONE;
+	if (strstr(dummytype, "parallel")) {
+		buses_supported |= CHIP_BUSTYPE_PARALLEL;
+		printf_debug("Enabling support for %s flash.\n", "parallel");
+	}
+	if (strstr(dummytype, "lpc")) {
+		buses_supported |= CHIP_BUSTYPE_LPC;
+		printf_debug("Enabling support for %s flash.\n", "LPC");
+	}
+	if (strstr(dummytype, "fwh")) {
+		buses_supported |= CHIP_BUSTYPE_FWH;
+		printf_debug("Enabling support for %s flash.\n", "FWH");
+	}
+	if (strstr(dummytype, "spi")) {
+		buses_supported |= CHIP_BUSTYPE_SPI;
+		spi_controller = SPI_CONTROLLER_DUMMY;
+		printf_debug("Enabling support for %s flash.\n", "SPI");
+	}
+	if (buses_supported == CHIP_BUSTYPE_NONE)
+		printf_debug("Support for all flash bus types disabled.\n");
+	free(dummytype);
+	return 0;
 }
 
 int dummy_shutdown(void)
@@ -67,6 +103,18 @@ void dummy_chip_writel(uint32_t val, chipaddr addr)
 	printf_debug("%s: addr=0x%lx, val=0x%08x\n", __func__, addr, val);
 }
 
+void dummy_chip_writen(uint8_t *buf, chipaddr addr, size_t len)
+{
+	size_t i;
+	printf_debug("%s: addr=0x%lx, len=0x%08lx, writing data (hex):",
+		     __func__, addr, (unsigned long)len);
+	for (i = 0; i < len; i++) {
+		if ((i % 16) == 0)
+			printf_debug("\n");
+		printf_debug("%02x ", buf[i])
+	}
+}
+
 uint8_t dummy_chip_readb(const chipaddr addr)
 {
 	printf_debug("%s:  addr=0x%lx, returning 0xff\n", __func__, addr);
@@ -83,6 +131,14 @@ uint32_t dummy_chip_readl(const chipaddr addr)
 {
 	printf_debug("%s:  addr=0x%lx, returning 0xffffffff\n", __func__, addr);
 	return 0xffffffff;
+}
+
+void dummy_chip_readn(uint8_t *buf, const chipaddr addr, size_t len)
+{
+	printf_debug("%s:  addr=0x%lx, len=0x%lx, returning array of 0xff\n",
+		     __func__, addr, (unsigned long)len);
+	memset(buf, 0xff, len);
+	return;
 }
 
 int dummy_spi_command(unsigned int writecnt, unsigned int readcnt,
