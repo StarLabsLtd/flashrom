@@ -36,6 +36,7 @@
 #define ERROR_PTR ((void*)-1)
 
 /* Error codes */
+#define ERROR_OOM	-100
 #define TIMEOUT_ERROR	-101
 
 typedef unsigned long chipaddr;
@@ -228,7 +229,8 @@ enum write_granularity {
 	write_gran_1byte,
 	write_gran_256bytes,
 };
-extern int verbose;
+extern int verbose_screen;
+extern int verbose_logfile;
 extern const char flashrom_version[];
 extern char *chip_to_probe;
 void map_flash_registers(struct flashctx *flash);
@@ -244,6 +246,7 @@ int verify_range(struct flashctx *flash, uint8_t *cmpbuf, unsigned int start, un
 int need_erase(uint8_t *have, uint8_t *want, unsigned int len, enum write_granularity gran);
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
+void print_buildinfo(void);
 void print_banner(void);
 void list_programmers_linebreak(int startcol, int cols, int paren);
 int selfcheck(void);
@@ -268,13 +271,20 @@ int write_buf_to_file(unsigned char *buf, unsigned long size, const char *filena
 #define ERROR_FLASHROM_LIMIT -201
 
 /* cli_output.c */
+#ifndef STANDALONE
+int open_logfile(const char * const filename);
+int close_logfile(void);
+void start_logging(void);
+#endif
+enum msglevel {
+	MSG_ERROR	= 0,
+	MSG_INFO	= 1,
+	MSG_DEBUG	= 2,
+	MSG_DEBUG2	= 3,
+	MSG_SPEW	= 4,
+};
 /* Let gcc and clang check for correct printf-style format strings. */
-int print(int type, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
-#define MSG_ERROR	0
-#define MSG_INFO	1
-#define MSG_DEBUG	2
-#define MSG_DEBUG2	3
-#define MSG_BARF	4
+int print(enum msglevel level, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #define msg_gerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* general errors */
 #define msg_perr(...)	print(MSG_ERROR, __VA_ARGS__)	/* programmer errors */
 #define msg_cerr(...)	print(MSG_ERROR, __VA_ARGS__)	/* chip errors */
@@ -287,9 +297,9 @@ int print(int type, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #define msg_gdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* general debug2 */
 #define msg_pdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* programmer debug2 */
 #define msg_cdbg2(...)	print(MSG_DEBUG2, __VA_ARGS__)	/* chip debug2 */
-#define msg_gspew(...)	print(MSG_BARF, __VA_ARGS__)	/* general debug barf  */
-#define msg_pspew(...)	print(MSG_BARF, __VA_ARGS__)	/* programmer debug barf  */
-#define msg_cspew(...)	print(MSG_BARF, __VA_ARGS__)	/* chip debug barf  */
+#define msg_gspew(...)	print(MSG_SPEW, __VA_ARGS__)	/* general debug spew  */
+#define msg_pspew(...)	print(MSG_SPEW, __VA_ARGS__)	/* programmer debug spew  */
+#define msg_cspew(...)	print(MSG_SPEW, __VA_ARGS__)	/* chip debug spew  */
 
 /* layout.c */
 int register_include_arg(char *name);

@@ -184,10 +184,11 @@
 #define ATMEL_AT45DB642		/* No ID available */
 #define ATMEL_AT45DB642D	0x2800
 #define ATMEL_AT49BV512		0x03
-#define ATMEL_AT49F020		0x0B
 #define ATMEL_AT49F002N		0x07	/* for AT49F002(N)  */
-#define ATMEL_AT49F002NT		0x08	/* for AT49F002(N)T */
 #define ATMEL_AT49LH002		0xE9
+#define ATMEL_AT49F002NT	0x08	/* for AT49F002(N)T */
+#define ATMEL_AT49F020		0x0B
+#define ATMEL_AT49F040		0x13
 
 /* Bright Microelectronics has the same manufacturer ID as Hyundai... */
 #define BRIGHT_ID		0xAD	/* Bright Microelectronics */
@@ -251,11 +252,13 @@
 #define EON_EN25Q64		0x3017
 #define EON_EN25Q128		0x3018
 #define EON_EN25QH16		0x7015
+#define EON_EN25QH32		0x7016
 #define EON_EN29F512		0x7F21
 #define EON_EN29F010		0x20
 #define EON_EN29F040A		0x7F04
 #define EON_EN29LV010		0x7F6E
 #define EON_EN29LV040A		0x7F4F	/* EN29LV040(A) */
+#define EON_EN29LV640B		0xCB
 #define EON_EN29F002T		0x7F92	/* Same as EN29F002A */
 #define EON_EN29F002B		0x7F97	/* Same as EN29F002AN */
 
@@ -289,6 +292,15 @@
 #define FUJITSU_MBM29LV400TC	0xB9
 #define FUJITSU_MBM29LV800BA	0x5B	/* Same as MBM29LV800BE */
 #define FUJITSU_MBM29LV800TA	0xDA	/* Same as MBM29LV800TE */
+
+#define GIGADEVICE_ID		0xC8	/* GigaDevice */
+#define GIGADEVICE_GD25Q20	0x4012
+#define GIGADEVICE_GD25Q40	0x4013
+#define GIGADEVICE_GD25Q80	0x4014
+#define GIGADEVICE_GD25Q16	0x4015
+#define GIGADEVICE_GD25Q32	0x4016
+#define GIGADEVICE_GD25Q64	0x4017
+#define GIGADEVICE_GD25Q128	0x4018
 
 #define HYUNDAI_ID		0xAD	/* Hyundai */
 #define HYUNDAI_HY29F400T	0x23	/* Same as HY29F400AT */
@@ -574,6 +586,7 @@
 #define ST_M29W010B		0x23
 #define ST_M29W040B		0xE3
 #define ST_M29W512B		0x27
+#define ST_N25Q064		0xBA17
 
 #define SYNCMOS_MVC_ID		0x40	/* SyncMOS (SM) and Mosel Vitelic Corporation (MVC) */
 #define MVC_V29C51000T		0x00

@@ -69,6 +69,9 @@ enum programmer {
 #if CONFIG_RAYER_SPI == 1
 	PROGRAMMER_RAYER_SPI,
 #endif
+#if CONFIG_PONY_SPI == 1
+	PROGRAMMER_PONY_SPI,
+#endif
 #if CONFIG_NICINTEL == 1
 	PROGRAMMER_NICINTEL,
 #endif
@@ -109,6 +112,9 @@ enum bitbang_spi_master_type {
 	BITBANG_SPI_INVALID	= 0, /* This must always be the first entry. */
 #if CONFIG_RAYER_SPI == 1
 	BITBANG_SPI_MASTER_RAYER,
+#endif
+#if CONFIG_PONY_SPI == 1
+	BITBANG_SPI_MASTER_PONY,
 #endif
 #if CONFIG_NICINTEL_SPI == 1
 	BITBANG_SPI_MASTER_NICINTEL,
@@ -240,6 +246,7 @@ void print_supported_pcidevs(const struct pcidev_status *devs);
 /* board_enable.c */
 void w836xx_ext_enter(uint16_t port);
 void w836xx_ext_leave(uint16_t port);
+void probe_superio_winbond(void);
 int it8705f_write_enable(uint8_t port);
 uint8_t sio_read(uint16_t port, uint8_t reg);
 void sio_write(uint16_t port, uint8_t reg, uint8_t data);
@@ -284,6 +291,7 @@ extern struct superio superios[];
 extern int superio_count;
 #define SUPERIO_VENDOR_NONE	0x0
 #define SUPERIO_VENDOR_ITE	0x1
+#define SUPERIO_VENDOR_WINBOND	0x2
 #endif
 #if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter);
@@ -430,6 +438,11 @@ void print_supported_usbdevs(const struct usbdev_status *devs);
 int rayer_spi_init(void);
 #endif
 
+/* pony_spi.c */
+#if CONFIG_PONY_SPI == 1
+int pony_spi_init(void);
+#endif
+
 /* bitbang_spi.c */
 int bitbang_spi_init(const struct bitbang_spi_master *master);
 
@@ -492,7 +505,7 @@ enum spi_controller {
 #if CONFIG_DEDIPROG == 1
 	SPI_CONTROLLER_DEDIPROG,
 #endif
-#if CONFIG_OGP_SPI == 1 || CONFIG_NICINTEL_SPI == 1 || CONFIG_RAYER_SPI == 1 || (CONFIG_INTERNAL == 1 && (defined(__i386__) || defined(__x86_64__)))
+#if CONFIG_OGP_SPI == 1 || CONFIG_NICINTEL_SPI == 1 || CONFIG_RAYER_SPI == 1 || CONFIG_PONY_SPI == 1 || (CONFIG_INTERNAL == 1 && (defined(__i386__) || defined(__x86_64__)))
 	SPI_CONTROLLER_BITBANG,
 #endif
 #if CONFIG_LINUX_SPI == 1
@@ -517,6 +530,7 @@ struct spi_programmer {
 	/* Optimized functions for this programmer */
 	int (*read)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 	int (*write_256)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+	int (*write_aai)(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 	const void *data;
 };
 
@@ -525,10 +539,10 @@ int default_spi_send_command(struct flashctx *flash, unsigned int writecnt, unsi
 int default_spi_send_multicommand(struct flashctx *flash, struct spi_command *cmds);
 int default_spi_read(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 int default_spi_write_256(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
+int default_spi_write_aai(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 int register_spi_programmer(const struct spi_programmer *programmer);
 
-/* ichspi.c */
-#if CONFIG_INTERNAL == 1
+/* The following enum is needed by ich_descriptor_tool and ich* code. */
 enum ich_chipset {
 	CHIPSET_ICH_UNKNOWN,
 	CHIPSET_ICH7 = 7,
@@ -537,9 +551,12 @@ enum ich_chipset {
 	CHIPSET_ICH10,
 	CHIPSET_5_SERIES_IBEX_PEAK,
 	CHIPSET_6_SERIES_COUGAR_POINT,
-	CHIPSET_7_SERIES_PANTHER_POINT
+	CHIPSET_7_SERIES_PANTHER_POINT,
+	CHIPSET_8_SERIES_LYNX_POINT
 };
 
+/* ichspi.c */
+#if CONFIG_INTERNAL == 1
 extern uint32_t ichspi_bbar;
 int ich_init_spi(struct pci_dev *dev, uint32_t base, void *rcrb,
 		 enum ich_chipset ich_generation);
@@ -633,5 +650,32 @@ extern fdtype sp_fd;
 int serialport_shutdown(void *data);
 int serialport_write(unsigned char *buf, unsigned int writecnt);
 int serialport_read(unsigned char *buf, unsigned int readcnt);
+
+/* Serial port/pin mapping:
+
+  1	CD	<-
+  2	RXD	<-
+  3	TXD	->
+  4	DTR	->
+  5	GND     --
+  6	DSR	<-
+  7	RTS	->
+  8	CTS	<-
+  9	RI	<-
+*/
+enum SP_PIN {
+	PIN_CD = 1,
+	PIN_RXD,
+	PIN_TXD,
+	PIN_DTR,
+	PIN_GND,
+	PIN_DSR,
+	PIN_RTS,
+	PIN_CTS,
+	PIN_RI,
+};
+
+void sp_set_pin(enum SP_PIN pin, int val);
+int sp_get_pin(enum SP_PIN pin);
 
 #endif				/* !__PROGRAMMER_H__ */
