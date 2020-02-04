@@ -7,7 +7,8 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/mman.h>
-#include "../../src/include/boot/linuxbios_tables.h"
+#include "flash.h"
+#include "linuxbios_tables.h"
 #include "debug.h"
 
 char *lb_part=NULL, *lb_vendor=NULL;
@@ -157,15 +158,9 @@ int linuxbios_init(void)
 	struct lb_header *lb_table;
 	struct lb_record *rec, *last;
 	
-	int fd;
-	fd = open("/dev/mem", O_RDONLY);
-	if (fd < 0) {
-		fprintf(stderr, "Can not open /dev/mem\n");
-		exit(-1);
-	}
-	low_1MB = mmap(0, 1024*1024, PROT_READ, MAP_SHARED, fd, 0x00000000);
-	if (low_1MB == ((void *) -1)) {
-		fprintf(stderr, "Can not mmap /dev/mem at %08lx errno(%d):%s\n",
+	low_1MB = mmap(0, 1024*1024, PROT_READ, MAP_SHARED, fd_mem, 0x00000000);
+	if (low_1MB == MAP_FAILED) {
+		fprintf(stderr, "Can not mmap " MEM_DEV " at %08lx errno(%d):%s\n",
 			0x00000000UL, errno, strerror(errno));
 		exit(-2);
 	}
