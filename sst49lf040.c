@@ -19,9 +19,9 @@
  *
  *
  * Reference:
- *      4 MEgabit (512K x 8) SuperFlash EEPROM, SST49lF040 data sheet
+ *      4 Megabit (512K x 8) SuperFlash EEPROM, SST49lF040 data sheet
  *
- * ToDo: Consilidated to standard JEDEC code.
+ * TODO: Consilidated to standard JEDEC code.
  *
  */
 #include <stdio.h>
@@ -34,7 +34,7 @@ int erase_49lf040(struct flashchip *flash)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
 
 	for (i = 0; i < total_size / page_size; i++) {
 		/* Chip erase only works in parallel programming mode
@@ -49,7 +49,7 @@ int write_49lf040(struct flashchip *flash, uint8_t *buf)
 	int i;
 	int total_size = flash->total_size * 1024;
 	int page_size = flash->page_size;
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
 
 	printf("Programming Page: ");
 	for (i = 0; i < total_size / page_size; i++) {

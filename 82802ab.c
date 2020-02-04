@@ -23,12 +23,8 @@
  *
  */
 
-#include <errno.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdint.h>
 
 #include "flash.h"
 #include "82802ab.h"
@@ -48,13 +44,13 @@ void print_82802ab_status(uint8_t status)
 
 int probe_82802ab(struct flashchip *flash)
 {
-	volatile uint8_t *bios = flash->virt_addr;
+	volatile uint8_t *bios = flash->virtual_memory;
 	uint8_t id1, id2;
 
 #if 0
-	*(volatile uint8_t *) (bios + 0x5555) = 0xAA;
-	*(volatile uint8_t *) (bios + 0x2AAA) = 0x55;
-	*(volatile uint8_t *) (bios + 0x5555) = 0x90;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0x90;
 #endif
 
 	*bios = 0xff;
@@ -62,35 +58,24 @@ int probe_82802ab(struct flashchip *flash)
 	*bios = 0x90;
 	myusec_delay(10);
 
-	id1 = *(volatile uint8_t *) bios;
-	id2 = *(volatile uint8_t *) (bios + 0x01);
+	id1 = *(volatile uint8_t *)bios;
+	id2 = *(volatile uint8_t *)(bios + 0x01);
 
-#if 1
-	*(volatile uint8_t *) (bios + 0x5555) = 0xAA;
-	*(volatile uint8_t *) (bios + 0x2AAA) = 0x55;
-	*(volatile uint8_t *) (bios + 0x5555) = 0xF0;
+	/* Leave ID mode */
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
 
-#endif
 	myusec_delay(10);
 
 	printf_debug("%s: id1 0x%x, id2 0x%x\n", __FUNCTION__, id1, id2);
 
-	if (id1 == flash->manufacture_id && id2 == flash->model_id) {
-		size_t size = flash->total_size * 1024;
-		// we need to mmap the write-protect space. 
-		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
-			    fd_mem, (off_t) (0 - 0x400000 - size));
-		if (bios == MAP_FAILED) {
-			// it's this part but we can't map it ...
-			perror("Error MMAP memory using " MEM_DEV );
-			exit(1);
-		}
+	if (id1 != flash->manufacture_id || id2 != flash->model_id)
+		return 0;
 
-		flash->virt_addr_2 = bios;
-		return 1;
-	}
+	map_flash_registers(flash);
 
-	return 0;
+	return 1;
 }
 
 uint8_t wait_82802ab(volatile uint8_t *bios)
@@ -101,7 +86,7 @@ uint8_t wait_82802ab(volatile uint8_t *bios)
 
 	*bios = 0x70;
 	if ((*bios & 0x80) == 0) {	// it's busy
-		while ((*bios & 0x80) == 0);
+		while ((*bios & 0x80) == 0) ;
 	}
 
 	status = *bios;
@@ -111,21 +96,20 @@ uint8_t wait_82802ab(volatile uint8_t *bios)
 	*bios = 0x90;
 	myusec_delay(10);
 
-	id1 = *(volatile uint8_t *) bios;
-	id2 = *(volatile uint8_t *) (bios + 0x01);
+	id1 = *(volatile uint8_t *)bios;
+	id2 = *(volatile uint8_t *)(bios + 0x01);
 
 	// this is needed to jam it out of "read id" mode
-	*(volatile uint8_t *) (bios + 0x5555) = 0xAA;
-	*(volatile uint8_t *) (bios + 0x2AAA) = 0x55;
-	*(volatile uint8_t *) (bios + 0x5555) = 0xF0;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xAA;
+	*(volatile uint8_t *)(bios + 0x2AAA) = 0x55;
+	*(volatile uint8_t *)(bios + 0x5555) = 0xF0;
 	return status;
 
 }
 int erase_82802ab_block(struct flashchip *flash, int offset)
 {
-	volatile uint8_t *bios = flash->virt_addr + offset;
-	volatile uint8_t *wrprotect =
-	    flash->virt_addr_2 + offset + 2;
+	volatile uint8_t *bios = flash->virtual_memory + offset;
+	volatile uint8_t *wrprotect = flash->virtual_registers + offset + 2;
 	uint8_t status;
 
 	// clear status register
@@ -138,11 +122,11 @@ int erase_82802ab_block(struct flashchip *flash, int offset)
 	//printf("write protect is 0x%x\n", *(wrprotect));
 
 	// now start it
-	*(volatile uint8_t *) (bios) = 0x20;
-	*(volatile uint8_t *) (bios) = 0xd0;
+	*(volatile uint8_t *)(bios) = 0x20;
+	*(volatile uint8_t *)(bios) = 0xd0;
 	myusec_delay(10);
 	// now let's see what the register is
-	status = wait_82802ab(flash->virt_addr);
+	status = wait_82802ab(flash->virtual_memory);
 	//print_82802ab_status(status);
 	printf("DONE BLOCK 0x%x\n", offset);
 	return (0);
@@ -160,8 +144,8 @@ int erase_82802ab(struct flashchip *flash)
 	return (0);
 }
 
-void write_page_82802ab(volatile uint8_t *bios, uint8_t *src, volatile uint8_t *dst,
-			int page_size)
+void write_page_82802ab(volatile uint8_t *bios, uint8_t *src,
+			volatile uint8_t *dst, int page_size)
 {
 	int i;
 
@@ -177,9 +161,9 @@ void write_page_82802ab(volatile uint8_t *bios, uint8_t *src, volatile uint8_t *
 int write_82802ab(struct flashchip *flash, uint8_t *buf)
 {
 	int i;
-	int total_size = flash->total_size * 1024, page_size =
-	    flash->page_size;
-	volatile uint8_t *bios = flash->virt_addr;
+	int total_size = flash->total_size * 1024;
+	int page_size = flash->page_size;
+	volatile uint8_t *bios = flash->virtual_memory;
 
 	erase_82802ab(flash);
 	if (*bios != 0xff) {
@@ -191,8 +175,7 @@ int write_82802ab(struct flashchip *flash, uint8_t *buf)
 		printf("%04d at address: 0x%08x", i, i * page_size);
 		write_page_82802ab(bios, buf + i * page_size,
 				   bios + i * page_size, page_size);
-		printf
-		    ("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
+		printf("\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b");
 	}
 	printf("\n");
 	protect_82802ab(bios);
