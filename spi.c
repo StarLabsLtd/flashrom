@@ -34,21 +34,24 @@ void spi_prettyprint_status_register(struct flashchip *flash);
 
 int spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr)
 {
-	if (it8716f_flashport)
+	switch (flashbus) {
+	case BUS_TYPE_IT87XX_SPI:
 		return it8716f_spi_command(writecnt, readcnt, writearr, readarr);
-       else if (ich7_detected)
+	case BUS_TYPE_ICH7_SPI:
+	case BUS_TYPE_ICH9_SPI:
+	case BUS_TYPE_VIA_SPI:
                return ich_spi_command(writecnt, readcnt, writearr, readarr);
-	else if (ich9_detected)
-		return ich_spi_command(writecnt, readcnt, writearr, readarr);
-	printf_debug("%s called, but no SPI chipset detected\n", __FUNCTION__);
+	default:
+		printf_debug("%s called, but no SPI chipset/strapping detected\n", __FUNCTION__);
+	}
 	return 1;
 }
 
-static int spi_rdid(unsigned char *readarr)
+static int spi_rdid(unsigned char *readarr, int bytes)
 {
 	const unsigned char cmd[JEDEC_RDID_OUTSIZE] = {JEDEC_RDID};
 
-	if (spi_command(JEDEC_RDID_OUTSIZE, JEDEC_RDID_INSIZE, cmd, readarr))
+	if (spi_command(sizeof(cmd), bytes, cmd, readarr))
 		return 1;
 	printf_debug("RDID returned %02x %02x %02x.\n", readarr[0], readarr[1], readarr[2]);
 	return 0;
@@ -58,7 +61,7 @@ static int spi_res(unsigned char *readarr)
 {
 	const unsigned char cmd[JEDEC_RES_OUTSIZE] = {JEDEC_RES, 0, 0, 0};
 
-	if (spi_command(JEDEC_RES_OUTSIZE, JEDEC_RES_INSIZE, cmd, readarr))
+	if (spi_command(sizeof(cmd), JEDEC_RES_INSIZE, cmd, readarr))
 		return 1;
 	printf_debug("RES returned %02x.\n", readarr[0]);
 	return 0;
@@ -69,7 +72,7 @@ void spi_write_enable()
 	const unsigned char cmd[JEDEC_WREN_OUTSIZE] = {JEDEC_WREN};
 
 	/* Send WREN (Write Enable) */
-	spi_command(JEDEC_WREN_OUTSIZE, JEDEC_WREN_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 void spi_write_disable()
@@ -77,16 +80,16 @@ void spi_write_disable()
 	const unsigned char cmd[JEDEC_WRDI_OUTSIZE] = {JEDEC_WRDI};
 
 	/* Send WRDI (Write Disable) */
-	spi_command(JEDEC_WRDI_OUTSIZE, JEDEC_WRDI_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
-int probe_spi_rdid(struct flashchip *flash)
+static int probe_spi_rdid_generic(struct flashchip *flash, int bytes)
 {
-	unsigned char readarr[3];
+	unsigned char readarr[4];
 	uint32_t manuf_id;
 	uint32_t model_id;
 
-	if (spi_rdid(readarr))
+	if (spi_rdid(readarr, bytes))
 		return 0;
 
 	if (!oddparity(readarr[0]))
@@ -98,6 +101,10 @@ int probe_spi_rdid(struct flashchip *flash)
 			printf_debug("RDID byte 1 parity violation.\n");
 		manuf_id = (readarr[0] << 8) | readarr[1];
 		model_id = readarr[2];
+		if (bytes > 3) {
+			model_id <<= 8;
+			model_id |= readarr[3];
+		}
 	} else {
 		manuf_id = readarr[0];
 		model_id = (readarr[1] << 8) | readarr[2];
@@ -123,12 +130,32 @@ int probe_spi_rdid(struct flashchip *flash)
 	return 0;
 }
 
+int probe_spi_rdid(struct flashchip *flash) {
+	return probe_spi_rdid_generic(flash, 3);
+}
+
+/* support 4 bytes flash ID */
+int probe_spi_rdid4(struct flashchip *flash) {
+
+	/* only some SPI chipsets support 4 bytes commands */
+	switch (flashbus) {
+	case BUS_TYPE_ICH7_SPI:
+	case BUS_TYPE_ICH9_SPI:
+	case BUS_TYPE_VIA_SPI:
+		return probe_spi_rdid_generic(flash, 4);
+	default:
+		printf_debug("4b ID not supported on this SPI controller\n");
+	}
+
+	return 0;
+}
+
 int probe_spi_res(struct flashchip *flash)
 {
 	unsigned char readarr[3];
 	uint32_t model_id;
 
-	if (spi_rdid(readarr))
+	if (spi_rdid(readarr, 3))
 		/* We couldn't issue RDID, it's pointless to try RES. */
 		return 0;
 
@@ -155,10 +182,10 @@ int probe_spi_res(struct flashchip *flash)
 uint8_t spi_read_status_register()
 {
 	const unsigned char cmd[JEDEC_RDSR_OUTSIZE] = {JEDEC_RDSR};
-	unsigned char readarr[1];
+	unsigned char readarr[JEDEC_RDSR_INSIZE];
 
 	/* Read Status Register */
-	spi_command(JEDEC_RDSR_OUTSIZE, JEDEC_RDSR_INSIZE, cmd, readarr);
+	spi_command(sizeof(cmd), sizeof(readarr), cmd, readarr);
 	return readarr[0];
 }
 
@@ -246,7 +273,7 @@ int spi_chip_erase_c7(struct flashchip *flash)
 	spi_disable_blockprotect();
 	spi_write_enable();
 	/* Send CE (Chip Erase) */
-	spi_command(JEDEC_CE_C7_OUTSIZE, JEDEC_CE_C7_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 1-85 s, so wait in 1 s steps.
 	 */
@@ -269,7 +296,7 @@ int spi_block_erase_d8(const struct flashchip *flash, unsigned long addr)
 	cmd[3] = (addr & 0x000000ff);
 	spi_write_enable();
 	/* Send BE (Block Erase) */
-	spi_command(JEDEC_BE_D8_OUTSIZE, JEDEC_BE_D8_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 100-4000 ms, so wait in 100 ms steps.
 	 */
@@ -288,22 +315,13 @@ int spi_sector_erase(const struct flashchip *flash, unsigned long addr)
 
 	spi_write_enable();
 	/* Send SE (Sector Erase) */
-	spi_command(JEDEC_SE_OUTSIZE, JEDEC_SE_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 	/* Wait until the Write-In-Progress bit is cleared.
 	 * This usually takes 15-800 ms, so wait in 10 ms steps.
 	 */
 	while (spi_read_status_register() & JEDEC_RDSR_BIT_WIP)
 		usleep(10 * 1000);
 	return 0;
-}
-
-void spi_page_program(int block, uint8_t *buf, uint8_t *bios)
-{
-	if (it8716f_flashport) {
-		it8716f_spi_page_program(block, buf, bios);
-		return;
-	}
-	printf_debug("%s called, but no SPI chipset detected\n", __FUNCTION__);
 }
 
 /*
@@ -315,7 +333,7 @@ void spi_write_status_register(int status)
 	const unsigned char cmd[JEDEC_WRSR_OUTSIZE] = {JEDEC_WRSR, (unsigned char)status};
 
 	/* Send WRSR (Write Status Register) */
-	spi_command(JEDEC_WRSR_OUTSIZE, JEDEC_WRSR_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 void spi_byte_program(int address, uint8_t byte)
@@ -328,7 +346,7 @@ void spi_byte_program(int address, uint8_t byte)
 	};
 
 	/* Send Byte-Program */
-	spi_command(JEDEC_BYTE_PROGRAM_OUTSIZE, JEDEC_BYTE_PROGRAM_INSIZE, cmd, NULL);
+	spi_command(sizeof(cmd), 0, cmd, NULL);
 }
 
 void spi_disable_blockprotect(void)
@@ -353,30 +371,39 @@ void spi_nbyte_read(int address, uint8_t *bytes, int len)
 	};
 
 	/* Send Read */
-	spi_command(JEDEC_READ_OUTSIZE, len, cmd, bytes);
+	spi_command(sizeof(cmd), len, cmd, bytes);
 }
 
 int spi_chip_read(struct flashchip *flash, uint8_t *buf)
 {
-	if (it8716f_flashport)
+
+	switch (flashbus) {
+	case BUS_TYPE_IT87XX_SPI:
 		return it8716f_spi_chip_read(flash, buf);
-       else if (ich7_detected)
-               return ich_spi_read(flash, buf);
-	else if (ich9_detected)
+	case BUS_TYPE_ICH7_SPI:
+	case BUS_TYPE_ICH9_SPI:
+	case BUS_TYPE_VIA_SPI:
 		return ich_spi_read(flash, buf);
-	printf_debug("%s called, but no SPI chipset detected\n", __FUNCTION__);
+	default:
+		printf_debug("%s called, but no SPI chipset/strapping detected\n", __FUNCTION__);
+	}
+
 	return 1;
 }
 
 int spi_chip_write(struct flashchip *flash, uint8_t *buf)
 {
-	if (it8716f_flashport)
+	switch (flashbus) {
+	case BUS_TYPE_IT87XX_SPI:
 		return it8716f_spi_chip_write(flash, buf);
-       else if (ich7_detected)
-               return ich_spi_write(flash, buf);
-	else if (ich9_detected)
+	case BUS_TYPE_ICH7_SPI:
+	case BUS_TYPE_ICH9_SPI:
+	case BUS_TYPE_VIA_SPI:
 		return ich_spi_write(flash, buf);
-	printf_debug("%s called, but no SPI chipset detected\n", __FUNCTION__);
+	default:
+		printf_debug("%s called, but no SPI chipset/strapping detected\n", __FUNCTION__);
+	}
+
 	return 1;
 }
 
