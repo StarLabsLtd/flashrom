@@ -2,6 +2,7 @@
  * This file is part of the flashrom project.
  *
  * Copyright (C) 2008 Peter Stuge <peter@stuge.se>
+ * Copyright (C) 2009,2010 Carl-Daniel Hailfinger
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -34,18 +35,18 @@ static uint16_t wbsio_get_spibase(uint16_t port)
 	w836xx_ext_enter(port);
 	id = sio_read(port, 0x20);
 	if (id != 0xa0) {
-		fprintf(stderr, "\nW83627 not found at 0x%x, id=0x%02x want=0xa0.\n", port, id);
+		msg_perr("\nW83627 not found at 0x%x, id=0x%02x want=0xa0.\n", port, id);
 		goto done;
 	}
 
 	if (0 == (sio_read(port, 0x24) & 2)) {
-		fprintf(stderr, "\nW83627 found at 0x%x, but SPI pins are not enabled. (CR[0x24] bit 1=0)\n", port);
+		msg_perr("\nW83627 found at 0x%x, but SPI pins are not enabled. (CR[0x24] bit 1=0)\n", port);
 		goto done;
 	}
 
 	sio_write(port, 0x07, 0x06);
 	if (0 == (sio_read(port, 0x30) & 1)) {
-		fprintf(stderr, "\nW83627 found at 0x%x, but SPI is not enabled. (LDN6[0x30] bit 0=0)\n", port);
+		msg_perr("\nW83627 found at 0x%x, but SPI is not enabled. (LDN6[0x30] bit 0=0)\n", port);
 		goto done;
 	}
 
@@ -62,7 +63,7 @@ int wbsio_check_for_spi(const char *name)
 		if (0 == (wbsio_spibase = wbsio_get_spibase(WBSIO_PORT2)))
 			return 1;
 
-	printf_debug("\nwbsio_spibase = 0x%x\n", wbsio_spibase);
+	msg_pspew("\nwbsio_spibase = 0x%x\n", wbsio_spibase);
 
 	buses_supported |= CHIP_BUSTYPE_SPI;
 	spi_controller = SPI_CONTROLLER_WBSIO;
@@ -96,42 +97,42 @@ int wbsio_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	int i;
 	uint8_t mode = 0;
 
-	printf_debug("%s:", __func__);
+	msg_pspew("%s:", __func__);
 
 	if (1 == writecnt && 0 == readcnt) {
 		mode = 0x10;
 	} else if (2 == writecnt && 0 == readcnt) {
 		OUTB(writearr[1], wbsio_spibase + 4);
-		printf_debug(" data=0x%02x", writearr[1]);
+		msg_pspew(" data=0x%02x", writearr[1]);
 		mode = 0x20;
 	} else if (1 == writecnt && 2 == readcnt) {
 		mode = 0x30;
 	} else if (4 == writecnt && 0 == readcnt) {
-		printf_debug(" addr=0x%02x", (writearr[1] & 0x0f));
+		msg_pspew(" addr=0x%02x", (writearr[1] & 0x0f));
 		for (i = 2; i < writecnt; i++) {
 			OUTB(writearr[i], wbsio_spibase + i);
-			printf_debug("%02x", writearr[i]);
+			msg_pspew("%02x", writearr[i]);
 		}
 		mode = 0x40 | (writearr[1] & 0x0f);
 	} else if (5 == writecnt && 0 == readcnt) {
-		printf_debug(" addr=0x%02x", (writearr[1] & 0x0f));
+		msg_pspew(" addr=0x%02x", (writearr[1] & 0x0f));
 		for (i = 2; i < 4; i++) {
 			OUTB(writearr[i], wbsio_spibase + i);
-			printf_debug("%02x", writearr[i]);
+			msg_pspew("%02x", writearr[i]);
 		}
 		OUTB(writearr[i], wbsio_spibase + i);
-		printf_debug(" data=0x%02x", writearr[i]);
+		msg_pspew(" data=0x%02x", writearr[i]);
 		mode = 0x50 | (writearr[1] & 0x0f);
 	} else if (8 == writecnt && 0 == readcnt) {
-		printf_debug(" addr=0x%02x", (writearr[1] & 0x0f));
+		msg_pspew(" addr=0x%02x", (writearr[1] & 0x0f));
 		for (i = 2; i < 4; i++) {
 			OUTB(writearr[i], wbsio_spibase + i);
-			printf_debug("%02x", writearr[i]);
+			msg_pspew("%02x", writearr[i]);
 		}
-		printf_debug(" data=0x");
+		msg_pspew(" data=0x");
 		for (; i < writecnt; i++) {
 			OUTB(writearr[i], wbsio_spibase + i);
-			printf_debug("%02x", writearr[i]);
+			msg_pspew("%02x", writearr[i]);
 		}
 		mode = 0x60 | (writearr[1] & 0x0f);
 	} else if (5 == writecnt && 4 == readcnt) {
@@ -142,17 +143,17 @@ int wbsio_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 		 */
 		;
 	} else if (4 == writecnt && readcnt >= 1 && readcnt <= 4) {
-		printf_debug(" addr=0x%02x", (writearr[1] & 0x0f));
+		msg_pspew(" addr=0x%02x", (writearr[1] & 0x0f));
 		for (i = 2; i < writecnt; i++) {
 			OUTB(writearr[i], wbsio_spibase + i);
-			printf_debug("%02x", writearr[i]);
+			msg_pspew("%02x", writearr[i]);
 		}
 		mode = ((7 + readcnt) << 4) | (writearr[1] & 0x0f);
 	}
-	printf_debug(" cmd=%02x mode=%02x\n", writearr[0], mode);
+	msg_pspew(" cmd=%02x mode=%02x\n", writearr[0], mode);
 
 	if (!mode) {
-		fprintf(stderr, "%s: unsupported command type wr=%d rd=%d\n",
+		msg_perr("%s: unsupported command type wr=%d rd=%d\n",
 			__func__, writecnt, readcnt);
 		/* Command type refers to the number of bytes read/written. */
 		return SPI_INVALID_LENGTH;
@@ -165,12 +166,12 @@ int wbsio_spi_send_command(unsigned int writecnt, unsigned int readcnt,
 	if (!readcnt)
 		return 0;
 
-	printf_debug("%s: returning data =", __func__);
+	msg_pspew("%s: returning data =", __func__);
 	for (i = 0; i < readcnt; i++) {
 		readarr[i] = INB(wbsio_spibase + 4 + i);
-		printf_debug(" 0x%02x", readarr[i]);
+		msg_pspew(" 0x%02x", readarr[i]);
 	}
-	printf_debug("\n");
+	msg_pspew("\n");
 	return 0;
 }
 
@@ -179,7 +180,7 @@ int wbsio_spi_read(struct flashchip *flash, uint8_t *buf, int start, int len)
 	int size = flash->total_size * 1024;
 
 	if (size > 1024 * 1024) {
-		fprintf(stderr, "%s: Winbond saved on 4 register bits so max chip size is 1024 KB!\n", __func__);
+		msg_perr("%s: Winbond saved on 4 register bits so max chip size is 1024 KB!\n", __func__);
 		return 1;
 	}
 
@@ -191,7 +192,7 @@ int wbsio_spi_write_1(struct flashchip *flash, uint8_t *buf)
 	int size = flash->total_size * 1024;
 
 	if (size > 1024 * 1024) {
-		fprintf(stderr, "%s: Winbond saved on 4 register bits so max chip size is 1024 KB!\n", __func__);
+		msg_perr("%s: Winbond saved on 4 register bits so max chip size is 1024 KB!\n", __func__);
 		return 1;
 	}
 

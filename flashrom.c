@@ -33,10 +33,70 @@
 const char *flashrom_version = FLASHROM_VERSION;
 char *chip_to_probe = NULL;
 int verbose = 0;
+
+#if INTERNAL_SUPPORT == 1
 enum programmer programmer = PROGRAMMER_INTERNAL;
+#elif DUMMY_SUPPORT == 1
+enum programmer programmer = PROGRAMMER_DUMMY;
+#else
+/* If neither internal nor dummy are selected, we must pick a sensible default.
+ * Since there is no reason to prefer a particular external programmer, we fail
+ * if more than one of them is selected. If only one is selected, it is clear
+ * that the user wants that one to become the default.
+ */
+#if NIC3COM_SUPPORT+GFXNVIDIA_SUPPORT+DRKAISER_SUPPORT+SATASII_SUPPORT+FT2232_SPI_SUPPORT+SERPROG_SUPPORT+BUSPIRATE_SPI_SUPPORT+DEDIPROG_SUPPORT > 1
+#error Please enable either CONFIG_DUMMY or CONFIG_INTERNAL or disable support for all external programmers except one.
+#endif
+enum programmer programmer =
+#if NIC3COM_SUPPORT == 1
+	PROGRAMMER_NIC3COM
+#endif
+#if GFXNVIDIA_SUPPORT == 1
+	PROGRAMMER_GFXNVIDIA
+#endif
+#if DRKAISER_SUPPORT == 1
+	PROGRAMMER_DRKAISER
+#endif
+#if SATASII_SUPPORT == 1
+	PROGRAMMER_SATASII
+#endif
+#if FT2232_SPI_SUPPORT == 1
+	PROGRAMMER_FT2232SPI
+#endif
+#if SERPROG_SUPPORT == 1
+	PROGRAMMER_SERPROG
+#endif
+#if BUSPIRATE_SPI_SUPPORT == 1
+	PROGRAMMER_BUSPIRATESPI
+#endif
+#if DEDIPROG_SUPPORT == 1
+	PROGRAMMER_DEDIPROG
+#endif
+;
+#endif
+
 char *programmer_param = NULL;
 
+/**
+ * flashrom defaults to Parallel/LPC/FWH flash devices. If a known host
+ * controller is found, the init routine sets the buses_supported bitfield to
+ * contain the supported buses for that controller.
+ */
+enum chipbustype buses_supported = CHIP_BUSTYPE_NONSPI;
+
+/**
+ * Programmers supporting multiple buses can have differing size limits on
+ * each bus. Store the limits for each bus in a common struct.
+ */
+struct decode_sizes max_rom_decode = {
+	.parallel	= 0xffffffff,
+	.lpc		= 0xffffffff,
+	.fwh		= 0xffffffff,
+	.spi		= 0xffffffff
+};
+
 const struct programmer_entry programmer_table[] = {
+#if INTERNAL_SUPPORT == 1
 	{
 		.name			= "internal",
 		.init			= internal_init,
@@ -53,6 +113,7 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
 
 #if DUMMY_SUPPORT == 1
 	{
@@ -149,6 +210,7 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if INTERNAL_SUPPORT == 1
 	{
 		.name			= "it87spi",
 		.init			= it87spi_init,
@@ -165,6 +227,7 @@ const struct programmer_entry programmer_table[] = {
 		.chip_writen		= fallback_chip_writen,
 		.delay			= internal_delay,
 	},
+#endif
 
 #if FT2232_SPI_SUPPORT == 1
 	{
@@ -209,6 +272,25 @@ const struct programmer_entry programmer_table[] = {
 		.name			= "buspiratespi",
 		.init			= buspirate_spi_init,
 		.shutdown		= buspirate_spi_shutdown,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.chip_readb		= noop_chip_readb,
+		.chip_readw		= fallback_chip_readw,
+		.chip_readl		= fallback_chip_readl,
+		.chip_readn		= fallback_chip_readn,
+		.chip_writeb		= noop_chip_writeb,
+		.chip_writew		= fallback_chip_writew,
+		.chip_writel		= fallback_chip_writel,
+		.chip_writen		= fallback_chip_writen,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if DEDIPROG_SUPPORT == 1
+	{
+		.name			= "dediprog",
+		.init			= dediprog_init,
+		.shutdown		= dediprog_shutdown,
 		.map_flash_region	= fallback_map,
 		.unmap_flash_region	= fallback_unmap,
 		.chip_readb		= noop_chip_readb,
@@ -307,6 +389,8 @@ int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len)
 		
 	return 0;
 }
+
+unsigned long flashbase = 0;
 
 int min(int a, int b)
 {
@@ -659,6 +743,7 @@ int check_max_decode(enum chipbustype buses, uint32_t size)
 	 * and the limit is not exceeded on all buses. Tell the user.
 	 */
 	if (bitcount(buses) > limitexceeded)
+		/* FIXME: This message is designed towards CLI users. */
 		printf_debug("There is at least one common chip/programmer "
 			     "interface which can support a chip of this size. "
 			     "You can try --force at your own risk.\n");
@@ -770,13 +855,81 @@ int read_flash(struct flashchip *flash, char *filename)
 	return 0;
 }
 
+/* This function shares a lot of its structure with erase_flash().
+ * Even if an error is found, the function will keep going and check the rest.
+ */
+int selfcheck_eraseblocks(struct flashchip *flash)
+{
+	int i, j, k;
+	int ret = 0;
+
+	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
+		unsigned int done = 0;
+		struct block_eraser eraser = flash->block_erasers[k];
+
+		for (i = 0; i < NUM_ERASEREGIONS; i++) {
+			/* Blocks with zero size are bugs in flashchips.c. */
+			if (eraser.eraseblocks[i].count &&
+			    !eraser.eraseblocks[i].size) {
+				msg_gerr("ERROR: Flash chip %s erase function "
+					"%i region %i has size 0. Please report"
+					" a bug at flashrom@flashrom.org\n",
+					flash->name, k, i);
+				ret = 1;
+			}
+			/* Blocks with zero count are bugs in flashchips.c. */
+			if (!eraser.eraseblocks[i].count &&
+			    eraser.eraseblocks[i].size) {
+				msg_gerr("ERROR: Flash chip %s erase function "
+					"%i region %i has count 0. Please report"
+					" a bug at flashrom@flashrom.org\n",
+					flash->name, k, i);
+				ret = 1;
+			}
+			done += eraser.eraseblocks[i].count *
+				eraser.eraseblocks[i].size;
+		}
+		/* Empty eraseblock definition with erase function.  */
+		if (!done && eraser.block_erase)
+			msg_pspew("Strange: Empty eraseblock definition with "
+				"non-empty erase function. Not an error.\n");
+		if (!done)
+			continue;
+		if (done != flash->total_size * 1024) {
+			msg_gerr("ERROR: Flash chip %s erase function %i "
+				"region walking resulted in 0x%06x bytes total,"
+				" expected 0x%06x bytes. Please report a bug at"
+				" flashrom@flashrom.org\n", flash->name, k,
+				done, flash->total_size * 1024);
+			ret = 1;
+		}
+		if (!eraser.block_erase)
+			continue;
+		/* Check if there are identical erase functions for different
+		 * layouts. That would imply "magic" erase functions. The
+		 * easiest way to check this is with function pointers.
+		 */
+		for (j = k + 1; j < NUM_ERASEFUNCTIONS; j++)
+			if (eraser.block_erase ==
+			    flash->block_erasers[j].block_erase) {
+				msg_gerr("ERROR: Flash chip %s erase function "
+					"%i and %i are identical. Please report"
+					" a bug at flashrom@flashrom.org\n",
+					flash->name, k, j);
+				ret = 1;
+			}
+	}
+	return ret;
+}
+
 int erase_flash(struct flashchip *flash)
 {
 	int i, j, k, ret = 0, found = 0;
+	unsigned int start, len;
 
 	printf("Erasing flash chip... ");
 	for (k = 0; k < NUM_ERASEFUNCTIONS; k++) {
-		unsigned long done = 0;
+		unsigned int done = 0;
 		struct block_eraser eraser = flash->block_erasers[k];
 
 		printf_debug("Looking at blockwise erase function %i... ", k);
@@ -804,13 +957,20 @@ int erase_flash(struct flashchip *flash)
 			 * members so the loop below won't be executed for them.
 			 */
 			for (j = 0; j < eraser.eraseblocks[i].count; j++) {
-				ret = eraser.block_erase(flash, done + eraser.eraseblocks[i].size * j, eraser.eraseblocks[i].size);
+				start = done + eraser.eraseblocks[i].size * j;
+				len = eraser.eraseblocks[i].size;
+				printf_debug("0x%06x-0x%06x, ", start,
+					     start + len - 1);
+				ret = eraser.block_erase(flash, start, len);
 				if (ret)
 					break;
 			}
 			if (ret)
 				break;
+			done += eraser.eraseblocks[i].count *
+				eraser.eraseblocks[i].size;
 		}
+		printf_debug("\n");
 		/* If everything is OK, don't try another erase function. */
 		if (!ret)
 			break;
@@ -843,69 +1003,16 @@ void emergency_help_message(void)
 		"DO NOT REBOOT OR POWEROFF!\n");
 }
 
-void usage(const char *name)
+/* The way to go if you want a delimited list of programmers*/
+void list_programmers(char *delim)
 {
-	const char *pname;
-	int pnamelen;
-	int remaining = 0;
 	enum programmer p;
-
-	printf("usage: %s [-VfLzhR] [-E|-r file|-w file|-v file] [-c chipname]\n"
-              "       [-m [vendor:]part] [-l file] [-i image] [-p programmer]\n\n", name);
-
-	printf("Please note that the command line interface for flashrom will "
-		"change before\nflashrom 1.0. Do not use flashrom in scripts "
-		"or other automated tools without\nchecking that your flashrom"
-		" version won't interpret options in a different way.\n\n");
-
-	printf
-	    ("   -r | --read:                      read flash and save into file\n"
-	     "   -w | --write:                     write file into flash\n"
-	     "   -v | --verify:                    verify flash against file\n"
-	     "   -n | --noverify:                  don't verify flash against file\n"
-	     "   -E | --erase:                     erase flash device\n"
-	     "   -V | --verbose:                   more verbose output\n"
-	     "   -c | --chip <chipname>:           probe only for specified flash chip\n"
-	     "   -m | --mainboard <[vendor:]part>: override mainboard settings\n"
-	     "   -f | --force:                     force write without checking image\n"
-	     "   -l | --layout <file.layout>:      read ROM layout from file\n"
-	     "   -i | --image <name>:              only flash image name from flash layout\n"
-	     "   -L | --list-supported:            print supported devices\n"
-#if PRINT_WIKI_SUPPORT == 1
-	     "   -z | --list-supported-wiki:       print supported devices in wiki syntax\n"
-#endif
-	     "   -p | --programmer <name>:         specify the programmer device");
-
 	for (p = 0; p < PROGRAMMER_INVALID; p++) {
-		pname = programmer_table[p].name;
-		pnamelen = strlen(pname);
-		if (remaining - pnamelen - 2 < 0) {
-			printf("\n                                     ");
-			remaining = 43;
-		} else {
-			printf(" ");
-			remaining--;
-		}
-		if (p == 0) {
-			printf("(");
-			remaining--;
-		}
-		printf("%s", pname);
-		remaining -= pnamelen;
-		if (p < PROGRAMMER_INVALID - 1) {
-			printf(",");
-			remaining--;
-		} else {
-			printf(")\n");
-		}
+		printf("%s", programmer_table[p].name);
+		if (p < PROGRAMMER_INVALID - 1)
+			printf("%s", delim);
 	}
-		
-	printf(
-	     "   -h | --help:                      print this help text\n"
-	     "   -R | --version:                   print the version (release)\n"
-	     "\nYou can specify one of -E, -r, -w, -v or no operation. If no operation is\n"
-	     "specified, then all that happens is that flash info is dumped.\n\n");
-	exit(1);
+	printf("\n");	
 }
 
 void print_version(void)
@@ -913,283 +1020,36 @@ void print_version(void)
 	printf("flashrom v%s\n", flashrom_version);
 }
 
-int main(int argc, char *argv[])
+int selfcheck(void)
 {
-	uint8_t *buf;
-	unsigned long size, numbytes;
-	FILE *image;
-	/* Probe for up to three flash chips. */
-	struct flashchip *flash, *flashes[3];
-	const char *name;
-	int namelen;
-	int opt;
-	int option_index = 0;
-	int force = 0;
-	int read_it = 0, write_it = 0, erase_it = 0, verify_it = 0;
-	int dont_verify_it = 0, list_supported = 0;
-#if PRINT_WIKI_SUPPORT == 1
-	int list_supported_wiki = 0;
-#endif
-	int operation_specified = 0;
-	int ret = 0, i;
+	int ret = 0;
+	struct flashchip *flash;
 
-#if PRINT_WIKI_SUPPORT == 1
-	const char *optstring = "rRwvnVEfc:m:l:i:p:Lzh";
-#else
-	const char *optstring = "rRwvnVEfc:m:l:i:p:Lh";
-#endif
-	static struct option long_options[] = {
-		{"read", 0, 0, 'r'},
-		{"write", 0, 0, 'w'},
-		{"erase", 0, 0, 'E'},
-		{"verify", 0, 0, 'v'},
-		{"noverify", 0, 0, 'n'},
-		{"chip", 1, 0, 'c'},
-		{"mainboard", 1, 0, 'm'},
-		{"verbose", 0, 0, 'V'},
-		{"force", 0, 0, 'f'},
-		{"layout", 1, 0, 'l'},
-		{"image", 1, 0, 'i'},
-		{"list-supported", 0, 0, 'L'},
-#if PRINT_WIKI_SUPPORT == 1
-		{"list-supported-wiki", 0, 0, 'z'},
-#endif
-		{"programmer", 1, 0, 'p'},
-		{"help", 0, 0, 'h'},
-		{"version", 0, 0, 'R'},
-		{0, 0, 0, 0}
-	};
-
-	char *filename = NULL;
-
-	char *tempstr = NULL, *tempstr2 = NULL;
-
-	print_version();
-
-	if (argc > 1) {
-		/* Yes, print them. */
-		int i;
-		printf_debug("The arguments are:\n");
-		for (i = 1; i < argc; ++i)
-			printf_debug("%s\n", argv[i]);
-	}
-
-	/* Safety check. */
+	/* Safety check. Instead of aborting after the first error, check
+	 * if more errors exist.
+	 */
 	if (ARRAY_SIZE(programmer_table) - 1 != PROGRAMMER_INVALID) {
 		fprintf(stderr, "Programmer table miscompilation!\n");
-		exit(1);
+		ret = 1;
 	}
 	if (spi_programmer_count - 1 != SPI_CONTROLLER_INVALID) {
 		fprintf(stderr, "SPI programmer table miscompilation!\n");
-		exit(1);
+		ret = 1;
 	}
 #if BITBANG_SPI_SUPPORT == 1
 	if (bitbang_spi_master_count - 1 != BITBANG_SPI_INVALID) {
 		fprintf(stderr, "Bitbanging SPI master table miscompilation!\n");
-		exit(1);
+		ret = 1;
 	}
 #endif
+	for (flash = flashchips; flash && flash->name; flash++)
+		if (selfcheck_eraseblocks(flash))
+			ret = 1;
+	return ret;
+}
 
-	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, optstring,
-				  long_options, &option_index)) != EOF) {
-		switch (opt) {
-		case 'r':
-			if (++operation_specified > 1) {
-				fprintf(stderr, "More than one operation "
-					"specified. Aborting.\n");
-				exit(1);
-			}
-			read_it = 1;
-			break;
-		case 'w':
-			if (++operation_specified > 1) {
-				fprintf(stderr, "More than one operation "
-					"specified. Aborting.\n");
-				exit(1);
-			}
-			write_it = 1;
-			break;
-		case 'v':
-			//FIXME: gracefully handle superfluous -v
-			if (++operation_specified > 1) {
-				fprintf(stderr, "More than one operation "
-					"specified. Aborting.\n");
-				exit(1);
-			}
-			if (dont_verify_it) {
-				fprintf(stderr, "--verify and --noverify are"
-					"mutually exclusive. Aborting.\n");
-				exit(1);
-			}
-			verify_it = 1;
-			break;
-		case 'n':
-			if (verify_it) {
-				fprintf(stderr, "--verify and --noverify are"
-					"mutually exclusive. Aborting.\n");
-				exit(1);
-			}
-			dont_verify_it = 1;
-			break;
-		case 'c':
-			chip_to_probe = strdup(optarg);
-			break;
-		case 'V':
-			verbose = 1;
-			break;
-		case 'E':
-			if (++operation_specified > 1) {
-				fprintf(stderr, "More than one operation "
-					"specified. Aborting.\n");
-				exit(1);
-			}
-			erase_it = 1;
-			break;
-		case 'm':
-			tempstr = strdup(optarg);
-			strtok(tempstr, ":");
-			tempstr2 = strtok(NULL, ":");
-			if (tempstr2) {
-				lb_vendor = tempstr;
-				lb_part = tempstr2;
-			} else {
-				lb_vendor = NULL;
-				lb_part = tempstr;
-			}
-			break;
-		case 'f':
-			force = 1;
-			break;
-		case 'l':
-			tempstr = strdup(optarg);
-			if (read_romlayout(tempstr))
-				exit(1);
-			break;
-		case 'i':
-			tempstr = strdup(optarg);
-			find_romentry(tempstr);
-			break;
-		case 'L':
-			list_supported = 1;
-			break;
-#if PRINT_WIKI_SUPPORT == 1
-		case 'z':
-			list_supported_wiki = 1;
-			break;
-#endif
-		case 'p':
-			for (programmer = 0; programmer < PROGRAMMER_INVALID; programmer++) {
-				name = programmer_table[programmer].name;
-				namelen = strlen(name);
-				if (strncmp(optarg, name, namelen) == 0) {
-					switch (optarg[namelen]) {
-					case ':':
-						programmer_param = strdup(optarg + namelen + 1);
-						break;
-					case '\0':
-						break;
-					default:
-						/* The continue refers to the
-						 * for loop. It is here to be
-						 * able to differentiate between
-						 * foo and foobar.
-						 */
-						continue;
-					}
-					break;
-				}
-			}
-			if (programmer == PROGRAMMER_INVALID) {
-				printf("Error: Unknown programmer %s.\n", optarg);
-				exit(1);
-			}
-			break;
-		case 'R':
-			/* print_version() is always called during startup. */
-			exit(0);
-			break;
-		case 'h':
-		default:
-			usage(argv[0]);
-			break;
-		}
-	}
-
-	if (list_supported) {
-		print_supported();
-		exit(0);
-	}
-
-#if PRINT_WIKI_SUPPORT == 1
-	if (list_supported_wiki) {
-		print_supported_wiki();
-		exit(0);
-	}
-#endif
-
-	if (read_it && write_it) {
-		printf("Error: -r and -w are mutually exclusive.\n");
-		usage(argv[0]);
-	}
-
-	if (optind < argc)
-		filename = argv[optind++];
-	
-	if (optind < argc) {
-		printf("Error: Extra parameter found.\n");
-		usage(argv[0]);
-	}
-
-	if (programmer_init()) {
-		fprintf(stderr, "Error: Programmer initialization failed.\n");
-		exit(1);
-	}
-
-	myusec_calibrate_delay();
-
-	for (i = 0; i < ARRAY_SIZE(flashes); i++) {
-		flashes[i] =
-		    probe_flash(i ? flashes[i - 1] + 1 : flashchips, 0);
-		if (!flashes[i])
-			for (i++; i < ARRAY_SIZE(flashes); i++)
-				flashes[i] = NULL;
-	}
-
-	if (flashes[1]) {
-		printf("Multiple flash chips were detected:");
-		for (i = 0; i < ARRAY_SIZE(flashes) && flashes[i]; i++)
-			printf(" %s", flashes[i]->name);
-		printf("\nPlease specify which chip to use with the -c <chipname> option.\n");
-		programmer_shutdown();
-		exit(1);
-	} else if (!flashes[0]) {
-		printf("No EEPROM/flash device found.\n");
-		if (!force || !chip_to_probe) {
-			printf("If you know which flash chip you have, and if this version of flashrom\n");
-			printf("supports a similar flash chip, you can try to force read your chip. Run:\n");
-			printf("flashrom -f -r -c similar_supported_flash_chip filename\n");
-			printf("\n");
-			printf("Note: flashrom can never write when the flash chip isn't found automatically.\n");
-		}
-		if (force && read_it && chip_to_probe) {
-			printf("Force read (-f -r -c) requested, forcing chip probe success:\n");
-			flashes[0] = probe_flash(flashchips, 1);
-			if (!flashes[0]) {
-				printf("flashrom does not support a flash chip named '%s'.\n", chip_to_probe);
-				printf("Run flashrom -L to view the hardware supported in this flashrom version.\n");
-				exit(1);
-			}
-			printf("Please note that forced reads most likely contain garbage.\n");
-			return read_flash(flashes[0], filename);
-		}
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(1);
-	}
-
-	flash = flashes[0];
-
+void check_chip_supported(struct flashchip *flash)
+{
 	if (TEST_OK_MASK != (flash->tested & TEST_OK_MASK)) {
 		printf("===\n");
 		if (flash->tested & TEST_BAD_MASK) {
@@ -1219,41 +1079,34 @@ int main(int argc, char *argv[])
 				printf(" WRITE");
 			printf("\n");
 		}
+		/* FIXME: This message is designed towards CLI users. */
 		printf("Please email a report to flashrom@flashrom.org if any "
 		       "of the above operations\nwork correctly for you with "
 		       "this flash part. Please include the flashrom\noutput "
 		       "with the additional -V option for all operations you "
 		       "tested (-V, -rV,\n-wV, -EV), and mention which "
-		       "mainboard you tested. Thanks for your help!\n===\n");
+		       "mainboard or programmer you tested. Thanks for your "
+		       "help!\n===\n");
 	}
+}
+
+int main(int argc, char *argv[])
+{
+	return cli_classic(argc, argv);
+}
+
+/* This function signature is horrible. We need to design a better interface,
+ * but right now it allows us to split off the CLI code.
+ */
+int doit(struct flashchip *flash, int force, char *filename, int read_it, int write_it, int erase_it, int verify_it)
+{
+	uint8_t *buf;
+	unsigned long numbytes;
+	FILE *image;
+	int ret = 0;
+	unsigned long size;
 
 	size = flash->total_size * 1024;
-	if (check_max_decode((buses_supported & flash->bustype), size) &&
-	    (!force)) {
-		fprintf(stderr, "Chip is too big for this programmer "
-			"(-V gives details). Use --force to override.\n");
-		programmer_shutdown();
-		return 1;
-	}
-
-	if (!(read_it | write_it | verify_it | erase_it)) {
-		printf("No operations were specified.\n");
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(1);
-	}
-
-	if (!filename && !erase_it) {
-		printf("Error: No filename specified.\n");
-		// FIXME: flash writes stay enabled!
-		programmer_shutdown();
-		exit(1);
-	}
-
-	/* Always verify write operations unless -n is used. */
-	if (write_it && !dont_verify_it)
-		verify_it = 1;
-
 	buf = (uint8_t *) calloc(size, sizeof(char));
 
 	if (erase_it) {
@@ -1318,7 +1171,9 @@ int main(int argc, char *argv[])
 		}
 
 		numbytes = fread(buf, 1, size, image);
+#if INTERNAL_SUPPORT == 1
 		show_id(buf, size, force);
+#endif
 		fclose(image);
 		if (numbytes != size) {
 			fprintf(stderr, "Error: Failed to read file. Got %ld bytes, wanted %ld!\n", numbytes, size);

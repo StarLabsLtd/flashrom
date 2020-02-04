@@ -4,6 +4,8 @@
  * Copyright (C) 2000 Silicon Integrated System Corporation
  * Copyright (C) 2005-2009 coresystems GmbH
  * Copyright (C) 2006 Uwe Hermann <uwe@hermann-uwe.de>
+ * Copyright (C) 2007,2008,2009 Carl-Daniel Hailfinger
+ * Copyright (C) 2009 Kontron Modular Computers GmbH
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -31,27 +33,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "flash.h"
-
-unsigned long flashbase = 0;
-
-/**
- * flashrom defaults to Parallel/LPC/FWH flash devices. If a known host
- * controller is found, the init routine sets the buses_supported bitfield to
- * contain the supported buses for that controller.
- */
-
-enum chipbustype buses_supported = CHIP_BUSTYPE_NONSPI;
-
-/**
- * Programmers supporting multiple buses can have differing size limits on
- * each bus. Store the limits for each bus in a common struct.
- */
-struct decode_sizes max_rom_decode = {
-	.parallel	= 0xffffffff,
-	.lpc		= 0xffffffff,
-	.fwh		= 0xffffffff,
-	.spi		= 0xffffffff
-};
 
 extern int ichspi_lock;
 
@@ -163,16 +144,6 @@ static int enable_flash_sis5511(struct pci_dev *dev, const char *name)
 	return ret;
 }
 
-static int enable_flash_sis5596(struct pci_dev *dev, const char *name)
-{
-	int ret;
-
-	ret = enable_flash_sis5511(dev, name);
-
-	/* FIXME: Needs same superio handling as enable_flash_sis630 */
-	return ret;
-}
-
 static int enable_flash_sis530(struct pci_dev *dev, const char *name)
 {
 	uint8_t new, newer;
@@ -189,7 +160,7 @@ static int enable_flash_sis530(struct pci_dev *dev, const char *name)
 	new &= (~0x20);
 	new |= 0x4;
 	pci_write_byte(sbdev, 0x45, new);
-	newer = pci_read_byte(dev, 0x45);
+	newer = pci_read_byte(sbdev, 0x45);
 	if (newer != new) {
 		printf_debug("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x45, new, name);
 		printf_debug("Stuck at 0x%x\n", newer);
@@ -215,46 +186,12 @@ static int enable_flash_sis540(struct pci_dev *dev, const char *name)
 	new &= (~0x80);
 	new |= 0x40;
 	pci_write_byte(sbdev, 0x45, new);
-	newer = pci_read_byte(dev, 0x45);
+	newer = pci_read_byte(sbdev, 0x45);
 	if (newer != new) {
 		printf_debug("tried to set register 0x%x to 0x%x on %s failed (WARNING ONLY)\n", 0x45, new, name);
 		printf_debug("Stuck at 0x%x\n", newer);
 		ret = -1;
 	}
-
-	return ret;
-}
-
-static int enable_flash_sis630(struct pci_dev *dev, const char *name)
-{
-	uint8_t tmp;
-	uint16_t siobase;
-	int ret;
-
-	ret = enable_flash_sis540(dev, name);
-
-	/* The same thing on SiS 950 Super I/O side... */
-
-	/* First probe for Super I/O on config port 0x2e. */
-	siobase = 0x2e;
-	enter_conf_mode_ite(siobase);
-
-	if (INB(siobase + 1) != 0x87) {
-		/* If that failed, try config port 0x4e. */
-		siobase = 0x4e;
-		enter_conf_mode_ite(siobase);
-		if (INB(siobase + 1) != 0x87) {
-			printf("Can not find SuperI/O.\n");
-			return -1;
-		}
-	}
-
-	/* Enable flash mapping. Works for most old ITE style SuperI/O. */
-	tmp = sio_read(siobase, 0x24);
-	tmp |= 0xfc;
-	sio_write(siobase, 0x24, tmp);
-
-	exit_conf_mode_ite(siobase);
 
 	return ret;
 }
@@ -269,6 +206,8 @@ static int enable_flash_piix4(struct pci_dev *dev, const char *name)
 {
 	uint16_t old, new;
 	uint16_t xbcs = 0x4e;	/* X-Bus Chip Select register. */
+
+	buses_supported = CHIP_BUSTYPE_PARALLEL;
 
 	old = pci_read_word(dev, xbcs);
 
@@ -354,34 +293,10 @@ static int enable_flash_ich_dc(struct pci_dev *dev, const char *name)
 	uint32_t fwh_conf;
 	int i;
 	char *idsel = NULL;
-
-	/* Ignore all legacy ranges below 1 MB. */
-	/* FWH_SEL1 */
-	fwh_conf = pci_read_long(dev, 0xd0);
-	for (i = 7; i >= 0; i--)
-		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
-			     (0x1ff8 + i) * 0x80000,
-			     (0x1ff0 + i) * 0x80000,
-			     (fwh_conf >> (i * 4)) & 0xf);
-	/* FWH_SEL2 */
-	fwh_conf = pci_read_word(dev, 0xd4);
-	for (i = 3; i >= 0; i--)
-		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
-			     (0xff4 + i) * 0x100000,
-			     (0xff0 + i) * 0x100000,
-			     (fwh_conf >> (i * 4)) & 0xf);
-	/* FWH_DEC_EN1 */
-	fwh_conf = pci_read_word(dev, 0xd8);
-	for (i = 7; i >= 0; i--)
-		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
-			     (0x1ff8 + i) * 0x80000,
-			     (0x1ff0 + i) * 0x80000,
-			     (fwh_conf >> (i + 0x8)) & 0x1 ? "en" : "dis");
-	for (i = 3; i >= 0; i--)
-		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
-			     (0xff4 + i) * 0x100000,
-			     (0xff0 + i) * 0x100000,
-			     (fwh_conf >> i) & 0x1 ? "en" : "dis");
+	int tmp;
+	int max_decode_fwh_idsel = 0;
+	int max_decode_fwh_decode = 0;
+	int contiguous = 1;
 
 	if (programmer_param)
 		idsel = strstr(programmer_param, "fwh_idsel=");
@@ -394,10 +309,98 @@ static int enable_flash_ich_dc(struct pci_dev *dev, const char *name)
 		printf("\nSetting IDSEL=0x%x for top 16 MB", fwh_conf);
 		pci_write_long(dev, 0xd0, fwh_conf);
 		pci_write_word(dev, 0xd4, fwh_conf);
+		/* FIXME: Decode settings are not changed. */
 	}
 
+	/* Ignore all legacy ranges below 1 MB.
+	 * We currently only support flashing the chip which responds to
+	 * IDSEL=0. To support IDSEL!=0, flashbase and decode size calculations
+	 * have to be adjusted.
+	 */
+	/* FWH_SEL1 */
+	fwh_conf = pci_read_long(dev, 0xd0);
+	for (i = 7; i >= 0; i--) {
+		tmp = (fwh_conf >> (i * 4)) & 0xf;
+		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
+			     (0x1ff8 + i) * 0x80000,
+			     (0x1ff0 + i) * 0x80000,
+			     tmp);
+		if ((tmp == 0) && contiguous) {
+			max_decode_fwh_idsel = (8 - i) * 0x80000;
+		} else {
+			contiguous = 0;
+		}
+	}
+	/* FWH_SEL2 */
+	fwh_conf = pci_read_word(dev, 0xd4);
+	for (i = 3; i >= 0; i--) {
+		tmp = (fwh_conf >> (i * 4)) & 0xf;
+		printf_debug("\n0x%08x/0x%08x FWH IDSEL: 0x%x",
+			     (0xff4 + i) * 0x100000,
+			     (0xff0 + i) * 0x100000,
+			     tmp);
+		if ((tmp == 0) && contiguous) {
+			max_decode_fwh_idsel = (8 - i) * 0x100000;
+		} else {
+			contiguous = 0;
+		}
+	}
+	contiguous = 1;
+	/* FWH_DEC_EN1 */
+	fwh_conf = pci_read_word(dev, 0xd8);
+	for (i = 7; i >= 0; i--) {
+		tmp = (fwh_conf >> (i + 0x8)) & 0x1;
+		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
+			     (0x1ff8 + i) * 0x80000,
+			     (0x1ff0 + i) * 0x80000,
+			     tmp ? "en" : "dis");
+		if ((tmp == 1) && contiguous) {
+			max_decode_fwh_decode = (8 - i) * 0x80000;
+		} else {
+			contiguous = 0;
+		}
+	}
+	for (i = 3; i >= 0; i--) {
+		tmp = (fwh_conf >> i) & 0x1;
+		printf_debug("\n0x%08x/0x%08x FWH decode %sabled",
+			     (0xff4 + i) * 0x100000,
+			     (0xff0 + i) * 0x100000,
+			     tmp ? "en" : "dis");
+		if ((tmp == 1) && contiguous) {
+			max_decode_fwh_decode = (8 - i) * 0x100000;
+		} else {
+			contiguous = 0;
+		}
+	}
+	max_rom_decode.fwh = min(max_decode_fwh_idsel, max_decode_fwh_decode);
+	printf_debug("\nMaximum FWH chip size: 0x%x bytes", max_rom_decode.fwh);
+
+	/* If we're called by enable_flash_ich_dc_spi, it will override
+	 * buses_supported anyway.
+	 */
+	buses_supported = CHIP_BUSTYPE_FWH;
 	return enable_flash_ich(dev, name, 0xdc);
 }
+
+static int enable_flash_poulsbo(struct pci_dev *dev, const char *name)
+{
+       uint16_t old, new;
+       int err;
+
+       if ((err = enable_flash_ich(dev, name, 0xd8)) != 0)
+               return err;
+
+       old = pci_read_byte(dev, 0xd9);
+       printf_debug("BIOS Prefetch Enable: %sabled, ",
+                    (old & 1) ? "en" : "dis");
+       new = old & ~1;
+
+       if (new != old)
+               pci_write_byte(dev, 0xd9, new);
+
+       return 0;
+}
+
 
 #define ICH_STRAP_RSVD 0x00
 #define ICH_STRAP_SPI  0x01
@@ -408,6 +411,7 @@ static int enable_flash_vt8237s_spi(struct pci_dev *dev, const char *name)
 {
 	uint32_t mmio_base;
 
+	/* Do we really need no write enable? */
 	mmio_base = (pci_read_long(dev, 0xbc)) << 8;
 	printf_debug("MMIO base at = 0x%x\n", mmio_base);
 	spibar = physmap("VT8237S MMIO registers", mmio_base, 0x70);
@@ -462,8 +466,7 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 	 */
 
 	if (ich_generation == 7 && bbs == ICH_STRAP_LPC) {
-		/* Not sure if it speaks LPC as well. */
-		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH;
+		buses_supported = CHIP_BUSTYPE_FWH;
 		/* No further SPI initialization required */
 		return ret;
 	}
@@ -475,16 +478,14 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name,
 		spibar_offset = 0x3020;
 		break;
 	case 8:
-		/* Not sure if it speaks LPC as well. */
-		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
+		buses_supported = CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
 		spi_controller = SPI_CONTROLLER_ICH9;
 		spibar_offset = 0x3020;
 		break;
 	case 9:
 	case 10:
 	default:		/* Future version might behave the same */
-		/* Not sure if it speaks LPC as well. */
-		buses_supported = CHIP_BUSTYPE_LPC | CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
+		buses_supported = CHIP_BUSTYPE_FWH | CHIP_BUSTYPE_SPI;
 		spi_controller = SPI_CONTROLLER_ICH9;
 		spibar_offset = 0x3800;
 		break;
@@ -656,6 +657,13 @@ static int enable_flash_vt823x(struct pci_dev *dev, const char *name)
 		return -1;
 	}
 
+	if (dev->device_id == 0x3227) { /* VT8237R */
+	    /* All memory cycles, not just ROM ones, go to LPC. */
+	    val = pci_read_byte(dev, 0x59);
+	    val &= ~0x80;
+	    pci_write_byte(dev, 0x59, val);
+	}
+
 	return 0;
 }
 
@@ -665,14 +673,22 @@ static int enable_flash_cs5530(struct pci_dev *dev, const char *name)
 
 #define DECODE_CONTROL_REG2		0x5b	/* F0 index 0x5b */
 #define ROM_AT_LOGIC_CONTROL_REG	0x52	/* F0 index 0x52 */
+#define CS5530_RESET_CONTROL_REG	0x44	/* F0 index 0x44 */
+#define CS5530_USB_SHADOW_REG		0x43	/* F0 index 0x43 */
 
 #define LOWER_ROM_ADDRESS_RANGE		(1 << 0)
 #define ROM_WRITE_ENABLE		(1 << 1)
 #define UPPER_ROM_ADDRESS_RANGE		(1 << 2)
 #define BIOS_ROM_POSITIVE_DECODE	(1 << 5)
+#define CS5530_ISA_MASTER		(1 << 7)
+#define CS5530_ENABLE_SA2320		(1 << 2)
+#define CS5530_ENABLE_SA20		(1 << 6)
 
+	buses_supported = CHIP_BUSTYPE_PARALLEL;
 	/* Decode 0x000E0000-0x000FFFFF (128 KB), not just 64 KB, and
 	 * decode 0xFF000000-0xFFFFFFFF (16 MB), not just 256 KB.
+	 * FIXME: Should we really touch the low mapping below 1 MB? Flashrom
+	 * ignores that region completely.
 	 * Make the configured ROM areas writable.
 	 */
 	reg8 = pci_read_byte(dev, ROM_AT_LOGIC_CONTROL_REG);
@@ -685,6 +701,24 @@ static int enable_flash_cs5530(struct pci_dev *dev, const char *name)
 	reg8 = pci_read_byte(dev, DECODE_CONTROL_REG2);
 	reg8 |= BIOS_ROM_POSITIVE_DECODE;
 	pci_write_byte(dev, DECODE_CONTROL_REG2, reg8);
+
+	reg8 = pci_read_byte(dev, CS5530_RESET_CONTROL_REG);
+	if (reg8 & CS5530_ISA_MASTER) {
+		/* We have A0-A23 available. */
+		max_rom_decode.parallel = 16 * 1024 * 1024;
+	} else {
+		reg8 = pci_read_byte(dev, CS5530_USB_SHADOW_REG);
+		if (reg8 & CS5530_ENABLE_SA2320) {
+			/* We have A0-19, A20-A23 available. */
+			max_rom_decode.parallel = 16 * 1024 * 1024;
+		} else if (reg8 & CS5530_ENABLE_SA20) {
+			/* We have A0-19, A20 available. */
+			max_rom_decode.parallel = 2 * 1024 * 1024;
+		} else {
+			/* A20 and above are not active. */
+			max_rom_decode.parallel = 1024 * 1024;
+		}
+	}
 
 	return 0;
 }
@@ -992,19 +1026,19 @@ static int enable_flash_sb400(struct pci_dev *dev, const char *name)
 
 static int enable_flash_mcp55(struct pci_dev *dev, const char *name)
 {
-	uint8_t old, new, byte;
-	uint16_t word;
+	uint8_t old, new, val;
+	uint16_t wordval;
 
 	/* Set the 0-16 MB enable bits. */
-	byte = pci_read_byte(dev, 0x88);
-	byte |= 0xff;		/* 256K */
-	pci_write_byte(dev, 0x88, byte);
-	byte = pci_read_byte(dev, 0x8c);
-	byte |= 0xff;		/* 1M */
-	pci_write_byte(dev, 0x8c, byte);
-	word = pci_read_word(dev, 0x90);
-	word |= 0x7fff;		/* 16M */
-	pci_write_word(dev, 0x90, word);
+	val = pci_read_byte(dev, 0x88);
+	val |= 0xff;		/* 256K */
+	pci_write_byte(dev, 0x88, val);
+	val = pci_read_byte(dev, 0x8c);
+	val |= 0xff;		/* 1M */
+	pci_write_byte(dev, 0x8c, val);
+	wordval = pci_read_word(dev, 0x90);
+	wordval |= 0x7fff;	/* 16M */
+	pci_write_word(dev, 0x90, wordval);
 
 	old = pci_read_byte(dev, 0x6d);
 	new = old | 0x01;
@@ -1122,6 +1156,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x27b8, OK, "Intel", "ICH7/ICH7R",	enable_flash_ich7},
 	{0x8086, 0x27b9, OK, "Intel", "ICH7M",		enable_flash_ich7},
 	{0x8086, 0x27bd, OK, "Intel", "ICH7MDH",	enable_flash_ich7},
+	{0x8086, 0x27bc, OK, "Intel", "NM10",		enable_flash_ich7},
 	{0x8086, 0x2410, OK, "Intel", "ICH",		enable_flash_ich_4e},
 	{0x8086, 0x2812, OK, "Intel", "ICH8DH",		enable_flash_ich8},
 	{0x8086, 0x2814, OK, "Intel", "ICH8DO",		enable_flash_ich8},
@@ -1139,6 +1174,7 @@ const struct penable chipset_enables[] = {
 	{0x8086, 0x7000, OK, "Intel", "PIIX3",		enable_flash_piix4},
 	{0x8086, 0x7110, OK, "Intel", "PIIX4/4E/4M",	enable_flash_piix4},
 	{0x8086, 0x122e, OK, "Intel", "PIIX",		enable_flash_piix4},
+	{0x8086, 0x8119, OK, "Intel", "Poulsbo",        enable_flash_poulsbo},
 	{0x10de, 0x0030, OK, "NVIDIA", "nForce4/MCP4",  enable_flash_nvidia_nforce2},
 	{0x10de, 0x0050, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* LPC */
 	{0x10de, 0x0051, OK, "NVIDIA", "CK804",		enable_flash_ck804}, /* Pro */
@@ -1161,7 +1197,7 @@ const struct penable chipset_enables[] = {
 	{0x1039, 0x0496, NT, "SiS", "85C496+497",	enable_flash_sis85c496},
 	{0x1039, 0x0406, NT, "SiS", "501/5101/5501",	enable_flash_sis501},
 	{0x1039, 0x5511, NT, "SiS", "5511",		enable_flash_sis5511},
-	{0x1039, 0x5596, NT, "SiS", "5596",		enable_flash_sis5596},
+	{0x1039, 0x5596, NT, "SiS", "5596",		enable_flash_sis5511},
 	{0x1039, 0x5571, NT, "SiS", "5571",		enable_flash_sis530},
 	{0x1039, 0x5591, NT, "SiS", "5591/5592",	enable_flash_sis530},
 	{0x1039, 0x5597, NT, "SiS", "5597/5598/5581/5120", enable_flash_sis530},
@@ -1169,26 +1205,27 @@ const struct penable chipset_enables[] = {
 	{0x1039, 0x5600, NT, "SiS", "600",		enable_flash_sis530},
 	{0x1039, 0x0620, NT, "SiS", "620",		enable_flash_sis530},
 	{0x1039, 0x0540, NT, "SiS", "540",		enable_flash_sis540},
-	{0x1039, 0x0630, NT, "SiS", "630",		enable_flash_sis630},
-	{0x1039, 0x0635, NT, "SiS", "635",		enable_flash_sis630},
-	{0x1039, 0x0640, NT, "SiS", "640",		enable_flash_sis630},
-	{0x1039, 0x0645, NT, "SiS", "645",		enable_flash_sis630},
-	{0x1039, 0x0646, NT, "SiS", "645DX",		enable_flash_sis630},
-	{0x1039, 0x0648, NT, "SiS", "648",		enable_flash_sis630},
-	{0x1039, 0x0650, NT, "SiS", "650",		enable_flash_sis630},
-	{0x1039, 0x0651, NT, "SiS", "651",		enable_flash_sis630},
-	{0x1039, 0x0655, NT, "SiS", "655",		enable_flash_sis630},
-	{0x1039, 0x0730, NT, "SiS", "730",		enable_flash_sis630},
-	{0x1039, 0x0733, NT, "SiS", "733",		enable_flash_sis630},
-	{0x1039, 0x0735, OK, "SiS", "735",		enable_flash_sis630},
-	{0x1039, 0x0740, NT, "SiS", "740",		enable_flash_sis630},
-	{0x1039, 0x0745, NT, "SiS", "745",		enable_flash_sis630},
-	{0x1039, 0x0746, NT, "SiS", "746",		enable_flash_sis630},
-	{0x1039, 0x0748, NT, "SiS", "748",		enable_flash_sis630},
-	{0x1039, 0x0755, NT, "SiS", "755",		enable_flash_sis630},
+	{0x1039, 0x0630, NT, "SiS", "630",		enable_flash_sis540},
+	{0x1039, 0x0635, NT, "SiS", "635",		enable_flash_sis540},
+	{0x1039, 0x0640, NT, "SiS", "640",		enable_flash_sis540},
+	{0x1039, 0x0645, NT, "SiS", "645",		enable_flash_sis540},
+	{0x1039, 0x0646, NT, "SiS", "645DX",		enable_flash_sis540},
+	{0x1039, 0x0648, NT, "SiS", "648",		enable_flash_sis540},
+	{0x1039, 0x0650, NT, "SiS", "650",		enable_flash_sis540},
+	{0x1039, 0x0651, NT, "SiS", "651",		enable_flash_sis540},
+	{0x1039, 0x0655, NT, "SiS", "655",		enable_flash_sis540},
+	{0x1039, 0x0730, NT, "SiS", "730",		enable_flash_sis540},
+	{0x1039, 0x0733, NT, "SiS", "733",		enable_flash_sis540},
+	{0x1039, 0x0735, OK, "SiS", "735",		enable_flash_sis540},
+	{0x1039, 0x0740, NT, "SiS", "740",		enable_flash_sis540},
+	{0x1039, 0x0745, NT, "SiS", "745",		enable_flash_sis540},
+	{0x1039, 0x0746, NT, "SiS", "746",		enable_flash_sis540},
+	{0x1039, 0x0748, NT, "SiS", "748",		enable_flash_sis540},
+	{0x1039, 0x0755, NT, "SiS", "755",		enable_flash_sis540},
 	{0x1106, 0x8324, OK, "VIA", "CX700",		enable_flash_vt823x},
 	{0x1106, 0x8231, NT, "VIA", "VT8231",		enable_flash_vt823x},
 	{0x1106, 0x3074, NT, "VIA", "VT8233",		enable_flash_vt823x},
+	{0x1106, 0x3147, OK, "VIA", "VT8233A",		enable_flash_vt823x},
 	{0x1106, 0x3177, OK, "VIA", "VT8235",		enable_flash_vt823x},
 	{0x1106, 0x3227, OK, "VIA", "VT8237",		enable_flash_vt823x},
 	{0x1106, 0x3337, OK, "VIA", "VT8237A",		enable_flash_vt823x},

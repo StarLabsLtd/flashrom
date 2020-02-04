@@ -1,4 +1,1150 @@
 ------------------------------------------------------------------------
+r873 | snelson | 2010-01-19 21:23:26 +0100 (Tue, 19 Jan 2010) | 5 lines
+
+Fix SyncMOS S29C51004T, which has 512 uniform 1k sectors.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+
+------------------------------------------------------------------------
+r872 | snelson | 2010-01-19 17:39:19 +0100 (Tue, 19 Jan 2010) | 41 lines
+
+Convert ST to block erasers:
+ST M25P05-A
+ST M25P05.RES
+ST M25P10-A
+ST M25P10.RES
+ST M25P20
+ST M25P40
+ST M25P40-old
+ST M25P80
+ST M25P16
+ST M25P32
+ST M25P64
+ST M25P128
+ST M29F002B
+ST M29F002T/NT
+ST M29F040B
+ST M29F400BT
+ST M29W010B
+ST M29W040B
+ST M50FLW040A
+ST M50FLW040B
+ST M50FLW080A
+ST M50FLW080B
+ST M50FW002
+ST M50FW016
+ST M50FW040
+ST M50FW080
+ST M50LPW116
+
+Add erase_chip_stm50flw0x0x to stm50flw0x0x.c
+Add copyright to stm50flw0x0x.c
+Fix block sizes and counts
+Omit M50FLW0x0x mixed sector/block eraser
+Convert the used 82802ab functions to their stm50flw0x0x equivalents
+Fix incorrect sizes as found by Carl-Daniel.
+Add back M50FLW0x0x mixed sector/block eraser sans function pointer.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r871 | snelson | 2010-01-19 17:08:51 +0100 (Tue, 19 Jan 2010) | 15 lines
+
+Convert chips to block_erasers:
+
+SyncMOS S29C31004T
+SyncMOS S29C51001T
+SyncMOS S29C51002T
+SyncMOS S29C51004T
+TI TMS29F002RT
+TI TMS29F002RB
+
+SyncMOS chips have Uniform sector; boot blocks on chips are made up of uniform sectors but have locking.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r870 | hailfinger | 2010-01-19 12:15:48 +0100 (Tue, 19 Jan 2010) | 21 lines
+
+Dediprog SF100 support.
+
+Reverse engineered from USB logs. I never touched that programmer nor
+did I ever see the associated software.
+Disabled by default until it is complete. The driver needs to be hooked
+up to the SPI core before it will do anything besides init and
+diagnostics.
+
+I successfully reverse engineered all commands, but some are still
+somewhat magic.
+Logs from "flashrom -p dediprog -V" are appreciated.
+
+Probe and read should work, erase/write is expected to explode.
+The programmer will set voltage to 0 on exit.
+
+Thanks a lot to Stefan Reinauer and Patrick Georgi for providing USB
+logs and for testing the result.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+------------------------------------------------------------------------
+r869 | hailfinger | 2010-01-19 07:42:46 +0100 (Tue, 19 Jan 2010) | 8 lines
+
+Add eraseblock functions to self-check. It doesn't make sense to have
+different layouts for the same function on one chip.
+Keep going if an error is found, we want all errors to be reported in
+one fell swoop.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r868 | snelson | 2010-01-19 04:24:55 +0100 (Tue, 19 Jan 2010) | 27 lines
+
+Converted chips to block_erasers:
+W_25X10
+W_25X20
+W_25X40
+W_25X80
+W_25X16
+W_25X32
+W_25X64
+W_29C011
+W_29C020C
+W_29C040P
+W_29EE011
+W_39V040A
+W_39V040B
+W_39V040C
+W_39V040FA
+W_39V080A
+W_49F002U
+W_49V002A
+W_49V002FA
+W_39V080FA
+W_39V080FA_DM
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r867 | snelson | 2010-01-19 04:23:07 +0100 (Tue, 19 Jan 2010) | 24 lines
+
+Convert chips to block_erasers:
+ST_M25PE10
+ST_M25PE20
+ST_M25PE40
+ST_M25PE80
+ST_M25PE16
+PMC_25LV010
+PMC_25LV016B
+PMC_25LV020
+PMC_25LV040
+PMC_25LV080B
+PMC_25LV512
+PMC_39F010
+PMC_49FL002
+PMC_49FL004
+SANYO_LE25FW203A
+SPANSION_S25FL016A
+
+Added spi_block_erase_d7 for PMC chips.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r866 | hailfinger | 2010-01-19 03:19:27 +0100 (Tue, 19 Jan 2010) | 10 lines
+
+Add Intel NM10 chipset enable.
+Public chipset documentation available at
+http://www.intel.com/Assets/PDF/datasheet/322896.pdf
+
+Tested on NM10-based customer reference board from Intel.
+
+Signed-off-by: David Hendricks <dhendrix@google.com>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r865 | snelson | 2010-01-18 09:24:02 +0100 (Mon, 18 Jan 2010) | 6 lines
+
+Fix A25L40PU and A2540PT due to incorrect full-chip block size is incorrect.
+Thanks to hailfinger's self-check-erase routine for catching this.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r864 | hailfinger | 2010-01-18 09:14:43 +0100 (Mon, 18 Jan 2010) | 10 lines
+
+Flashrom performs a self-check on every startup before it even starts to
+initialize any programmer. That way, compiler errors and code errors
+will be caught before they can do any harm.
+This patch adds an eraseblock structure self-check.
+It also modifies the self-check code to consistently run all checks even
+if one check failed.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r863 | hailfinger | 2010-01-18 08:02:19 +0100 (Mon, 18 Jan 2010) | 6 lines
+
+The write and erase column in the --list-supported-wiki output were
+swapped. Thanks to Michael Karcher for noticing.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r862 | mkarcher | 2010-01-13 00:29:30 +0100 (Wed, 13 Jan 2010) | 7 lines
+
+Support for Spansion S25FL008A
+
+Tested with read/erase/write (including verify). I only wrote the image
+that was read before - don't want to brick my laptop.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r861 | mkarcher | 2010-01-13 00:29:26 +0100 (Wed, 13 Jan 2010) | 7 lines
+
+Don't use "byte" as identifier.
+
+Some mingw declares a global identifier "byte", causing -Werror -Wshadow
+to break compilation. This patch renames all identifiers called "byte".
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r860 | mkarcher | 2010-01-12 16:36:24 +0100 (Tue, 12 Jan 2010) | 11 lines
+
+Enable -Wshadow, clean code for that
+
+This is not just for fun. We hit a real bug on BSD with the outl macros.
+The macro variable tmp collided with the tmp from outer scope.
+
+second revision, now also taking care of inb/inw/inl. While that shadowing
+did not introduce bugs (yet), of course it breaks the build on BSD when
+-Wshadow is enabled.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+------------------------------------------------------------------------
+r859 | libv | 2010-01-10 16:01:08 +0100 (Sun, 10 Jan 2010) | 8 lines
+
+Chipset: Fix sis5x0 register write verification.
+
+Also remove separate sis 5596 routine: superio code will be handled
+separately, which then turns this routine into the sis 5511 chipset
+enable.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r858 | hailfinger | 2010-01-10 14:28:48 +0100 (Sun, 10 Jan 2010) | 11 lines
+
+If neither internal (old default) nor dummy (safe default) programmer
+are selected, we must pick a sensible default programmer. Since there is
+no reason to prefer a particular external programmer, we abort
+compilation if more than one of them is selected. If only one is
+selected, it is clear that the user wants that one to become the
+default.
+This fixes single-programmer compilation.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r857 | hailfinger | 2010-01-10 02:59:50 +0100 (Sun, 10 Jan 2010) | 5 lines
+
+Convert all messages in sb600spi.c to the new message infrastructure.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r856 | hailfinger | 2010-01-10 02:34:00 +0100 (Sun, 10 Jan 2010) | 7 lines
+
+Change a few probe timings to TIMING_FIXME. They previously had
+TIMING_IGNORED, but now they use probe_jedec directly or indirectly and
+that function does not ignore probe timing.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r855 | snelson | 2010-01-10 02:09:58 +0100 (Sun, 10 Jan 2010) | 7 lines
+
+Convert all messages in it87spi.c to the new message infrastructure.
+Change one msg_pdbg to msg_pinfo, change 7 msg_pinfo to msg_pdbg.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r854 | snelson | 2010-01-10 02:08:37 +0100 (Sun, 10 Jan 2010) | 7 lines
+
+Convert all messages in ft2232_spi.c to the new message infrastructure. 
+Fix one pinfo message to be pdbg.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r853 | snelson | 2010-01-10 02:06:23 +0100 (Sun, 10 Jan 2010) | 7 lines
+
+Convert all messages in serprog.c to the new message infrastructure.
+Rename some msg_pdbg to msg_pspew.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r852 | snelson | 2010-01-10 00:58:37 +0100 (Sun, 10 Jan 2010) | 6 lines
+
+Convert all messages in bitbang_spi.c to the new message infrastructure.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r851 | snelson | 2010-01-10 00:56:41 +0100 (Sun, 10 Jan 2010) | 6 lines
+
+Convert all messages in buspirate_spi.c to the new message infrastructure.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r850 | snelson | 2010-01-10 00:54:05 +0100 (Sun, 10 Jan 2010) | 5 lines
+
+Convert all messages in gfxnvidia.c to the new message infrastructure.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r849 | snelson | 2010-01-10 00:50:27 +0100 (Sun, 10 Jan 2010) | 6 lines
+
+Convert all messages in satasii.c to the new message infrastructure.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r848 | snelson | 2010-01-10 00:46:39 +0100 (Sun, 10 Jan 2010) | 4 lines
+
+Convert all messages in serial.c to the new message infrastructure.
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r847 | snelson | 2010-01-10 00:34:45 +0100 (Sun, 10 Jan 2010) | 6 lines
+
+Convert all messages in wbsio_spi.c to the new message infrastructure.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r846 | mkarcher | 2010-01-10 00:31:13 +0100 (Sun, 10 Jan 2010) | 10 lines
+
+commit 845 is wrong, as I deleted a wrong line when I wanted to remove
+debugging print code. This (hopefully obviously correct) patch fixes the
+issue. As a previous version (before adding the debugging statement) was
+already executed on the board, the missing OUTW was executed on the
+testers machine on an earlier flashrom run.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+
+
+------------------------------------------------------------------------
+r845 | mkarcher | 2010-01-09 18:36:06 +0100 (Sat, 09 Jan 2010) | 6 lines
+
+Enable flashing on MSI 651M-L.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sergey Lichack <shadowpilot34@gmail.com>
+
+
+------------------------------------------------------------------------
+r844 | hailfinger | 2010-01-09 15:18:01 +0100 (Sat, 09 Jan 2010) | 7 lines
+
+Fix Makefile dependencies if FT2232SPI is not selected.
+.features was always regenerated in that case, triggering whole-project
+recompiles even if nothing changed.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r843 | snelson | 2010-01-09 06:30:14 +0100 (Sat, 09 Jan 2010) | 49 lines
+
+Convert chips to block_erasers:
+ASD AE49F2008
+AMIC A25L40P(T/U)
+AMIC A49LF040A
+EMST F49B002UA
+Eon EN25B05
+Eon EN25B10
+Eon EN25B20
+Eon EN25B40
+Eon EN25B80
+Eon EN25B16
+Eon EN25B32
+Eon EN25B64
+Eon EN25D16
+Eon EN25F05
+Eon EN25F10
+Eon EN25F20
+Eon EN25F40
+Eon EN25F80
+Eon EN25F16
+Eon EN25F32
+Intel 28F001BX-B
+Intel 28F001BX-T
+Intel 82802AB
+Intel 82802AC
+Macronix MX25L1635D
+Macronix MX25L3235D
+Macronix MX25L6405
+Macronix MX25L12805
+Macronix MX29F001B
+Macronix MX29F001T
+Macronix MX29LV040
+
+Added new chips (according to datasheets):
+Eon EN25B05T
+Eon EN25B10T
+Eon EN25B20T
+Eon EN25B40T
+Eon EN25B80T
+Eon EN25B16T
+Eon EN25B32T
+Eon EN25B64T
+
+Added minor Device IDs for Eon EN25Bxx{T,B} chips.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r842 | hailfinger | 2010-01-09 05:32:23 +0100 (Sat, 09 Jan 2010) | 12 lines
+
+Convert dummyflasher to msg_* and make good use of msg_pspew.
+Rule of thumb: Diagnostic programmer init messages are msg_pdbg, all
+other debug stuff (except warnings, which should be pmsg_pinfo or
+msg_perr) is msg_pspew.
+
+This makes "flashrom -p dummy -V" output a whole lot more readable
+(try it!). In case someone wants the full barfed output, it is
+possible to specify -VV instead of -V.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r841 | hailfinger | 2010-01-09 04:22:31 +0100 (Sat, 09 Jan 2010) | 11 lines
+
+The msg_* macros won't compile as is if you use more than one parameter
+(i.e. have a format string and a variable).
+There are two alternative styles: GNU or C99 variadic macros. While C99
+has limitations compared to the GNU extensions, these limitations do not
+affect our macros, so I decided to go with the standard way.
+
+I adjusted whitespace a bit to have aligned values (cosmetic change).
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r840 | hailfinger | 2010-01-09 04:15:50 +0100 (Sat, 09 Jan 2010) | 9 lines
+
+Use address mask in probe_jedec. This allows us to have one common
+probe_jedec function instead of half a dozen wrappers.
+The trick here is to have FEATURE_ADDR_FULL==0 and thus default to
+unmasked addresses. That way, we only have to annotate chips which need
+small address masks.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r839 | hailfinger | 2010-01-09 03:24:17 +0100 (Sat, 09 Jan 2010) | 16 lines
+
+Use the register mapping feature bit.
+All functions which just call probe_jedec and then map flash registers
+are replaced by probe_jedec. All functions which call probe_jedec, map
+flash registers and do something else can at least eliminate mapping
+flash registers.
+Fix logic inversion in probe_jedec to map flash registers on success
+instead of on failure.
+Change a few TIMING_IGNORED to TIMING_FIXME where probe_jedec is used.
+
+Total savings: One probe function simplified, three probe functions
+eliminated.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r838 | hailfinger | 2010-01-08 22:18:08 +0100 (Fri, 08 Jan 2010) | 5 lines
+
+Add support for NetBSD.
+
+Signed-off-by: Jonathan A. Kollasch <jakllsch@kollasch.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r837 | hailfinger | 2010-01-07 22:23:45 +0100 (Thu, 07 Jan 2010) | 12 lines
+
+Fix Sharp LHF00L04.
+- Add eraseblock definitions
+- Use correct eraseblock sizes (the datasheet is a bit ambiguous)
+- Use correct probe function
+- Fill in probe timing
+
+There is a lot more stuff left to clean up, but at least probe and erase
+should work now.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r836 | snelson | 2010-01-07 21:21:58 +0100 (Thu, 07 Jan 2010) | 12 lines
+
+Converting fprintf(stderr), printf, and printf_debug into a common
+print interface for flashrom. It also changes so -VV will spit out
+highly verbose messages for debugging. This is a minimal patch to
+lessen impact a later patch will convert current printf messages to
+the new interface.
+
+Add file that was suppose to be committed with r835.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r835 | snelson | 2010-01-07 21:09:33 +0100 (Thu, 07 Jan 2010) | 9 lines
+
+Converting fprintf(stderr), printf, and printf_debug into a common print
+interface for flashrom. It also changes so -VV will spit out highly verbose
+messages for debugging. This is a minimal patch to lessen impact a later patch
+will convert current printf messages to the new interface.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r834 | hailfinger | 2010-01-07 04:32:17 +0100 (Thu, 07 Jan 2010) | 24 lines
+
+Programmer debug messages during programmer init/shutdown are useful
+because they print hardware settings and desired configuration. They
+help in getting a quick overview of hardware and software state on
+startup and shutdown.
+
+Programmer debug messages during flash chip access are mostly a
+distraction in logs and should only be enabled if someone is having
+problems which are suspected to stem from a programmer hardware or
+programmer software bug. Disable those messages by default, they can be
+reenabled by #define COMM_DEBUG in the affected programmer file.
+
+An added benefit is a tremendous size reduction in verbose
+probe/read/write/erase logs because only flash chip driver messages
+remain. In some cases, logs will shrink from 65 MB to 10 kB or less.
+
+The right(tm) fix would be two different debug levels (DEBUG and SPEW)
+and the ability to differentiate between programmer debug messages and
+flash chip debug messages. Until the design for the message printing
+infrastructure is finished, this is the best stop-gap measure we can
+get.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audioahcked@gmail.com>
+
+------------------------------------------------------------------------
+r833 | hailfinger | 2010-01-07 04:24:05 +0100 (Thu, 07 Jan 2010) | 15 lines
+
+Move the CLI related functions main() and cli_usage() to cli_classic.c
+and rename them accordingly. For now, main() just calls cli_classic(),
+but alternative frontends can be switched in main().
+Annotate remaining help texts with CLI dependency inside flashrom.c with
+a FIXME comment.
+
+Now people can go and create different frontends and be happy. Please
+note that any other frontend will have to sort of duplicate the probing
+code in cli_classic.c. Refactoring that part of the code is possible,
+but not easy because we still want to print instructive help messages
+for users.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r832 | oxygene | 2010-01-06 23:14:39 +0100 (Wed, 06 Jan 2010) | 5 lines
+
+buspiratespi support on mingw
+
+Signed-off-by: Patrick Georgi <patrick.georgi@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r831 | oxygene | 2010-01-06 20:09:40 +0100 (Wed, 06 Jan 2010) | 11 lines
+
+- replace the hand written serial input flush routine with the termios one.
+- serialport_discard_read isn't necessary anymore - it just wrapped
+  sp_flush_incoming with no extra value.
+- serialport_read and serialport_write would misbehave if read or write
+  didn't process everything in one go.
+- sp_flush_incoming should be #define'd out for FAKE_COMMUNICATION like
+  serialport_discard_read was
+
+Signed-off-by: Patrick Georgi <patrick.georgi@coresystems.de>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r830 | hailfinger | 2010-01-06 17:09:10 +0100 (Wed, 06 Jan 2010) | 7 lines
+
+Move OS-dependent serial code from buspirate_spi.c to serial.c and
+rename a few functions to make it obvious that they are generic and not
+specific to the Bus Pirate.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Patrick Georgi <patrick.georgi@coresystems.de>
+
+------------------------------------------------------------------------
+r829 | hailfinger | 2010-01-06 11:21:00 +0100 (Wed, 06 Jan 2010) | 9 lines
+
+Some programmers (most notably FT2232SPI) use fallback_* and noop_*, but
+those functions lived inside internal.c and were unavailable if no
+PCI-based programmers were compiled in. Move those functions to the new
+file programmer.c.
+Thanks to Patrick Georgi for finding this.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Patrick Georgi <patrick.georgi@coresystems.de>
+
+------------------------------------------------------------------------
+r828 | snelson | 2010-01-04 18:15:23 +0100 (Mon, 04 Jan 2010) | 12 lines
+
+The patch converts jedec functions into mask-based generics which can be used
+for many chip provided the only changes are the addresses are converted from 
+0x5555/0x2AAA to 0x555/0x2AA or similar. The patch mostly changes jedec.c, but
+a few other files are changed because they use the jedec functions within
+their own functions.
+
+The patch also adds a copyright line to flashchips.c because of my recent work in converting AMD and Atmel chips to use struct erase_block.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r827 | stepan | 2010-01-04 00:50:28 +0100 (Mon, 04 Jan 2010) | 7 lines
+
+Drop multiple forwards to man page and add a single one more prominently.
+Drop usage information that is already mentioned in the man page.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r826 | mkarcher | 2010-01-03 16:09:17 +0100 (Sun, 03 Jan 2010) | 6 lines
+
+Fix Intel FWH decode size
+
+Fixes wrong detection of area decoded to the FWH interfaces.
+
+Signed-off-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r825 | stepan | 2010-01-03 15:40:30 +0100 (Sun, 03 Jan 2010) | 6 lines
+
+drop known broken email addresses.
+
+Signed-off-by: Stefan Reinauer <stepan@coresystems.de>
+Acked-by: Stefan Reinauer <stepan@coresystems.de>
+
+
+------------------------------------------------------------------------
+r824 | snelson | 2009-12-24 17:54:21 +0100 (Thu, 24 Dec 2009) | 9 lines
+
+This patch shouldn't affect anything else in patchwork. It just splits
+$(OBJS) in Makefile into separate lists for Programmer, Chip, and CLI
+related files/objects. This should help later on figuring out where
+files may go for a libflashrom library.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r823 | hailfinger | 2009-12-24 04:33:11 +0100 (Thu, 24 Dec 2009) | 13 lines
+
+Only check for requested features in the Makefile.
+libpci is no longer required to build flashrom and will not be checked
+for if no PCI code is needed for the selected programmers.
+libftdi is no longer checked for if FT2232 support is not selected.
+
+With this patch, it is possible to build on pretty much every OS out
+there (including Windows) without altering the Makefile.
+Some gcc versions may need a CFLAGS override for a warning in
+dummyflasher.c, though.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r822 | hailfinger | 2009-12-24 04:11:55 +0100 (Thu, 24 Dec 2009) | 9 lines
+
+internal.c was always compiled in because it hosted the function
+internal_delay(). Move that function to udelay.c and compile internal.c
+only if really needed.
+physmap.c is only needed if the programmer is internal or a PCI card.
+Make its compilation conditional.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r821 | hailfinger | 2009-12-24 03:15:55 +0100 (Thu, 24 Dec 2009) | 11 lines
+
+Factor out CLI code by moving generic stuff out of main(). Add a generic
+programmer list output function to be used by alternative frontends.
+The interface between main() and doit is a hack and should get a clean
+design, but for now it serves the purpose of shortening main() by 120
+lines.
+The rest of main() needs to be refactored a bit more before moving
+main() away.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r820 | hailfinger | 2009-12-23 22:29:18 +0100 (Wed, 23 Dec 2009) | 5 lines
+
+Add VIA VT8233A identification, mark as tested.
+
+Signed-off-by: Ra?\195?\186l Soriano <GatoLoko@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r819 | snelson | 2009-12-23 18:05:59 +0100 (Wed, 23 Dec 2009) | 22 lines
+
+Convert the following chips to use struct eraseblock:
+AMIC_A29002B
+AMIC_A29002T
+EN_29F002B
+EN_29F002T
+MBM29F004BC
+MBM29F004TC
+MBM29F400BC
+MBM29F400TC
+MX_25L3205
+MX_25L6405
+MX_29F002B
+MX_29F002T
+
+
+Add block erasers for m29f400bt and mx29f002.
+Change programmer delays from 2 seconds to 10us in mx29f002 and am29f040b.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+
+------------------------------------------------------------------------
+r818 | hailfinger | 2009-12-23 13:16:47 +0100 (Wed, 23 Dec 2009) | 7 lines
+
+Add blockwise erase to all supported chips of the SST25 family:
+SST25VF040.REMS, SST25VF040B, SST25VF040B.REMS, SST25VF080B,
+SST25VF016B, SST25VF032B
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r817 | hailfinger | 2009-12-23 13:02:55 +0100 (Wed, 23 Dec 2009) | 12 lines
+
+Convert the following chips to use struct eraseblock:
+AT25DF021, AT25DF041A, AT25DF081, AT25DF161, AT25DF321, AT25DF321A,
+AT25DF641, AT25F512B, AT25FS010, AT25FS040, AT26DF041, AT26DF081A,
+AT26DF161, AT26DF161A, AT26F004, AT29C512, AT29C010A, AT29C020,
+AT29C040A, AT49BV512, AT49F002(N), AT49F002(N)T
+
+A possible future patch would to add spi_block_erase_d7 to spi.c as an 
+alternate to spi_block_erase_20. Only some SPI chips support d7.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r816 | libv | 2009-12-23 04:01:36 +0100 (Wed, 23 Dec 2009) | 4 lines
+
+Board: Add MSI K8N Neo4-F
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Fraser Hanson <fraser.hanson@gmail.com>
+------------------------------------------------------------------------
+r815 | libv | 2009-12-23 01:54:26 +0100 (Wed, 23 Dec 2009) | 20 lines
+
+Chipset/Board: vt8237: Set All mem cycles to LPC in chipset enable.
+
+Only done for VT8237R (possibly needed for VT8237 too), VT8235 does
+not need this (even if the original bios does so: Asus A7V8X-MX SE,
+MSI KT4V were verified).
+
+This then opens a floodgate of cleanups in the board enables.
+* EPIA SP board enable vanishes, taking EPIA CN match with it.
+* Asus A7V8X-MX/Tyan S2498 board enable then equals
+  w836xx_memw_enable_2e
+* AOpen vKM400Am-S board enable then equals it8705_rom_write_enable
+* Epia M board enable becomes via_vt823x_gpio15_raise
+* Epia N board enable becomes via_vt823x_gpio9_raise
+* Asus M2V-MX board enable becomes via_vt823x_gpio5_raise
+* vt823x_gpio_set becomes via_vt823x_gpio_set, and now detects ISA
+  bridge itself, in concordance with intel ich and nvidia mcp gpio.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r814 | hailfinger | 2009-12-23 00:54:10 +0100 (Wed, 23 Dec 2009) | 5 lines
+
+Add a few FIXME comments to the generic SPI code.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r813 | hailfinger | 2009-12-23 00:42:04 +0100 (Wed, 23 Dec 2009) | 16 lines
+
+SuperI/O detection now happens unconditionally and before the chipset
+enable. We could run it after chipset enable, but it definitely has to
+happen before board enable because the board enable usually accesses the
+SuperI/O.
+With this patch, it is possible to add a struct superio to the board
+enable table for more accurate matching in case subsystem IDs are
+ambiguous.
+This patch focuses on the generic infrastructure aspect and on support
+for IT8712F/IT8716F.
+
+Thanks go to Adrian Glaubitz and Ward Vandewege for testing.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
+
+------------------------------------------------------------------------
+r812 | hailfinger | 2009-12-22 23:15:33 +0100 (Tue, 22 Dec 2009) | 19 lines
+
+Convert the following chips to use struct eraseblock:
+Am29F010A/B
+Am29F002(N)BB
+Am29F002(N)BT
+Am29F016D
+Am29F040B
+Am29F080B
+Am29LV040B
+Am29LV081B
+A29040B
+Pm29F002T
+Pm29F002B
+
+Change function signature of Am29 erase functions and JEDEC chip erase
+to be usable with block_erasers.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r811 | hailfinger | 2009-12-22 14:04:53 +0100 (Tue, 22 Dec 2009) | 7 lines
+
+Clarify comment about how to enter chip erase functions in
+struct block_eraser.
+Reported by Sean Nelson.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r810 | libv | 2009-12-22 14:04:13 +0100 (Tue, 22 Dec 2009) | 9 lines
+
+Boards: Fix several issues with nvidia_mcp_gpio_set.
+
+- CK804, MCP04, MCP2 use the isa bridges..
+- Newer nvidia mcp's do use the smbus controllers (Found by
+  Michael Karcher).
+- gpio line check breaks EPoX EP-8RDA3+, and should be wider.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+------------------------------------------------------------------------
+r809 | libv | 2009-12-21 16:30:46 +0100 (Mon, 21 Dec 2009) | 4 lines
+
+Chipset: Add support for Intel Poulsbo chipset.
+
+Signed-off-by: Adam Jurkowski <adam.jurkowski@kontron.pl>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+------------------------------------------------------------------------
+r808 | libv | 2009-12-18 09:37:55 +0100 (Fri, 18 Dec 2009) | 7 lines
+
+Boards: Add ECS K7S6A.
+
+The nulled second set of subsystem ids is correct, and this seems
+to be a unique match.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: spirals <spirals@eircom.net>
+------------------------------------------------------------------------
+r807 | hailfinger | 2009-12-17 17:20:26 +0100 (Thu, 17 Dec 2009) | 20 lines
+
+If the JEDEC Toggle Bit algorithm needs more than 2^20 loops, it is a
+good sign we should have used delays between toggle bit reads. Tell the
+user about this.  2^20 loops need roughly a second depending on flash
+bus speed. One reason for excessive loops can be a slow operation like
+erase.
+
+The Winbond W39V040C requires a 50 ms delay between toggle bit reads
+during erase according to the datasheet. Turns out a 2 ms delay is
+sufficient. Use a safety factor of 4 and default all erase operations to
+8 ms delay between toggle reads. This is short enough not to have a
+substantial negative impact on erase times, and should improve
+reliability.
+
+This patch addresses the excessive toggle behaviour (observed on some
+non-Winbond chips) and the toggle delay requirement (Winbond W39V040C).
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Javier Ortega Conde (aka Malkavian) <malkavian666@gmail.com>
+Acked-By: Michael Karcher <flashrom@mkarcher.dialup.fu-berlin.de>
+
+------------------------------------------------------------------------
+r806 | hailfinger | 2009-12-17 16:20:01 +0100 (Thu, 17 Dec 2009) | 15 lines
+
+Use the maximum decode size infrastructure.
+- Detect max FWH size for Intel
+  631xESB/632xESB/3100/ICH6/ICH7/ICH8/ICH9/ICH10.
+- Move IDSEL override before decode size checking for the chipsets
+  listed above or flashrom will complain based on old values.
+- Adjust supported flash buses for the chipsets listed above (none of
+  them supports LPC or Parallel).
+- Detect max parallel size for AMD/National Semiconductor CS5530.
+- Adjust supported flash buses for CS5530/CS5530A.
+- Set board-specific max decode size for Elitegroup K7VTA3.
+- Set board-specific max decode size for Shuttle AK38N.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+------------------------------------------------------------------------
+r805 | hailfinger | 2009-12-17 05:22:40 +0100 (Thu, 17 Dec 2009) | 8 lines
+
+probe_jedec() checks the delay value and issues programmer_delay based
+on the value except for delays between single chip_writeb.
+If a chip has zero probe_delay, delays between chip_writeb should be
+skipped as well.
+
+Signed-off-by: Sean Nelson <audiohacked@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r804 | hailfinger | 2009-12-17 05:21:12 +0100 (Thu, 17 Dec 2009) | 5 lines
+
+Remove nonexisting functions from chipdrivers.h
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r803 | libv | 2009-12-14 11:41:58 +0100 (Mon, 14 Dec 2009) | 15 lines
+
+Boards: Formalize intel piix4 gpo setting.
+
+The function intel_piix4_gpo_set includes proper gpo pin checking, and
+gpo pin enables when necessary.
+
+This is a leftover from soyo SY-6BA+III code that turned out to be
+unnecessary, but still used for the epox ep-bx3 board enable which it
+cleans up and clarifies.
+
+Difference to old code:
+* typical bios delay io port 0xEB now never gets touched.
+* pci config byte 0xB0 was not altered before.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r802 | hailfinger | 2009-12-14 05:24:42 +0100 (Mon, 14 Dec 2009) | 6 lines
+
+Use pci_fill_info() so device_class is valid.  This is needed on NetBSD
+and probably other non-Linux platforms.
+
+Signed-off-by: Jonathan A. Kollasch <jakllsch@kollasch.net>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r801 | hailfinger | 2009-12-14 05:11:12 +0100 (Mon, 14 Dec 2009) | 5 lines
+
+Mark ASRock M3A790GXH/128M as supported, no board enable needed.
+
+Signed-off-by: Zachary O Dillard <teathief@gmail.com>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r800 | hailfinger | 2009-12-14 05:04:18 +0100 (Mon, 14 Dec 2009) | 7 lines
+
+Fix eraseblock walking and add a few more checks to make sure such bugs
+get caught in the future. I found this bug during a code review.
+A consistency check for eraseblock definitions has been merged as well.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r799 | hailfinger | 2009-12-14 04:32:24 +0100 (Mon, 14 Dec 2009) | 14 lines
+
+Split hardware access, OS abstraction and chip drivers out of flash.h to
+get a better overview of what belongs where.
+
+This patch is only the first step, but it hopefully will make working
+with the code and especially porting to new platforms easier.
+
+Subsequent patches should move #includes for the newly created files
+hwaccess.h and chipdrivers.h from flash.h to the files which need them.
+Programmers should live in a separate header file as well.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+Tested-by: Idwer Vollering <vidwer@gmail.com>
+
+------------------------------------------------------------------------
+r798 | hailfinger | 2009-12-14 04:07:31 +0100 (Mon, 14 Dec 2009) | 6 lines
+
+Don't print out supported PCI devices header if all following lines are
+excluded from build.
+
+Signed-off-by: Adam Jurkowski <adam.jurkowski@kontron.pl>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+
+------------------------------------------------------------------------
+r797 | hailfinger | 2009-12-13 23:28:00 +0100 (Sun, 13 Dec 2009) | 25 lines
+
+Internal (onboard) programming was the only feature which could not be
+disabled.
+Make various pieces of code conditional on support for internal
+programming. Code shared between PCI device programmers and onboard
+programming is now conditional as well.
+
+It is now possible to build only with dummy support:
+make CONFIG_INTERNAL=no CONFIG_NIC3COM=no CONFIG_SATASII=no
+CONFIG_DRKAISER=no CONFIG_SERPROG=no CONFIG_FT2232SPI=no
+
+This allows building for a specific use case only, and it also
+facilitates porting to a new architecture because it is possible to
+focus on highlevel code only.
+
+Note: Either internal or dummy programmer needs to be compiled in due to
+the current behaviour of always picking a default programmer if -p is
+not specified. Picking an arbitrary external programmer as default  
+wouldn't make sense.
+
+Build and runtime tested in all 1024 possible build combinations. The
+only failures are by design as mentioned above.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+
+------------------------------------------------------------------------
+r796 | libv | 2009-12-09 12:39:02 +0100 (Wed, 09 Dec 2009) | 33 lines
+
+Boards: Tighten up ID match list.
+
+Tighten up board id match table in preparation of upcoming matching
+changes.
+
+Some boards are deliberately broken so that we will receive reports
+or can remove support later (for instance, for agami aruma, which,
+probably is no longer available in the wild).
+
+* Acorp 6A815EPD: make autodetectable.
+* Agami Aruma: remove bogus subsystem ids. Due to lacking secondary
+  main id, this match will break soon.
+* GIGABYTE GA-2761GXDK: Add secondary main id. Subsystem ids are not
+  possible as they are all copies of the main ids. Will still require
+  -m.
+* GIGABYTE GA-M57SLI-S4: add full set of subsystem ids. Will keep
+  match name for coreboot name matching.
+* GIGABYTE GA-M61P-S3: Add secondary main id. Remove name match.
+  Probably has good subsystem ids, but no info was found. So
+  deliberately broken match.
+* GIGABYTE GA-MA790FX-DQ6: pointless name match.
+* IBM x3455: add full ids, remove name match.
+* Kontron 986LCD-M: remove full id match as it is bogus. Kontron is
+  an embedded vendor and does not bother with subsystem ids, so
+  make this board name match only.
+* MSI MS-6590 (KT4 Ultra): remove name match.
+* MSI MS-7135 (K8N Neo3): add full id set, keep name match for
+  coreboot.
+* VIA EPIA-N/NL: remove name match.
+* VIA PC3500G: remove name match.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r795 | libv | 2009-12-09 08:53:01 +0100 (Wed, 09 Dec 2009) | 6 lines
+
+Boards: Add Asus M2V-MX.
+
+Expands via vt823x gpio support to also accept gpio5.
+
+Signed-off-by: David Bartley <dtbartle@csclub.uwaterloo.ca>
+Acked-by: Luc Verhaegen <libv@skynet.be>
+------------------------------------------------------------------------
+r794 | libv | 2009-12-09 08:43:13 +0100 (Wed, 09 Dec 2009) | 10 lines
+
+Chipset: remove sis630 chipset enable for sis540.
+
+SiS630 chipset enable is equal to sis540 plus superio "poking".
+
+Superio poking equals IT8705F flash write enable, which is currently
+dealt with on a board by board basis in board_enable.c. Not all
+630 and newer based boards come with it8705/sis950 superios.
+
+Signed-off-by: Luc Verhaegen <libv@skynet.be>
+Acked-by: Sean Nelson <audiohacked@gmail.com>
+------------------------------------------------------------------------
+r793 | uwe | 2009-12-08 18:26:24 +0100 (Tue, 08 Dec 2009) | 6 lines
+
+Intel PIIX* chipsets only support parallel flash (no LPC/FWH/SPI).
+
+Signed-off-by: Maciej Pijanka <maciej.pijanka@gmail.com>
+Acked-by: Uwe Hermann <uwe@hermann-uwe.de>
+
+
+------------------------------------------------------------------------
 r792 | libv | 2009-12-03 13:25:34 +0100 (Thu, 03 Dec 2009) | 7 lines
 
 Boards: Add general nVidia MCP gpio routine.

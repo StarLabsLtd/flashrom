@@ -25,7 +25,7 @@ INSTALL = install
 DIFF    = diff
 PREFIX  ?= /usr/local
 MANDIR  ?= $(PREFIX)/share/man
-CFLAGS  ?= -Os -Wall -Werror
+CFLAGS  ?= -Os -Wall -Werror -Wshadow
 EXPORTDIR ?= .
 
 OS_ARCH	= $(shell uname)
@@ -41,15 +41,16 @@ CFLAGS += -I/usr/local/include
 LDFLAGS += -L/usr/local/lib
 endif
 
-LIBS += -lpci
+CHIP_OBJS = jedec.o stm50flw0x0x.o w39v080fa.o sharplhf00l04.o w29ee011.o \
+	sst28sf040.o am29f040b.o mx29f002.o m29f400bt.o pm29f002.o w39v040c.o \
+	w49f002u.o 82802ab.o pm49fl00x.o sst49lf040.o en29f002a.o m29f002.o \
+	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o
 
-OBJS = chipset_enable.o board_enable.o udelay.o jedec.o stm50flw0x0x.o \
-	sst28sf040.o am29f040b.o mx29f002.o m29f400bt.o pm29f002.o \
-	w49f002u.o 82802ab.o pm49fl00x.o sst49lf040.o en29f002a.o \
-	sst49lfxxxc.o sst_fwhub.o layout.o cbtable.o flashchips.o physmap.o \
-	flashrom.o w39v080fa.o sharplhf00l04.o w29ee011.o spi.o it87spi.o \
-	ichspi.o w39v040c.o sb600spi.o wbsio_spi.o m29f002.o internal.o \
-	pcidev.o print.o
+LIB_OBJS = layout.o
+
+CLI_OBJS = flashrom.o cli_classic.o cli_output.o print.o
+
+PROGRAMMER_OBJS = udelay.o programmer.o
 
 all: pciutils features dep $(PROGRAM)
 
@@ -57,13 +58,16 @@ all: pciutils features dep $(PROGRAM)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 792
+SVNVERSION := 873
 
 RELEASE := 0.9.1
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
 SVNDEF := -D'FLASHROM_VERSION="$(VERSION)"'
+
+# Always enable internal/onboard support for now.
+CONFIG_INTERNAL ?= yes
 
 # Always enable serprog for now. Needs to be disabled on Windows.
 CONFIG_SERPROG ?= yes
@@ -92,12 +96,21 @@ CONFIG_DRKAISER ?= yes
 # Always enable Bus Pirate SPI for now.
 CONFIG_BUSPIRATESPI ?= yes
 
+# Disable Dediprog SF100 until support is complete and tested.
+CONFIG_DEDIPROG ?= no
+
 # Disable wiki printing by default. It is only useful if you have wiki access.
 CONFIG_PRINT_WIKI ?= no
 
+ifeq ($(CONFIG_INTERNAL), yes)
+FEATURE_CFLAGS += -D'INTERNAL_SUPPORT=1'
+PROGRAMMER_OBJS += chipset_enable.o board_enable.o cbtable.o it87spi.o ichspi.o sb600spi.o wbsio_spi.o
+NEED_PCI := yes
+endif
+
 ifeq ($(CONFIG_SERPROG), yes)
 FEATURE_CFLAGS += -D'SERPROG_SUPPORT=1'
-OBJS += serprog.o
+PROGRAMMER_OBJS += serprog.o
 ifeq ($(OS_ARCH), SunOS)
 LIBS += -lsocket
 endif
@@ -105,63 +118,90 @@ endif
 
 ifeq ($(CONFIG_BITBANG_SPI), yes)
 FEATURE_CFLAGS += -D'BITBANG_SPI_SUPPORT=1'
-OBJS += bitbang_spi.o
+PROGRAMMER_OBJS += bitbang_spi.o
 endif
 
 ifeq ($(CONFIG_NIC3COM), yes)
 FEATURE_CFLAGS += -D'NIC3COM_SUPPORT=1'
-OBJS += nic3com.o
+PROGRAMMER_OBJS += nic3com.o
+NEED_PCI := yes
 endif
 
 ifeq ($(CONFIG_GFXNVIDIA), yes)
 FEATURE_CFLAGS += -D'GFXNVIDIA_SUPPORT=1'
-OBJS += gfxnvidia.o
+PROGRAMMER_OBJS += gfxnvidia.o
+NEED_PCI := yes
 endif
 
 ifeq ($(CONFIG_SATASII), yes)
 FEATURE_CFLAGS += -D'SATASII_SUPPORT=1'
-OBJS += satasii.o
+PROGRAMMER_OBJS += satasii.o
+NEED_PCI := yes
 endif
 
-FTDILIBS := $(shell pkg-config --libs libftdi 2>/dev/null || printf "%s" "-lftdi -lusb")
 ifeq ($(CONFIG_FT2232SPI), yes)
+FTDILIBS := $(shell pkg-config --libs libftdi 2>/dev/null || printf "%s" "-lftdi -lusb")
 # This is a totally ugly hack.
 FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "-D'FT2232_SPI_SUPPORT=1'")
 FEATURE_LIBS += $(shell LC_ALL=C grep -q "FTDISUPPORT := yes" .features && printf "%s" "$(FTDILIBS)")
-OBJS += ft2232_spi.o
+PROGRAMMER_OBJS += ft2232_spi.o
 endif
 
 ifeq ($(CONFIG_DUMMY), yes)
 FEATURE_CFLAGS += -D'DUMMY_SUPPORT=1'
-OBJS += dummyflasher.o
+PROGRAMMER_OBJS += dummyflasher.o
 endif
 
 ifeq ($(CONFIG_DRKAISER), yes)
 FEATURE_CFLAGS += -D'DRKAISER_SUPPORT=1'
-OBJS += drkaiser.o
+PROGRAMMER_OBJS += drkaiser.o
+NEED_PCI := yes
 endif
 
 ifeq ($(CONFIG_BUSPIRATESPI), yes)
 FEATURE_CFLAGS += -D'BUSPIRATE_SPI_SUPPORT=1'
-OBJS += buspirate_spi.o
+PROGRAMMER_OBJS += buspirate_spi.o
+endif
+
+ifeq ($(CONFIG_DEDIPROG), yes)
+FEATURE_CFLAGS += -D'DEDIPROG_SUPPORT=1'
+FEATURE_LIBS += -lusb
+PROGRAMMER_OBJS += dediprog.o
 endif
 
 # Ugly, but there's no elif/elseif.
 ifeq ($(CONFIG_SERPROG), yes)
-OBJS += serial.o
+LIB_OBJS += serial.o
 else
 ifeq ($(CONFIG_BUSPIRATESPI), yes)
-OBJS += serial.o
+LIB_OBJS += serial.o
+endif
+endif
+
+ifeq ($(NEED_PCI), yes)
+LIBS += -lpci
+FEATURE_CFLAGS += -D'NEED_PCI=1'
+PROGRAMMER_OBJS += pcidev.o physmap.o internal.o #FIXME: We need to move stuff
+ 						# from internal.c and pcidev.c to pci.c
+						# internal.c needs to be split
+						# into internal-programmer-only stuff
+						# and a support lib for all internal+pci
+						# based stuff.
+ifeq ($(OS_ARCH), NetBSD)
+LIBS += -lpciutils #		The libpci we want.
+LIBS += -l$(shell uname -m) #	For (i386|x86_64)_iopl(2).
 endif
 endif
 
 ifeq ($(CONFIG_PRINT_WIKI), yes)
 FEATURE_CFLAGS += -D'PRINT_WIKI_SUPPORT=1'
-OBJS += print_wiki.o
+CLI_OBJS += print_wiki.o
 endif
 
 # We could use PULLED_IN_LIBS, but that would be ugly.
 FEATURE_LIBS += $(shell LC_ALL=C grep -q "NEEDLIBZ := yes" .libdeps && printf "%s" "-lz")
+
+OBJS = $(CHIP_OBJS) $(CLI_OBJS) $(PROGRAMMER_OBJS) $(LIB_OBJS)
 
 $(PROGRAM): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROGRAM) $(OBJS) $(FEATURE_LIBS) $(LIBS)
@@ -195,6 +235,7 @@ compiler:
 		rm -f .test.c .test; exit 1)
 	@rm -f .test.c .test
 
+ifeq ($(NEED_PCI), yes)
 pciutils: compiler
 	@printf "Checking for libpci headers... "
 	@$(shell ( echo "#include <pci/pci.h>";		   \
@@ -210,25 +251,30 @@ pciutils: compiler
 	@$(shell ( echo "#include <pci/pci.h>";		   \
 		   echo "int main(int argc, char **argv)"; \
 		   echo "{ return 0; }"; ) > .test1.c )
-	@$(CC) $(CFLAGS) $(LDFLAGS) .test1.c -o .test1 $(LIBS) >/dev/null 2>&1 &&	\
+	@$(CC) $(CFLAGS) $(LDFLAGS) .test1.c -o .test1 -lpci $(LIBS) >/dev/null 2>&1 &&	\
 		echo "found." || ( echo "not found."; echo;				\
 		echo "Please install libpci (package pciutils).";			\
 		echo "See README for more information."; echo;				\
 		rm -f .test1.c .test1; exit 1)
 	@printf "Checking if libpci is sufficient... "
 	@printf "" > .libdeps
-	@$(CC) $(LDFLAGS) .test.o -o .test $(LIBS) >/dev/null 2>&1 &&				\
+	@$(CC) $(LDFLAGS) .test.o -o .test -lpci $(LIBS) >/dev/null 2>&1 &&				\
 		echo "yes." || ( echo "no.";							\
 		printf "Checking if libz is present and supplies all needed symbols...";	\
-		$(CC) $(LDFLAGS) .test.o -o .test $(LIBS) -lz >/dev/null 2>&1 &&		\
+		$(CC) $(LDFLAGS) .test.o -o .test -lpci -lz $(LIBS) >/dev/null 2>&1 &&		\
 		( echo "yes."; echo "NEEDLIBZ := yes" > .libdeps ) || ( echo "no."; echo;	\
 		echo "Please install libz.";			\
 		echo "See README for more information."; echo;				\
 		rm -f .test.c .test.o .test; exit 1) )
 	@rm -f .test.c .test.o .test .test1.c .test1
+else
+pciutils: compiler
+	@printf "" > .libdeps
+endif
 
 .features: features
 
+ifeq ($(CONFIG_FT2232SPI), yes)
 features: compiler
 	@echo "FEATURES := yes" > .features.tmp
 	@printf "Checking for FTDI support... "
@@ -241,6 +287,11 @@ features: compiler
 		( echo "not found."; echo "FTDISUPPORT := no" >> .features.tmp )
 	@$(DIFF) -q .features.tmp .features >/dev/null 2>&1 && rm .features.tmp || mv .features.tmp .features
 	@rm -f .featuretest.c .featuretest
+else
+features: compiler
+	@echo "FEATURES := yes" > .features.tmp
+	@$(DIFF) -q .features.tmp .features >/dev/null 2>&1 && rm .features.tmp || mv .features.tmp .features
+endif
 
 install: $(PROGRAM)
 	mkdir -p $(DESTDIR)$(PREFIX)/sbin

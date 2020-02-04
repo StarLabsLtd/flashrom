@@ -31,6 +31,7 @@
 int io_fd;
 #endif
 
+#if NEED_PCI == 1
 struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
 {
 	struct pci_dev *temp;
@@ -99,6 +100,7 @@ struct pci_dev *pci_card_find(uint16_t vendor, uint16_t device,
 
 	return NULL;
 }
+#endif
 
 void get_io_perms(void)
 {
@@ -122,6 +124,18 @@ void release_io_perms(void)
 #endif
 }
 
+#if INTERNAL_SUPPORT == 1
+struct superio superio = {};
+
+void probe_superio(void)
+{
+	superio = probe_superio_ite();
+#if 0	/* Winbond SuperI/O code is not yet available. */
+	if (superio.vendor == SUPERIO_VENDOR_NONE)
+		superio = probe_superio_winbond();
+#endif
+}
+
 int internal_init(void)
 {
 	int ret = 0;
@@ -138,6 +152,9 @@ int internal_init(void)
 	 * mainboard specific flash enable sequence.
 	 */
 	coreboot_init();
+
+	/* Probe for the SuperI/O chip and fill global struct superio. */
+	probe_superio();
 
 	/* try to enable it. Failure IS an option, since not all motherboards
 	 * really need this to be done, etc., etc.
@@ -163,6 +180,7 @@ int internal_shutdown(void)
 
 	return 0;
 }
+#endif
 
 void internal_chip_writeb(uint8_t val, chipaddr addr)
 {
@@ -228,93 +246,4 @@ uint16_t mmio_readw(void *addr)
 uint32_t mmio_readl(void *addr)
 {
 	return *(volatile uint32_t *) addr;
-}
-
-void internal_delay(int usecs)
-{
-	/* If the delay is >1 s, use usleep because timing does not need to
-	 * be so precise.
-	 */
-	if (usecs > 1000000) {
-		usleep(usecs);
-	} else {
-		myusec_delay(usecs);
-	}
-}
-
-/* No-op shutdown() for programmers which don't need special handling */
-int noop_shutdown(void)
-{
-	return 0;
-}
-
-/* Fallback map() for programmers which don't need special handling */
-void *fallback_map(const char *descr, unsigned long phys_addr, size_t len)
-{
-	/* FIXME: Should return phys_addr. */
-	return 0;
-}
-
-/* No-op/fallback unmap() for programmers which don't need special handling */
-void fallback_unmap(void *virt_addr, size_t len)
-{
-}
-
-/* No-op chip_writeb() for drivers not supporting addr/data pair accesses */
-uint8_t noop_chip_readb(const chipaddr addr)
-{
-	return 0xff;
-}
-
-/* No-op chip_writeb() for drivers not supporting addr/data pair accesses */
-void noop_chip_writeb(uint8_t val, chipaddr addr)
-{
-}
-
-/* Little-endian fallback for drivers not supporting 16 bit accesses */
-void fallback_chip_writew(uint16_t val, chipaddr addr)
-{
-	chip_writeb(val & 0xff, addr);
-	chip_writeb((val >> 8) & 0xff, addr + 1);
-}
-
-/* Little-endian fallback for drivers not supporting 16 bit accesses */
-uint16_t fallback_chip_readw(const chipaddr addr)
-{
-	uint16_t val;
-	val = chip_readb(addr);
-	val |= chip_readb(addr + 1) << 8;
-	return val;
-}
-
-/* Little-endian fallback for drivers not supporting 32 bit accesses */
-void fallback_chip_writel(uint32_t val, chipaddr addr)
-{
-	chip_writew(val & 0xffff, addr);
-	chip_writew((val >> 16) & 0xffff, addr + 2);
-}
-
-/* Little-endian fallback for drivers not supporting 32 bit accesses */
-uint32_t fallback_chip_readl(const chipaddr addr)
-{
-	uint32_t val;
-	val = chip_readw(addr);
-	val |= chip_readw(addr + 2) << 16;
-	return val;
-}
-
-void fallback_chip_writen(uint8_t *buf, chipaddr addr, size_t len)
-{
-	size_t i;
-	for (i = 0; i < len; i++)
-		chip_writeb(buf[i], addr + i);
-	return;
-}
-
-void fallback_chip_readn(uint8_t *buf, chipaddr addr, size_t len)
-{
-	size_t i;
-	for (i = 0; i < len; i++)
-		buf[i] = chip_readb(addr + i);
-	return;
 }
