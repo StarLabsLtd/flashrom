@@ -1,4 +1,127 @@
 ------------------------------------------------------------------------
+r1954 | stefanct | 2016-03-13 18:46:08 +0100 (Sun, 13 Mar 2016) | 6 lines
+
+Increase flashrom version number to 0.9.9.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Urja Rannikko <urjaman@gmail.com>
+------------------------------------------------------------------------
+r1953 | hailfinger | 2016-03-13 18:36:49 +0100 (Sun, 13 Mar 2016) | 22 lines
+
+Fix fscanf format string security bug in layout.c
+
+An internal security audit of the flashrom project by
+Carl-Daniel Hailfinger found a buffer overflow bug present in all
+flashrom versions since the year 2005.
+This bug was independently found and reported to flashrom.org by
+Cosmin Gorgovan a few days ago. 
+
+A buffer on the stack and a buffer on the heap are affected by the
+overflow caused by an incorrect fscanf format string.
+The buffer overflow can only be triggered if the optional layout feature
+is used and if the user manually specifies a specially crafted layout
+file on the command line. Command line parsing and flash image handling
+do not trigger the buggy code path.
+Most usage of flashrom does not involve layout files.
+
+The fix in this commit (changed fscanf format string) can be applied to
+layout.c of all past flashrom versions.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1952 | hailfinger | 2016-03-13 17:24:09 +0100 (Sun, 13 Mar 2016) | 6 lines
+
+Implement serial port shutdown both for regular termination and error
+condition in pony_spi.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1951 | stefanct | 2016-03-13 16:16:30 +0100 (Sun, 13 Mar 2016) | 39 lines
+
+Add a bunch of new/tested stuff and various small changes 25.
+
+Tested mainboards:
+OK:
+ - ASRock Fatal1ty 970 Performance and P4i65G
+   Reported by anonymous email message ID:
+   932677687262b1300eaf14260999d9262c31@guerrillamail.com
+   The latter actually had a tested board enable already.
+
+Flash chips:
+ - Eon EN25Q128 to PREW (+PREW)
+   Reported by Adrian Graham
+ - GigaDevice GD25VQ41B to PREW (+PREW)
+   Reported by David Hendricks
+ - Winbond W39V040FB to PREW (+EW)
+   Reported by fjed on IRC
+
+Miscellaneous:
+ - Change PCI IDs of "MS-6577 (Xenon)" board enable.
+   The previous IDs contained the on-board display adapter which is
+   disabled when a dedicated graphics card is installed.
+ - Add a note to the README how to overcome the clang warning if only a
+   single programmer is enabled.
+ - Fix some typo and manpage problems found by lintian
+ - r1920 introduced some explicit calls to pkg-config instead of $(PKG_CONFIG).
+   This patch corrects that.
+ - Make MS-7094 (K8T Neo2-F V2.0) board enable less contestable.
+   Previous PCI IDs were board-specific but ot the other of devices
+   that could be disabled by the firmware or that vary among
+   hardware revions. There are no good alternatives available.
+   However, since we always have a DMI decoder available now, we can
+   use non-board-specific devices without taking risks. Thanks to
+   Uwe Hermann for reporting and testing.
+ - Some other small changes to clean up whitespace and fix some warnings
+   from Debian's lintian.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1950 | stefanct | 2016-03-13 13:57:03 +0100 (Sun, 13 Mar 2016) | 11 lines
+
+Fix compilation on SunOS.
+
+This came up when I was testing if building on SunOS still works
+on the buildbot's instance of OmniOS r151014 which is based on illumos.
+
+The fix is
+ - to link against libnsl
+ - a small C type fix in ich_descriptor_tool
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1949 | hailfinger | 2016-03-12 20:49:14 +0100 (Sat, 12 Mar 2016) | 7 lines
+
+Specifying spispeed=reserved as programmer parameter resulted in
+selecting the default SPI speed instead of aborting. Rewrite the logic
+to be more readable.
+
+Signed-off-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+
+------------------------------------------------------------------------
+r1948 | stefanct | 2016-03-06 23:32:16 +0100 (Sun, 06 Mar 2016) | 4 lines
+
+Add support for GNU Hurd.
+
+Signed-off-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+Acked-by: Carl-Daniel Hailfinger <c-d.hailfinger.devel.2006@gmx.net>
+------------------------------------------------------------------------
+r1947 | stefanct | 2016-03-06 15:33:49 +0100 (Sun, 06 Mar 2016) | 4 lines
+
+Add support for GD25VQ21B, GD25VQ40C, GD25VQ80C and GD25VQ16C.
+
+Signed-off-by: Hatim Kanchwala <hatim@hatimak.me>
+Acked-by: Stefan Tauner <stefan.tauner@alumni.tuwien.ac.at>
+------------------------------------------------------------------------
 r1946 | hailfinger | 2016-02-28 23:04:51 +0100 (Sun, 28 Feb 2016) | 9 lines
 
 Makefile: Fix driver blacklist dependencies
