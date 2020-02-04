@@ -37,36 +37,36 @@
 /* Enter extended functions */
 static void w836xx_ext_enter(uint16_t port)
 {
-	outb(0x87, port);
-	outb(0x87, port);
+	OUTB(0x87, port);
+	OUTB(0x87, port);
 }
 
 /* Leave extended functions */
 static void w836xx_ext_leave(uint16_t port)
 {
-	outb(0xAA, port);
+	OUTB(0xAA, port);
 }
 
 /* General functions for reading/writing Winbond Super I/Os. */
 static unsigned char wbsio_read(uint16_t index, uint8_t reg)
 {
-	outb(reg, index);
-	return inb(index + 1);
+	OUTB(reg, index);
+	return INB(index + 1);
 }
 
 static void wbsio_write(uint16_t index, uint8_t reg, uint8_t data)
 {
-	outb(reg, index);
-	outb(data, index + 1);
+	OUTB(reg, index);
+	OUTB(data, index + 1);
 }
 
 static void wbsio_mask(uint16_t index, uint8_t reg, uint8_t data, uint8_t mask)
 {
 	uint8_t tmp;
 
-	outb(reg, index);
-	tmp = inb(index + 1) & ~mask;
-	outb(tmp | (data & mask), index + 1);
+	OUTB(reg, index);
+	tmp = INB(index + 1) & ~mask;
+	OUTB(tmp | (data & mask), index + 1);
 }
 
 /**
@@ -172,9 +172,9 @@ static int board_via_epia_m(const char *name)
 	base = pci_read_word(dev, 0x88) & 0xFF80;
 
 	/* Enable GPIO15 which is connected to write protect. */
-	val = inb(base + 0x4D);
+	val = INB(base + 0x4D);
 	val |= 0x80;
-	outb(val, base + 0x4D);
+	OUTB(val, base + 0x4D);
 
 	return 0;
 }
@@ -249,14 +249,14 @@ static int board_asus_p5a(const char *name)
 
 #define ASUSP5A_LOOP 5000
 
-	outb(0x00, 0xE807);
-	outb(0xEF, 0xE803);
+	OUTB(0x00, 0xE807);
+	OUTB(0xEF, 0xE803);
 
-	outb(0xFF, 0xE800);
+	OUTB(0xFF, 0xE800);
 
 	for (i = 0; i < ASUSP5A_LOOP; i++) {
-		outb(0xE1, 0xFF);
-		if (inb(0xE800) & 0x04)
+		OUTB(0xE1, 0xFF);
+		if (INB(0xE800) & 0x04)
 			break;
 	}
 
@@ -265,13 +265,13 @@ static int board_asus_p5a(const char *name)
 		return -1;
 	}
 
-	outb(0x20, 0xE801);
-	outb(0x20, 0xE1);
+	OUTB(0x20, 0xE801);
+	OUTB(0x20, 0xE1);
 
-	outb(0xFF, 0xE802);
+	OUTB(0xFF, 0xE802);
 
 	for (i = 0; i < ASUSP5A_LOOP; i++) {
-		tmp = inb(0xE800);
+		tmp = INB(0xE800);
 		if (tmp & 0x70)
 			break;
 	}
@@ -281,24 +281,24 @@ static int board_asus_p5a(const char *name)
 		return -1;
 	}
 
-	tmp = inb(0xE804);
+	tmp = INB(0xE804);
 	tmp &= ~0x02;
 
-	outb(0x00, 0xE807);
-	outb(0xEE, 0xE803);
+	OUTB(0x00, 0xE807);
+	OUTB(0xEE, 0xE803);
 
-	outb(tmp, 0xE804);
+	OUTB(tmp, 0xE804);
 
-	outb(0xFF, 0xE800);
-	outb(0xE1, 0xFF);
+	OUTB(0xFF, 0xE800);
+	OUTB(0xE1, 0xFF);
 
-	outb(0x20, 0xE801);
-	outb(0x20, 0xE1);
+	OUTB(0x20, 0xE801);
+	OUTB(0x20, 0xE1);
 
-	outb(0xFF, 0xE802);
+	OUTB(0xFF, 0xE802);
 
 	for (i = 0; i < ASUSP5A_LOOP; i++) {
-		tmp = inb(0xE800);
+		tmp = INB(0xE800);
 		if (tmp & 0x70)
 			break;
 	}
@@ -316,9 +316,9 @@ static int board_ibm_x3455(const char *name)
 	uint8_t byte;
 
 	/* Set GPIO lines in the Broadcom HT-1000 southbridge. */
-	outb(0x45, 0xcd6);
-	byte = inb(0xcd7);
-	outb(byte | 0x20, 0xcd7);
+	OUTB(0x45, 0xcd6);
+	byte = INB(0xcd7);
+	OUTB(byte | 0x20, 0xcd7);
 
 	return 0;
 }
@@ -331,13 +331,13 @@ static int board_epox_ep_bx3(const char *name)
 	uint8_t tmp;
 
 	/* Raise GPIO22. */
-	tmp = inb(0x4036);
-	outb(tmp, 0xEB);
+	tmp = INB(0x4036);
+	OUTB(tmp, 0xEB);
 
 	tmp |= 0x40;
 
-	outb(tmp, 0x4036);
-	outb(tmp, 0xEB);
+	OUTB(tmp, 0x4036);
+	OUTB(tmp, 0xEB);
 
 	return 0;
 }
@@ -360,10 +360,10 @@ static int board_acorp_6a815epd(const char *name)
 	/* Use GPIOBASE register to find where the GPIO is mapped. */
 	port = (pci_read_word(dev, 0x58) & 0xFFC0) + 0xE;
 
-	val = inb(port);
+	val = INB(port);
 	val |= 0x80; /* Top Block Lock -- pin 8 of PLCC32 */
 	val |= 0x40; /* Lower Blocks Lock -- pin 7 of PLCC32 */
-	outb(val, port);
+	OUTB(val, port);
 
 	return 0;
 }
@@ -431,6 +431,53 @@ static int board_artecgroup_dbe6x(const char *name)
 	return 0;
 }
 
+/**
+ * Set the specified GPIO on the specified ICHx southbridge to high.
+ *
+ * @param name The name of this board.
+ * @param ich_vendor PCI vendor ID of the specified ICHx southbridge.
+ * @param ich_device PCI device ID of the specified ICHx southbridge.
+ * @param gpiobase_reg GPIOBASE register offset in the LPC bridge.
+ * @param gp_lvl Offset of GP_LVL register in I/O space, relative to GPIOBASE.
+ * @param gp_lvl_bitmask GP_LVL bitmask (set GPIO bits to 1, all others to 0).
+ * @param gpio_bit The bit (GPIO) which shall be set to high.
+ * @return If the write-enable was successful return 0, otherwise return -1.
+ */
+static int ich_gpio_raise(const char *name, uint16_t ich_vendor,
+			  uint16_t ich_device, uint8_t gpiobase_reg,
+			  uint8_t gp_lvl, uint32_t gp_lvl_bitmask,
+			  unsigned int gpio_bit)
+{
+	struct pci_dev *dev;
+	uint16_t gpiobar;
+	uint32_t reg32;
+
+	dev = pci_dev_find(ich_vendor, ich_device);     /* Intel ICHx LPC */
+	if (!dev) {
+		fprintf(stderr, "\nERROR: ICHx LPC dev %4x:%4x not found.\n",
+			ich_vendor, ich_device);
+		return -1;
+	}
+
+	/* Use GPIOBASE register to find the I/O space for GPIO. */
+	gpiobar = pci_read_word(dev, gpiobase_reg) & gp_lvl_bitmask;
+
+	/* Set specified GPIO to high. */
+	reg32 = INL(gpiobar + gp_lvl);
+	reg32 |= (1 << gpio_bit);
+	OUTL(reg32, gpiobar + gp_lvl);
+
+	return 0;
+}
+
+/**
+ * Suited for ASUS P4B266.
+ */
+static int ich2_gpio22_raise(const char *name)
+{
+	return ich_gpio_raise(name, 0x8086, 0x2440, 0x58, 0x0c, 0xffc0, 22);
+}
+
 static int board_kontron_986lcd_m(const char *name)
 {
 	struct pci_dev *dev;
@@ -449,7 +496,7 @@ static int board_kontron_986lcd_m(const char *name)
 	/* Use GPIOBASE register to find where the GPIO is mapped. */
 	gpiobar = pci_read_word(dev, 0x48) & 0xfffc;
 
-	val = inl(gpiobar + ICH7_GPIO_LVL2);	/* GP_LVL2 */
+	val = INL(gpiobar + ICH7_GPIO_LVL2);	/* GP_LVL2 */
 	printf_debug("\nGPIOBAR=0x%04x GP_LVL: 0x%08x\n", gpiobar, val);
 
 	/* bit 2 (0x04) = 0 #TBL --> bootblock locking = 1
@@ -462,7 +509,34 @@ static int board_kontron_986lcd_m(const char *name)
 	 */
 	val |= (1 << 2) | (1 << 3);
 
-	outl(val, gpiobar + ICH7_GPIO_LVL2);
+	OUTL(val, gpiobar + ICH7_GPIO_LVL2);
+
+	return 0;
+}
+
+/**
+ * Suited for:
+ *   - BioStar P4M80-M4: Intel P4 + VIA P4M800 + VT8237
+ *   - GIGABYTE GA-7VT600: AMD K7 + VIA KT600 + VT8237
+ */
+static int board_biostar_p4m80_m4(const char *name)
+{
+	/* enter IT87xx conf mode */
+	OUTB(0x87, 0x2e);
+	OUTB(0x01, 0x2e);
+	OUTB(0x55, 0x2e);
+	OUTB(0x55, 0x2e);
+
+	/* select right flash chip */
+	wbsio_mask(0x2e, 0x22, 0x80, 0x80);
+
+	/* bit 3: flash chip write enable
+	 * bit 7: map flash chip at 1MB-128K (why though? ignoring this.)
+	 */
+	wbsio_mask(0x2e, 0x24, 0x04, 0x04);
+
+	/* exit IT87xx conf mode */
+	wbsio_write(0x2, 0x2e, 0x2);
 
 	return 0;
 }
@@ -501,6 +575,8 @@ struct board_pciid_enable {
 };
 
 struct board_pciid_enable board_pciid_enables[] = {
+	{0x8086, 0x1a30, 0x1043, 0x8070, 0x8086, 0x244b, 0x1043, 0x8028,
+	 NULL, NULL, "ASUS P4B266", ich2_gpio22_raise},
 	{0x10de, 0x0360, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
 	 "gigabyte", "m57sli", "GIGABYTE GA-M57SLI-S4", it87xx_probe_spi_flash},
 	{0x10de, 0x03e0, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -535,6 +611,10 @@ struct board_pciid_enable board_pciid_enables[] = {
 	 "artecgroup", "dbe62", "Artec Group DBE62", board_artecgroup_dbe6x},
  	{0x8086, 0x27b8, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
  	 "kontron", "986lcd-m", "Kontron 986LCD-M", board_kontron_986lcd_m},
+ 	{0x1106, 0x3149, 0x1565, 0x3206, 0x1106, 0x3344, 0x1565, 0x1202,
+ 	 NULL, NULL, "BioStar P4M80-M4", board_biostar_p4m80_m4},
+ 	{0x1106, 0x3227, 0x1458, 0x5001, 0x10ec, 0x8139, 0x1458, 0xe000,
+ 	 NULL, NULL, "GIGABYTE GA-7VT600", board_biostar_p4m80_m4},
 	{0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL}	/* Keep this */
 };
 
@@ -652,7 +732,7 @@ int board_flash_enable(const char *vendor, const char *part)
 		board = board_match_pci_card_ids();
 
 	if (board) {
-		printf("Found board \"%s\": enabling flash write... ",
+		printf("Found board \"%s\", enabling flash write... ",
 			board->name);
 
 		ret = board->enable(board->name);

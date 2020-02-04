@@ -30,6 +30,25 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#ifdef __FreeBSD__
+  #include <machine/cpufunc.h>
+  #define off64_t off_t
+  #define lseek64 lseek
+  #define OUTB(x, y) do { u_int tmp = (y); outb(tmp, (x)); } while (0)
+  #define OUTW(x, y) do { u_int tmp = (y); outw(tmp, (x)); } while (0)
+  #define OUTL(x, y) do { u_int tmp = (y); outl(tmp, (x)); } while (0)
+  #define INB(x) __extension__ ({ u_int tmp = (x); inb(tmp); })
+  #define INW(x) __extension__ ({ u_int tmp = (x); inw(tmp); })
+  #define INL(x) __extension__ ({ u_int tmp = (x); inl(tmp); })
+#else
+  #define OUTB outb
+  #define OUTW outw
+  #define OUTL outl
+  #define INB  inb
+  #define INW  inw
+  #define INL  inl
+#endif
+
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
 struct flashchip {
@@ -45,6 +64,11 @@ struct flashchip {
 	int total_size;
 	int page_size;
 
+	/* Indicate if flashrom has been tested with this flash chip and if
+	 * everything worked correctly.
+	 */
+	uint32_t tested;
+
 	int (*probe) (struct flashchip *flash);
 	int (*erase) (struct flashchip *flash);
 	int (*write) (struct flashchip *flash, uint8_t *buf);
@@ -54,6 +78,22 @@ struct flashchip {
 	volatile uint8_t *virtual_memory;
 	volatile uint8_t *virtual_registers;
 };
+
+#define TEST_UNTESTED	0
+
+#define TEST_OK_PROBE	(1<<0)
+#define TEST_OK_READ	(1<<1)
+#define TEST_OK_ERASE	(1<<2)
+#define TEST_OK_WRITE	(1<<3)
+#define TEST_OK_PR	(TEST_OK_PROBE|TEST_OK_READ)
+#define TEST_OK_PREW	(TEST_OK_PROBE|TEST_OK_READ|TEST_OK_ERASE|TEST_OK_WRITE)
+#define TEST_OK_MASK	0x0f
+
+#define TEST_BAD_PROBE	(1<<4)
+#define TEST_BAD_READ	(1<<5)
+#define TEST_BAD_ERASE	(1<<6)
+#define TEST_BAD_WRITE	(1<<7)
+#define TEST_BAD_MASK	0xf0
 
 extern struct flashchip flashchips[];
 
@@ -77,11 +117,27 @@ extern struct flashchip flashchips[];
 #define AM_29F016D		0xAD
 
 #define AMIC_ID			0x7F37	/* AMIC */
+#define AMIC_ID_NOPREFIX	0x37	/* AMIC */
+#define AMIC_A25L40P		0x2013
+#define AMIC_A29040B		0x86
+#define AMIC_A49LF040A		0x9d
 
 #define ASD_ID			0x25	/* ASD, not listed in JEP106W */
 #define ASD_AE49F2008		0x52
 
 #define ATMEL_ID		0x1F	/* Atmel */
+#define AT_25DF021		0x4300
+#define AT_25DF041A		0x4401
+#define AT_25DF081		0x4502
+#define AT_25DF161		0x4602
+#define AT_25DF321		0x4700	/* also 26DF321 */
+#define AT_25DF321A		0x4701
+#define AT_25DF641		0x4800
+#define AT_26DF041		0x4400
+#define AT_26DF081		0x4500	/* guessed, no datasheet available */
+#define AT_26DF081A		0x4501
+#define AT_26DF161		0x4600
+#define AT_26DF161A		0x4601
 #define AT_29C040A		0xA4
 #define AT_29C020		0xDA
 #define AT_49F002N		0x07	/* for AT49F002(N)  */
@@ -136,14 +192,11 @@ extern struct flashchip flashchips[];
 
 #define ISSI_ID			0xD5	/* ISSI Integrated Silicon Solutions */
 
-#define MSYSTEMS_ID		0x156F	/* M-Systems, not listed in JEP106W */
-#define MSYSTEMS_MD2200		0xDB
-#define MSYSTEMS_MD2800		0x30	/* hmm -- both 0x30 */
-#define MSYSTEMS_MD2802		0x30	/* hmm -- both 0x30 */
-
 /*
  * MX25 chips are SPI, first byte of device ID is memory type,
  * second byte of device ID is log(bitsize)-9.
+ * Generalplus SPI chips seem to be compatible with Macronix
+ * and use the same set of IDs.
  */
 #define MX_ID			0xC2	/* Macronix (MX) */
 #define MX_25L512		0x2010	/* 2^19 kbit or 2^16 kByte */
@@ -202,12 +255,28 @@ extern struct flashchip flashchips[];
 #define SST_25VF032B		0x254A
 #define SST_25VF040B		0x258D
 #define SST_25VF080B		0x258E
-#define SST_29EE020A		0x10
+#define SST_27SF512		0xA4
+#define SST_27SF010		0xA5
+#define SST_27SF020		0xA6
+#define SST_27VF010		0xA9
+#define SST_27VF020		0xAA
 #define SST_28SF040		0x04
+#define SST_29EE512		0x5D
+#define SST_29EE010		0x07
+#define SST_29LE010		0x08	/* also SST29VE010 */
+#define SST_29EE020A		0x10
+#define SST_29LE020		0x12	/* also SST29VE020 */
+#define SST_29SF020		0x24
+#define SST_29VF020		0x25
+#define SST_29SF040		0x13
+#define SST_29VF040		0x14
 #define SST_39SF010		0xB5
 #define SST_39SF020		0xB6
 #define SST_39SF040		0xB7
+#define SST_39VF512		0xD4
+#define SST_39VF010		0xD5
 #define SST_39VF020		0xD6
+#define SST_39VF040		0xD7
 #define SST_49LF040B		0x50
 #define SST_49LF040		0x51
 #define SST_49LF020A		0x52
@@ -230,6 +299,7 @@ extern struct flashchip flashchips[];
 #define ST_M25P10A		0x2011
 #define ST_M25P20		0x2012
 #define ST_M25P40		0x2013
+#define ST_M25P40_RES		0x12
 #define ST_M25P80		0x2014
 #define ST_M25P16		0x2015
 #define ST_M25P32		0x2016
@@ -300,6 +370,9 @@ void print_supported_boards(void);
 /* chipset_enable.c */
 int chipset_flash_enable(void);
 void print_supported_chipsets(void);
+extern int ich7_detected;
+extern int ich9_detected;
+extern void *ich_spibar;
 
 /* Physical memory mapping device */
 #if defined (__sun) && (defined(__i386) || defined(__amd64))
@@ -318,7 +391,7 @@ extern int verbose;
 int map_flash_registers(struct flashchip *flash);
 
 /* layout.c */
-int show_id(uint8_t *bios, int size);
+int show_id(uint8_t *bios, int size, int force);
 int read_romlayout(char *name);
 int find_romentry(char *name);
 int handle_romentries(uint8_t *buffer, uint8_t *content);
@@ -328,14 +401,19 @@ int coreboot_init(void);
 extern char *lb_part, *lb_vendor;
 
 /* spi.c */
-int probe_spi(struct flashchip *flash);
-int it87xx_probe_spi_flash(const char *name);
-int generic_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
-void generic_spi_write_enable();
-void generic_spi_write_disable();
-int generic_spi_chip_erase_c7(struct flashchip *flash);
-int generic_spi_chip_write(struct flashchip *flash, uint8_t *buf);
-int generic_spi_chip_read(struct flashchip *flash, uint8_t *buf);
+int probe_spi_rdid(struct flashchip *flash);
+int probe_spi_res(struct flashchip *flash);
+int spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+void spi_write_enable();
+void spi_write_disable();
+int spi_chip_erase_c7(struct flashchip *flash);
+int spi_chip_write(struct flashchip *flash, uint8_t *buf);
+int spi_chip_read(struct flashchip *flash, uint8_t *buf);
+uint8_t spi_read_status_register();
+void spi_disable_blockprotect(void);
+void spi_byte_program(int address, uint8_t byte);
+void spi_page_program(int block, uint8_t *buf, uint8_t *bios);
+void spi_nbyte_read(int address, uint8_t *bytes, int len);
 
 /* 82802ab.c */
 int probe_82802ab(struct flashchip *flash);
@@ -347,7 +425,21 @@ int probe_29f040b(struct flashchip *flash);
 int erase_29f040b(struct flashchip *flash);
 int write_29f040b(struct flashchip *flash, uint8_t *buf);
 
+/* ichspi.c */
+int ich_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int ich_spi_read(struct flashchip *flash, uint8_t * buf);
+int ich_spi_write(struct flashchip *flash, uint8_t * buf);
+
+/* it87spi.c */
+extern uint16_t it8716f_flashport;
+int it87xx_probe_spi_flash(const char *name);
+int it8716f_spi_command(unsigned int writecnt, unsigned int readcnt, const unsigned char *writearr, unsigned char *readarr);
+int it8716f_spi_chip_read(struct flashchip *flash, uint8_t *buf);
+int it8716f_spi_chip_write(struct flashchip *flash, uint8_t *buf);
+void it8716f_spi_page_program(int block, uint8_t *buf, uint8_t *bios);
+
 /* jedec.c */
+uint8_t oddparity(uint8_t val);
 void toggle_ready_jedec(volatile uint8_t *dst);
 void data_polling_jedec(volatile uint8_t *dst, uint8_t data);
 void unprotect_jedec(volatile uint8_t *bios);
@@ -380,10 +472,10 @@ int probe_29f002(struct flashchip *flash);
 int erase_29f002(struct flashchip *flash);
 int write_29f002(struct flashchip *flash, uint8_t *buf);
 
-/* pm49fl004.c */
-int probe_49fl004(struct flashchip *flash);
-int erase_49fl004(struct flashchip *flash);
-int write_49fl004(struct flashchip *flash, uint8_t *buf);
+/* pm49fl00x.c */
+int probe_49fl00x(struct flashchip *flash);
+int erase_49fl00x(struct flashchip *flash);
+int write_49fl00x(struct flashchip *flash, uint8_t *buf);
 
 /* sharplhf00l04.c */
 int probe_lhf00l04(struct flashchip *flash);
@@ -431,4 +523,5 @@ int write_49f002(struct flashchip *flash, uint8_t *buf);
 int probe_stm50flw0x0x(struct flashchip *flash);
 int erase_stm50flw0x0x(struct flashchip *flash);
 int write_stm50flw0x0x(struct flashchip *flash, uint8_t *buf);
+
 #endif				/* !__FLASH_H__ */

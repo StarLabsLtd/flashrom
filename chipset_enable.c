@@ -65,37 +65,37 @@ static int enable_flash_sis630(struct pci_dev *dev, const char *name)
 	/* The same thing on SiS 950 Super I/O side... */
 
 	/* First probe for Super I/O on config port 0x2e. */
-	outb(0x87, 0x2e);
-	outb(0x01, 0x2e);
-	outb(0x55, 0x2e);
-	outb(0x55, 0x2e);
+	OUTB(0x87, 0x2e);
+	OUTB(0x01, 0x2e);
+	OUTB(0x55, 0x2e);
+	OUTB(0x55, 0x2e);
 
-	if (inb(0x2f) != 0x87) {
+	if (INB(0x2f) != 0x87) {
 		/* If that failed, try config port 0x4e. */
-		outb(0x87, 0x4e);
-		outb(0x01, 0x4e);
-		outb(0x55, 0x4e);
-		outb(0xaa, 0x4e);
-		if (inb(0x4f) != 0x87) {
+		OUTB(0x87, 0x4e);
+		OUTB(0x01, 0x4e);
+		OUTB(0x55, 0x4e);
+		OUTB(0xaa, 0x4e);
+		if (INB(0x4f) != 0x87) {
 			printf("Can not access SiS 950\n");
 			return -1;
 		}
-		outb(0x24, 0x4e);
-		b = inb(0x4f) | 0xfc;
-		outb(0x24, 0x4e);
-		outb(b, 0x4f);
-		outb(0x02, 0x4e);
-		outb(0x02, 0x4f);
+		OUTB(0x24, 0x4e);
+		b = INB(0x4f) | 0xfc;
+		OUTB(0x24, 0x4e);
+		OUTB(b, 0x4f);
+		OUTB(0x02, 0x4e);
+		OUTB(0x02, 0x4f);
 	}
 
-	outb(0x24, 0x2e);
-	printf("2f is %#x\n", inb(0x2f));
-	b = inb(0x2f) | 0xfc;
-	outb(0x24, 0x2e);
-	outb(b, 0x2f);
+	OUTB(0x24, 0x2e);
+	printf("2f is %#x\n", INB(0x2f));
+	b = INB(0x2f) | 0xfc;
+	OUTB(0x24, 0x2e);
+	OUTB(b, 0x2f);
 
-	outb(0x02, 0x2e);
-	outb(0x02, 0x2f);
+	OUTB(0x02, 0x2e);
+	OUTB(0x02, 0x2f);
 
 	return 0;
 }
@@ -154,7 +154,7 @@ static int enable_flash_ich(struct pci_dev *dev, const char *name,
 	 */
 	old = pci_read_byte(dev, bios_cntl);
 
-	printf_debug("BIOS Lock Enable: %sabled, ",
+	printf_debug("\nBIOS Lock Enable: %sabled, ",
 		     (old & (1 << 1)) ? "en" : "dis");
 	printf_debug("BIOS Write Enable: %sabled, ",
 		     (old & (1 << 0)) ? "en" : "dis");
@@ -185,33 +185,71 @@ static int enable_flash_ich_dc(struct pci_dev *dev, const char *name)
 	return enable_flash_ich(dev, name, 0xdc);
 }
 
-static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name)
-{
-	uint8_t old, new, bbs;
-	uint32_t tmp, gcs;
-	void *rcba;
+void *ich_spibar = NULL;
 
-	/* Root Complex Base Address Register (RCBA) */
+static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name, unsigned long spibar)
+{
+	uint8_t old, new, bbs, buc;
+	uint32_t tmp, gcs;
+	void *rcrb;
+
+	/* Read the Root Complex Base Address Register (RCBA) */
 	tmp = pci_read_long(dev, 0xf0);
+
+	/* Calculate the Root Complex Register Block address */
 	tmp &= 0xffffc000;
-	printf_debug("Root Complex Base Address Register = 0x%x\n", tmp);
-	rcba = mmap(0, 0x3510, PROT_READ, MAP_SHARED, fd_mem, (off_t)tmp);
-	if (rcba == MAP_FAILED) {
+	printf_debug("\nRoot Complex Register Block address = 0x%x\n", tmp);
+	rcrb = mmap(0, 0x4000, PROT_READ | PROT_WRITE, MAP_SHARED, fd_mem, (off_t)tmp);
+	if (rcrb == MAP_FAILED) {
 		perror("Can't mmap memory using " MEM_DEV);
 		exit(1);
 	}
 	printf_debug("GCS address = 0x%x\n", tmp + 0x3410);
-	gcs = *(volatile uint32_t *)(rcba + 0x3410);
+	gcs = *(volatile uint32_t *)(rcrb + 0x3410);
 	printf_debug("GCS = 0x%x: ", gcs);
 	printf_debug("BIOS Interface Lock-Down: %sabled, ",
 		     (gcs & 0x1) ? "en" : "dis");
 	bbs = (gcs >> 10) & 0x3;
 	printf_debug("BOOT BIOS Straps: 0x%x (%s)\n",	bbs,
 		     (bbs == 0x3) ? "LPC" : ((bbs == 0x2) ? "PCI" : "SPI"));
-	/* SPIBAR is at RCBA+0x3020 for ICH[78] and RCBA+0x3800 for ICH9. */
-	/* printf_debug("SPIBAR = 0x%x\n", tmp + 0x3020); */
-	/* TODO: Dump the SPI config regs */
-	munmap(rcba, 0x3510);
+	if (bbs >= 2)
+		ich7_detected = 0;
+
+	buc = *(volatile uint8_t *)(rcrb + 0x3414);
+	printf_debug("Top Swap : %s\n", (buc & 1)?"enabled (A16 inverted)":"not enabled");
+
+	/* SPIBAR is at RCRB+0x3020 for ICH[78] and RCRB+0x3800 for ICH9. */
+	printf_debug("SPIBAR = 0x%x + 0x%04x\n", tmp, (uint16_t)spibar);
+
+	// Assign Virtual Address
+	ich_spibar =  rcrb + spibar;
+
+	if (ich7_detected) {
+		int i;
+		printf_debug("0x00: 0x%04x     (SPIS)\n", *(uint16_t *)(ich_spibar + 0));
+		printf_debug("0x02: 0x%04x     (SPIC)\n", *(uint16_t *)(ich_spibar + 2));
+		printf_debug("0x04: 0x%08x (SPIA)\n", *(uint32_t *)(ich_spibar + 4));
+		for (i=0; i < 8; i++) {
+			int offs;
+			offs = 8 + (i * 8);
+			printf_debug("0x%02x: 0x%08x (SPID%d)\n", offs, *(uint32_t *)(ich_spibar + offs), i);
+			printf_debug("0x%02x: 0x%08x (SPID%d+4)\n", offs+4, *(uint32_t *)(ich_spibar + offs +4), i);
+		}
+		printf_debug("0x50: 0x%08x (BBAR)\n", *(uint32_t *)(ich_spibar + 0x50));
+		printf_debug("0x54: 0x%04x     (PREOP)\n", *(uint16_t *)(ich_spibar + 0x54));
+		printf_debug("0x56: 0x%04x     (OPTYPE)\n", *(uint16_t *)(ich_spibar + 0x56));
+		printf_debug("0x58: 0x%08x (OPMENU)\n", *(uint32_t *)(ich_spibar + 0x58));
+		printf_debug("0x5c: 0x%08x (OPMENU+4)\n", *(uint32_t *)(ich_spibar + 0x5c));
+		for (i=0; i < 4; i++) {
+			int offs;
+			offs = 0x60 + (i * 4);
+			printf_debug("0x%02x: 0x%08x (PBR%d)\n", offs, *(uint32_t *)(ich_spibar + offs), i);
+		}
+		printf_debug("\n");
+		if ( (*(uint16_t *)ich_spibar) & (1 << 15)) {
+			printf("WARNING: SPI Configuration Lockdown activated.\n");
+		}
+	}
 
 	old = pci_read_byte(dev, 0xdc);
 	printf_debug("SPI Read Configuration: ");
@@ -230,9 +268,36 @@ static int enable_flash_ich_dc_spi(struct pci_dev *dev, const char *name)
 	return enable_flash_ich_dc(dev, name);
 }
 
+/* Flag for ICH7 SPI register block */
+int ich7_detected = 0;
+
+static int enable_flash_ich7(struct pci_dev *dev, const char *name)
+{
+       ich7_detected = 1;
+	return enable_flash_ich_dc_spi(dev, name, 0x3020);
+}
+
+/* Flag for ICH8/ICH9 SPI register block */
+int ich9_detected = 0;
+
+static int enable_flash_ich8(struct pci_dev *dev, const char *name)
+{
+	ich9_detected = 1;
+	return enable_flash_ich_dc_spi(dev, name, 0x3020);
+}
+
+static int enable_flash_ich9(struct pci_dev *dev, const char *name)
+{
+	ich9_detected = 1;
+	return enable_flash_ich_dc_spi(dev, name, 0x3800);
+}
+
 static int enable_flash_vt823x(struct pci_dev *dev, const char *name)
 {
 	uint8_t val;
+
+	/* enable ROM decode range (1MB) FFC00000 - FFFFFFFF*/
+	pci_write_byte(dev, 0x41, 0x7f);
 
 	/* ROM write enable */
 	val = pci_read_byte(dev, 0x40);
@@ -496,13 +561,13 @@ static int enable_flash_sb400(struct pci_dev *dev, const char *name)
 	pci_write_byte(dev, 0x48, tmp);
 
 	/* Now become a bit silly. */
-	tmp = inb(0xc6f);
-	outb(tmp, 0xeb);
-	outb(tmp, 0xeb);
+	tmp = INB(0xc6f);
+	OUTB(tmp, 0xeb);
+	OUTB(tmp, 0xeb);
 	tmp |= 0x40;
-	outb(tmp, 0xc6f);
-	outb(tmp, 0xeb);
-	outb(tmp, 0xeb);
+	OUTB(tmp, 0xc6f);
+	OUTB(tmp, 0xeb);
+	OUTB(tmp, 0xeb);
 
 	return 0;
 }
@@ -574,23 +639,24 @@ static const FLASH_ENABLE enables[] = {
 	{0x8086, 0x24c0, "Intel ICH4/ICH4-L",	enable_flash_ich_4e},
 	{0x8086, 0x24cc, "Intel ICH4-M",	enable_flash_ich_4e},
 	{0x8086, 0x24d0, "Intel ICH5/ICH5R",	enable_flash_ich_4e},
+	{0x8086, 0x25a1, "Intel 6300ESB",	enable_flash_ich_4e},
 	{0x8086, 0x2640, "Intel ICH6/ICH6R",	enable_flash_ich_dc},
 	{0x8086, 0x2641, "Intel ICH6-M",	enable_flash_ich_dc},
-	{0x8086, 0x27b0, "Intel ICH7DH",	enable_flash_ich_dc_spi},
-	{0x8086, 0x27b8, "Intel ICH7/ICH7R",	enable_flash_ich_dc_spi},
-	{0x8086, 0x27b9, "Intel ICH7M",		enable_flash_ich_dc_spi},
-	{0x8086, 0x27bd, "Intel ICH7MDH",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2810, "Intel ICH8/ICH8R",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2811, "Intel ICH8M-E",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2812, "Intel ICH8DH",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2814, "Intel ICH8DO",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2815, "Intel ICH8M",		enable_flash_ich_dc_spi},
-	{0x8086, 0x2912, "Intel ICH9DH",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2914, "Intel ICH9DO",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2916, "Intel ICH9R",		enable_flash_ich_dc_spi},
-	{0x8086, 0x2917, "Intel ICH9M-E",	enable_flash_ich_dc_spi},
-	{0x8086, 0x2918, "Intel ICH9",		enable_flash_ich_dc_spi},
-	{0x8086, 0x2919, "Intel ICH9M",		enable_flash_ich_dc_spi},
+	{0x8086, 0x27b0, "Intel ICH7DH",	enable_flash_ich7},
+	{0x8086, 0x27b8, "Intel ICH7/ICH7R",	enable_flash_ich7},
+	{0x8086, 0x27b9, "Intel ICH7M",		enable_flash_ich7},
+	{0x8086, 0x27bd, "Intel ICH7MDH",	enable_flash_ich7},
+	{0x8086, 0x2810, "Intel ICH8/ICH8R",	enable_flash_ich8},
+	{0x8086, 0x2811, "Intel ICH8M-E",	enable_flash_ich8},
+	{0x8086, 0x2812, "Intel ICH8DH",	enable_flash_ich8},
+	{0x8086, 0x2814, "Intel ICH8DO",	enable_flash_ich8},
+	{0x8086, 0x2815, "Intel ICH8M",		enable_flash_ich8},
+	{0x8086, 0x2912, "Intel ICH9DH",	enable_flash_ich9},
+	{0x8086, 0x2914, "Intel ICH9DO",	enable_flash_ich9},
+	{0x8086, 0x2916, "Intel ICH9R",		enable_flash_ich9},
+	{0x8086, 0x2917, "Intel ICH9M-E",	enable_flash_ich9},
+	{0x8086, 0x2918, "Intel ICH9",		enable_flash_ich9},
+	{0x8086, 0x2919, "Intel ICH9M",		enable_flash_ich9},
 	{0x1106, 0x8231, "VIA VT8231",		enable_flash_vt823x},
 	{0x1106, 0x3177, "VIA VT8235",		enable_flash_vt823x},
 	{0x1106, 0x3227, "VIA VT8237",		enable_flash_vt823x},
