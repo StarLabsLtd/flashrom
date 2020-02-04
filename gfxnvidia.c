@@ -20,7 +20,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include "flash.h"
 #include "programmer.h"
 
@@ -67,8 +66,7 @@ int gfxnvidia_init(void)
 
 	get_io_perms();
 
-	io_base_addr = pcidev_init(PCI_VENDOR_ID_NVIDIA, PCI_BASE_ADDRESS_0,
-				   gfx_nvidia);
+	io_base_addr = pcidev_init(PCI_BASE_ADDRESS_0, gfx_nvidia);
 
 	io_base_addr += 0x300000;
 	msg_pinfo("Detected NVIDIA I/O base address: 0x%x.\n", io_base_addr);
@@ -76,7 +74,7 @@ int gfxnvidia_init(void)
 	/* Allow access to flash interface (will disable screen). */
 	reg32 = pci_read_long(pcidev_dev, 0x50);
 	reg32 &= ~(1 << 0);
-	pci_write_long(pcidev_dev, 0x50, reg32);
+	rpci_write_long(pcidev_dev, 0x50, reg32);
 
 	nvidia_bar = physmap("NVIDIA", io_base_addr, 16 * 1024 * 1024);
 
@@ -90,13 +88,9 @@ int gfxnvidia_init(void)
 
 int gfxnvidia_shutdown(void)
 {
-	uint32_t reg32;
-
-	/* Disallow access to flash interface (and re-enable screen). */
-	reg32 = pci_read_long(pcidev_dev, 0x50);
-	reg32 |= (1 << 0);
-	pci_write_long(pcidev_dev, 0x50, reg32);
-
+	/* Flash interface access is disabled (and screen enabled) automatically
+	 * by PCI restore.
+	 */
 	pci_cleanup(pacc);
 	release_io_perms();
 	return 0;

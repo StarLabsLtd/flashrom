@@ -18,10 +18,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
  */
 
-#include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include "flash.h"
 #include "programmer.h"
 
@@ -101,24 +99,39 @@ int force_boardenable = 0;
 int force_boardmismatch = 0;
 
 #if defined(__i386__) || defined(__x86_64__)
-struct superio superio = {};
-
 void probe_superio(void)
 {
-	superio = probe_superio_ite();
+	probe_superio_ite();
 #if 0
 	/* Winbond Super I/O code is not yet available. */
 	if (superio.vendor == SUPERIO_VENDOR_NONE)
 		superio = probe_superio_winbond();
 #endif
 }
+
+int superio_count = 0;
+#define SUPERIO_MAX_COUNT 3
+
+struct superio superios[SUPERIO_MAX_COUNT];
+
+int register_superio(struct superio s)
+{
+	if (superio_count == SUPERIO_MAX_COUNT)
+		return 1;
+	superios[superio_count++] = s;
+	return 0;
+}
+
 #endif
 
 int is_laptop = 0;
+int laptop_ok = 0;
 
 int internal_init(void)
 {
+#if __FLASHROM_LITTLE_ENDIAN__
 	int ret = 0;
+#endif
 	int force_laptop = 0;
 	char *arg;
 
@@ -166,6 +179,11 @@ int internal_init(void)
 
 	get_io_perms();
 
+	/* Default to Parallel/LPC/FWH flash devices. If a known host controller
+	 * is found, the init routine sets the buses_supported bitfield.
+	 */
+	buses_supported = CHIP_BUSTYPE_NONSPI;
+
 	/* Initialize PCI access for flash enables */
 	pacc = pci_alloc();	/* Get the pci_access structure */
 	/* Set all options you want -- here we stick with the defaults */
@@ -186,6 +204,9 @@ int internal_init(void)
 
 	dmi_init();
 
+	/* In case Super I/O probing would cause pretty explosions. */
+	board_handle_before_superio();
+
 	/* Probe for the Super I/O chip and fill global struct superio. */
 	probe_superio();
 #else
@@ -196,10 +217,13 @@ int internal_init(void)
 	 */
 #endif
 
-	/* Warn if a laptop is detected. */
-	if (is_laptop) {
+	/* Check laptop whitelist. */
+	board_handle_before_laptop();
+
+	/* Warn if a non-whitelisted laptop is detected. */
+	if (is_laptop && !laptop_ok) {
 		msg_perr("========================================================================\n"
-			 "WARNING! You seem to be running flashrom on a laptop.\n"
+			 "WARNING! You seem to be running flashrom on an unsupported laptop.\n"
 			 "Laptops, notebooks and netbooks are difficult to support and we recommend\n"
 			 "to use the vendor flashing utility. The embedded controller (EC) in these\n"
 			 "machines often interacts badly with flashing.\n"
@@ -242,7 +266,7 @@ int internal_init(void)
 	 * The error code might have been a warning only.
 	 * Besides that, we don't check the board enable return code either.
 	 */
-#if defined(__i386__) || defined(__x86_64__)
+#if defined(__i386__) || defined(__x86_64__) || defined (__mips)
 	return 0;
 #else
 	msg_perr("Your platform is not supported yet for the internal "

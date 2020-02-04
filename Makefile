@@ -28,6 +28,8 @@ PREFIX  ?= /usr/local
 MANDIR  ?= $(PREFIX)/share/man
 CFLAGS  ?= -Os -Wall -Wshadow
 EXPORTDIR ?= .
+AR      ?= ar
+RANLIB  ?= ranlib
 
 WARNERROR ?= yes
 
@@ -42,7 +44,8 @@ STRIP_ARGS = -s
 endif
 ifeq ($(OS_ARCH), Darwin)
 CPPFLAGS += -I/opt/local/include -I/usr/local/include
-LDFLAGS += -framework IOKit -framework DirectIO -L/opt/local/lib -L/usr/local/lib
+# DirectHW framework can be found in the DirectHW library.
+LDFLAGS += -framework IOKit -framework DirectHW -L/opt/local/lib -L/usr/local/lib
 endif
 ifeq ($(OS_ARCH), FreeBSD)
 CPPFLAGS += -I/usr/local/include
@@ -81,9 +84,43 @@ override CONFIG_FT2232_SPI = no
 endif
 endif
 
-CHIP_OBJS = jedec.o stm50flw0x0x.o w39v040c.o w39v080fa.o w29ee011.o \
+ifeq ($(OS_ARCH), libpayload)
+CC:=CC=i386-elf-gcc lpgcc
+AR:=i386-elf-ar
+RANLIB:=i386-elf-ranlib
+CPPFLAGS += -DSTANDALONE
+ifeq ($(CONFIG_DUMMY), yes)
+UNSUPPORTED_FEATURES += CONFIG_DUMMY=yes
+else
+override CONFIG_DUMMY = no
+endif
+ifeq ($(CONFIG_BUSPIRATE_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_BUSPIRATE_SPI=yes
+else
+override CONFIG_BUSPIRATE_SPI = no
+endif
+ifeq ($(CONFIG_SERPROG), yes)
+UNSUPPORTED_FEATURES += CONFIG_SERPROG=yes
+else
+override CONFIG_SERPROG = no
+endif
+# Dediprog and FT2232 are not supported with libpayload (missing libusb support)
+ifeq ($(CONFIG_DEDIPROG), yes)
+UNSUPPORTED_FEATURES += CONFIG_DEDIPROG=yes
+else
+override CONFIG_DEDIPROG = no
+endif
+ifeq ($(CONFIG_FT2232_SPI), yes)
+UNSUPPORTED_FEATURES += CONFIG_FT2232_SPI=yes
+else
+override CONFIG_FT2232_SPI = no
+endif
+endif
+
+CHIP_OBJS = jedec.o stm50flw0x0x.o w39.o w29ee011.o \
 	sst28sf040.o m29f400bt.o 82802ab.o pm49fl00x.o \
-	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o
+	sst49lfxxxc.o sst_fwhub.o flashchips.o spi.o spi25.o sharplhf00l04.o \
+	a25.o at25.o
 
 LIB_OBJS = layout.o
 
@@ -97,9 +134,9 @@ all: pciutils features $(PROGRAM)$(EXEC_SUFFIX)
 # of the checked out flashrom files.
 # Note to packagers: Any tree exported with "make export" or "make tarball"
 # will not require subversion. The downloadable snapshots are already exported.
-SVNVERSION := 1141
+SVNVERSION := $(shell LC_ALL=C svnversion -cn . 2>/dev/null | sed -e "s/.*://" -e "s/\([0-9]*\).*/\1/" | grep "[0-9]" || LC_ALL=C svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || LC_ALL=C git svn info . 2>/dev/null | awk '/^Revision:/ {print $$2 }' | grep "[0-9]" || echo unknown)
 
-RELEASE := 0.9.2
+RELEASE := 0.9.3
 VERSION := $(RELEASE)-r$(SVNVERSION)
 RELEASENAME ?= $(VERSION)
 
@@ -113,17 +150,6 @@ CONFIG_SERPROG ?= yes
 
 # RayeR SPIPGM hardware support
 CONFIG_RAYER_SPI ?= yes
-
-# Bitbanging SPI infrastructure, default off unless needed.
-ifeq ($(CONFIG_RAYER_SPI), yes)
-override CONFIG_BITBANG_SPI = yes
-else
-ifeq ($(CONFIG_INTERNAL), yes)
-override CONFIG_BITBANG_SPI = yes
-else
-CONFIG_BITBANG_SPI ?= no
-endif
-endif
 
 # Always enable 3Com NICs for now.
 CONFIG_NIC3COM ?= yes
@@ -153,20 +179,51 @@ CONFIG_NICREALTEK ?= yes
 # Disable National Semiconductor NICs until support is complete and tested.
 CONFIG_NICNATSEMI ?= no
 
+# Always enable Intel NICs for now.
+CONFIG_NICINTEL ?= yes
+
+# Always enable SPI on Intel NICs for now.
+CONFIG_NICINTEL_SPI ?= yes
+
+# Always enable SPI on OGP cards for now.
+CONFIG_OGP_SPI ?= yes
+
 # Always enable Bus Pirate SPI for now.
 CONFIG_BUSPIRATE_SPI ?= yes
 
 # Disable Dediprog SF100 until support is complete and tested.
 CONFIG_DEDIPROG ?= no
 
+# Always enable Marvell SATA controllers for now.
+CONFIG_SATAMV ?= yes
+
 # Disable wiki printing by default. It is only useful if you have wiki access.
 CONFIG_PRINT_WIKI ?= no
+
+# Bitbanging SPI infrastructure, default off unless needed.
+ifeq ($(CONFIG_RAYER_SPI), yes)
+override CONFIG_BITBANG_SPI = yes
+else
+ifeq ($(CONFIG_INTERNAL), yes)
+override CONFIG_BITBANG_SPI = yes
+else
+ifeq ($(CONFIG_NICINTEL_SPI), yes)
+override CONFIG_BITBANG_SPI = yes
+else
+ifeq ($(CONFIG_OGP_SPI), yes)
+override CONFIG_BITBANG_SPI = yes
+else
+CONFIG_BITBANG_SPI ?= no
+endif
+endif
+endif
+endif
 
 ifeq ($(CONFIG_INTERNAL), yes)
 FEATURE_CFLAGS += -D'CONFIG_INTERNAL=1'
 PROGRAMMER_OBJS += processor_enable.o chipset_enable.o board_enable.o cbtable.o dmi.o internal.o
 # FIXME: The PROGRAMMER_OBJS below should only be included on x86.
-PROGRAMMER_OBJS += it87spi.o ichspi.o sb600spi.o wbsio_spi.o mcp6x_spi.o
+PROGRAMMER_OBJS += it87spi.o it85spi.o ichspi.o sb600spi.o wbsio_spi.o mcp6x_spi.o
 NEED_PCI := yes
 endif
 
@@ -244,6 +301,24 @@ PROGRAMMER_OBJS += nicnatsemi.o
 NEED_PCI := yes
 endif
 
+ifeq ($(CONFIG_NICINTEL), yes)
+FEATURE_CFLAGS += -D'CONFIG_NICINTEL=1'
+PROGRAMMER_OBJS += nicintel.o
+NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_NICINTEL_SPI), yes)
+FEATURE_CFLAGS += -D'CONFIG_NICINTEL_SPI=1'
+PROGRAMMER_OBJS += nicintel_spi.o
+NEED_PCI := yes
+endif
+
+ifeq ($(CONFIG_OGP_SPI), yes)
+FEATURE_CFLAGS += -D'CONFIG_OGP_SPI=1'
+PROGRAMMER_OBJS += ogp_spi.o
+NEED_PCI := yes
+endif
+
 ifeq ($(CONFIG_BUSPIRATE_SPI), yes)
 FEATURE_CFLAGS += -D'CONFIG_BUSPIRATE_SPI=1'
 PROGRAMMER_OBJS += buspirate_spi.o
@@ -254,6 +329,12 @@ ifeq ($(CONFIG_DEDIPROG), yes)
 FEATURE_CFLAGS += -D'CONFIG_DEDIPROG=1'
 FEATURE_LIBS += -lusb
 PROGRAMMER_OBJS += dediprog.o
+endif
+
+ifeq ($(CONFIG_SATAMV), yes)
+FEATURE_CFLAGS += -D'CONFIG_SATAMV=1'
+PROGRAMMER_OBJS += satamv.o
+NEED_PCI := yes
 endif
 
 ifeq ($(NEED_SERIAL), yes)
@@ -299,10 +380,15 @@ FEATURE_CFLAGS += $(shell LC_ALL=C grep -q "UTSNAME := yes" .features && printf 
 # We could use PULLED_IN_LIBS, but that would be ugly.
 FEATURE_LIBS += $(shell LC_ALL=C grep -q "NEEDLIBZ := yes" .libdeps && printf "%s" "-lz")
 
-OBJS = $(CHIP_OBJS) $(CLI_OBJS) $(PROGRAMMER_OBJS) $(LIB_OBJS)
+LIBFLASHROM_OBJS = $(CHIP_OBJS) $(PROGRAMMER_OBJS) $(LIB_OBJS)
+OBJS = $(CLI_OBJS) $(LIBFLASHROM_OBJS) 
 
 $(PROGRAM)$(EXEC_SUFFIX): $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROGRAM)$(EXEC_SUFFIX) $(OBJS) $(FEATURE_LIBS) $(LIBS)
+
+libflashrom.a: $(LIBFLASHROM_OBJS)
+	$(AR) rcs $@ $^
+	$(RANLIB) $@
 
 # TAROPTIONS reduces information leakage from the packager's system.
 # If other tar programs support command line arguments for setting uid/gid of
@@ -316,7 +402,7 @@ TAROPTIONS = $(shell LC_ALL=C tar --version|grep -q GNU && echo "--owner=root --
 # This includes all frontends and libflashrom.
 # We don't use EXEC_SUFFIX here because we want to clean everything.
 clean:
-	rm -f $(PROGRAM) $(PROGRAM).exe *.o *.d
+	rm -f $(PROGRAM) $(PROGRAM).exe libflashrom.a *.o *.d
 
 distclean: clean
 	rm -f .features .libdeps

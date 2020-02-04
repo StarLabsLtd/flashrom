@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 #include "flash.h"
 #include "programmer.h"
 
@@ -31,7 +32,7 @@ char *mainboard_part = NULL;
 #endif
 static int romimages = 0;
 
-#define MAX_ROMLAYOUT	16
+#define MAX_ROMLAYOUT	32
 
 typedef struct {
 	unsigned int start;
@@ -75,7 +76,8 @@ int show_id(uint8_t *bios, int size, int force)
 	mb_vendor_offset = *(walk - 2);
 	if ((*walk) == 0 || ((*walk) & 0x3ff) != 0 || (*walk) > size ||
 	    mb_part_offset > size || mb_vendor_offset > size) {
-		msg_pinfo("Flash image seems to be a legacy BIOS. Disabling checks.\n");
+		msg_pinfo("Flash image seems to be a legacy BIOS. "
+		          "Disabling coreboot-related checks.\n");
 		return 0;
 	}
 
@@ -134,6 +136,7 @@ int show_id(uint8_t *bios, int size, int force)
 }
 #endif
 
+#ifndef __LIBPAYLOAD__
 int read_romlayout(char *name)
 {
 	FILE *romlayout;
@@ -150,6 +153,14 @@ int read_romlayout(char *name)
 
 	while (!feof(romlayout)) {
 		char *tstr1, *tstr2;
+
+		if (romimages >= MAX_ROMLAYOUT) {
+			msg_gerr("Maximum number of ROM images (%i) in layout "
+				 "file reached before end of layout file.\n",
+				 MAX_ROMLAYOUT);
+			msg_gerr("Ignoring the rest of the layout file.\n");
+			break;
+		}
 		if (2 != fscanf(romlayout, "%s %s\n", tempstr, rom_entries[romimages].name))
 			continue;
 #if 0
@@ -181,6 +192,7 @@ int read_romlayout(char *name)
 
 	return 0;
 }
+#endif
 
 int find_romentry(char *name)
 {
@@ -203,34 +215,62 @@ int find_romentry(char *name)
 	return -1;
 }
 
-int handle_romentries(uint8_t *buffer, struct flashchip *flash)
+int find_next_included_romentry(unsigned int start)
 {
 	int i;
+	unsigned int best_start = UINT_MAX;
+	int best_entry = -1;
 
-	// This function does not save flash write cycles.
-	// 
-	// Also it does not cope with overlapping rom layout
-	// sections. 
-	// example:
-	// 00000000:00008fff gfxrom
-	// 00009000:0003ffff normal
-	// 00040000:0007ffff fallback
-	// 00000000:0007ffff all
-	//
-	// If you'd specify -i all the included flag of all other
-	// sections is still 0, so no changes will be made to the
-	// flash. Same thing if you specify -i normal -i all only 
-	// normal will be updated and the rest will be kept.
-
+	/* First come, first serve for overlapping regions. */
 	for (i = 0; i < romimages; i++) {
-
-		if (rom_entries[i].included)
+		if (!rom_entries[i].included)
 			continue;
-
-		flash->read(flash, buffer + rom_entries[i].start,
-			    rom_entries[i].start,
-			    rom_entries[i].end - rom_entries[i].start + 1);
+		/* Already past the current entry? */
+		if (start > rom_entries[i].end)
+			continue;
+		/* Inside the current entry? */
+		if (start >= rom_entries[i].start)
+			return i;
+		/* Entry begins after start. */
+		if (best_start > rom_entries[i].start) {
+			best_start = rom_entries[i].start;
+			best_entry = i;
+		}
 	}
+	return best_entry;
+}
 
+int handle_romentries(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents)
+{
+	unsigned int start = 0;
+	int entry;
+	unsigned int size = flash->total_size * 1024;
+
+	/* If no layout file was specified or the layout file was empty, assume
+	 * that the user wants to flash the complete new image.
+	 */
+	if (!romimages)
+		return 0;
+	/* Non-included romentries are ignored.
+	 * The union of all included romentries is used from the new image.
+	 */
+	while (start < size) {
+		entry = find_next_included_romentry(start);
+		/* No more romentries for remaining region? */
+		if (entry < 0) {
+			memcpy(newcontents + start, oldcontents + start,
+			       size - start);
+			break;
+		}
+		if (rom_entries[entry].start > start)
+			memcpy(newcontents + start, oldcontents + start,
+			       rom_entries[entry].start - start);
+		/* Skip to location after current romentry. */
+		start = rom_entries[entry].end + 1;
+		/* Catch overflow. */
+		if (!start)
+			break;
+	}
+			
 	return 0;
 }

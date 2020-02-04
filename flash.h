@@ -33,6 +33,11 @@
 #undef max
 #endif
 
+#define ERROR_PTR ((void*)-1)
+
+/* Error codes */
+#define TIMEOUT_ERROR	-101
+
 typedef unsigned long chipaddr;
 
 int register_shutdown(void (*function) (void *data), void *data);
@@ -78,6 +83,7 @@ enum chipbustype {
 #define FEATURE_LONG_RESET	(0 << 4)
 #define FEATURE_SHORT_RESET	(1 << 4)
 #define FEATURE_EITHER_RESET	FEATURE_LONG_RESET
+#define FEATURE_RESET_MASK	(FEATURE_LONG_RESET | FEATURE_SHORT_RESET)
 #define FEATURE_ADDR_FULL	(0 << 2)
 #define FEATURE_ADDR_MASK	(3 << 2)
 #define FEATURE_ADDR_2AA	(1 << 2)
@@ -101,7 +107,9 @@ struct flashchip {
 	uint32_t manufacture_id;
 	uint32_t model_id;
 
+	/* Total chip size in kilobytes */
 	int total_size;
+	/* Chip page size in bytes */
 	int page_size;
 	int feature_bits;
 
@@ -119,19 +127,28 @@ struct flashchip {
 	/*
 	 * Erase blocks and associated erase function. Any chip erase function
 	 * is stored as chip-sized virtual block together with said function.
+	 * The first one that fits will be chosen. There is currently no way to
+	 * influence that behaviour. For testing just comment out the other
+	 * elements or set the function pointer to NULL.
 	 */
 	struct block_eraser {
 		struct eraseblock{
 			unsigned int size; /* Eraseblock size */
 			unsigned int count; /* Number of contiguous blocks with that size */
 		} eraseblocks[NUM_ERASEREGIONS];
+		/* a block_erase function should try to erase one block of size
+		 * 'blocklen' at address 'blockaddr' and return 0 on success. */
 		int (*block_erase) (struct flashchip *flash, unsigned int blockaddr, unsigned int blocklen);
 	} block_erasers[NUM_ERASEFUNCTIONS];
 
 	int (*printlock) (struct flashchip *flash);
 	int (*unlock) (struct flashchip *flash);
-	int (*write) (struct flashchip *flash, uint8_t *buf);
+	int (*write) (struct flashchip *flash, uint8_t *buf, int start, int len);
 	int (*read) (struct flashchip *flash, uint8_t *buf, int start, int len);
+	struct {
+		uint16_t min;
+		uint16_t max;
+	} voltage;
 
 	/* Some flash devices have an additional register space. */
 	chipaddr virtual_memory;
@@ -167,7 +184,7 @@ struct flashchip {
 #define TIMING_IGNORED	-1
 #define TIMING_ZERO	-2
 
-extern struct flashchip flashchips[];
+extern const struct flashchip flashchips[];
 
 /* print.c */
 char *flashbuses_to_text(enum chipbustype bustype);
@@ -182,15 +199,16 @@ enum write_granularity {
 };
 extern enum chipbustype buses_supported;
 extern int verbose;
-extern const char * const flashrom_version;
+extern const char flashrom_version[];
 extern char *chip_to_probe;
 void map_flash_registers(struct flashchip *flash);
 int read_memmapped(struct flashchip *flash, uint8_t *buf, int start, int len);
 int erase_flash(struct flashchip *flash);
-struct flashchip *probe_flash(struct flashchip *first_flash, int force);
+int probe_flash(int startchip, struct flashchip *fill_flash, int force);
 int read_flash_to_file(struct flashchip *flash, char *filename);
 int min(int a, int b);
 int max(int a, int b);
+void tolower_string(char *str);
 char *extract_param(char **haystack, char *needle, char *delim);
 int check_erased_range(struct flashchip *flash, int start, int len);
 int verify_range(struct flashchip *flash, uint8_t *cmpbuf, int start, int len, char *message);
@@ -198,8 +216,11 @@ int need_erase(uint8_t *have, uint8_t *want, int len, enum write_granularity gra
 char *strcat_realloc(char *dest, const char *src);
 void print_version(void);
 void print_banner(void);
+void list_programmers_linebreak(int startcol, int cols, int paren);
 int selfcheck(void);
 int doit(struct flashchip *flash, int force, char *filename, int read_it, int write_it, int erase_it, int verify_it);
+int read_buf_from_file(unsigned char *buf, unsigned long size, char *filename);
+int write_buf_to_file(unsigned char *buf, unsigned long size, char *filename);
 
 #define OK 0
 #define NT 1    /* Not tested */
@@ -233,7 +254,7 @@ int cli_classic(int argc, char *argv[]);
 /* layout.c */
 int read_romlayout(char *name);
 int find_romentry(char *name);
-int handle_romentries(uint8_t *buffer, struct flashchip *flash);
+int handle_romentries(struct flashchip *flash, uint8_t *oldcontents, uint8_t *newcontents);
 
 /* spi.c */
 struct spi_command {
