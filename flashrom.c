@@ -109,8 +109,13 @@ struct flashchip *probe_flash(struct flashchip *flash)
 			flash++;
 			continue;
 		}
-		printf_debug("Probing for %s, %d KB\n",
-			     flash->name, flash->total_size);
+		printf_debug("Probing for %s %s, %d KB: ",
+			     flash->vendor, flash->name, flash->total_size);
+		if (!flash->probe) {
+			printf_debug("failed! flashrom has no probe function for this flash chip.\n");
+			flash++;
+			continue;
+		}
 
 		size = flash->total_size * 1024;
 
@@ -129,9 +134,12 @@ struct flashchip *probe_flash(struct flashchip *flash)
 		 */
 
 		if (getpagesize() > size) {
+			/*
+			 * if a flash size of 0 is mapped, we map a single page
+			 * so we can probe in that area whether we know the
+			 * vendor at least.
+			 */
 			size = getpagesize();
-			printf("WARNING: size: %d -> %ld (page size)\n",
-			       flash->total_size * 1024, (unsigned long)size);
 		}
 
 		bios = mmap(0, size, PROT_WRITE | PROT_READ, MAP_SHARED,
@@ -193,9 +201,19 @@ int verify_flash(struct flashchip *flash, uint8_t *buf)
 	return 0;
 }
 
+void print_supported_chips(void)
+{
+	int i;
+
+	printf("Supported ROM chips:\n\n");
+
+	for (i = 0; flashchips[i].name != NULL; i++)
+		printf("%s %s\n", flashchips[i].vendor, flashchips[i].name);
+}
+
 void usage(const char *name)
 {
-	printf("usage: %s [-rwvEVfhR] [-c chipname] [-s exclude_start]\n", name);
+	printf("usage: %s [-rwvEVfLhR] [-c chipname] [-s exclude_start]\n", name);
 	printf("       [-e exclude_end] [-m [vendor:]part] [-l file.layout] [-i imagename] [file]\n");
 	printf
 	    ("   -r | --read:                      read flash and save into file\n"
@@ -210,8 +228,10 @@ void usage(const char *name)
 	     "   -f | --force:                     force write without checking image\n"
 	     "   -l | --layout <file.layout>:      read rom layout from file\n"
 	     "   -i | --image <name>:              only flash image name from flash layout\n"
+	     "   -L | --list-supported:            print supported devices\n"
+	     "   -h | --help:                      print this help text\n"
 	     "   -R | --version:                   print the version (release)\n"
-            "\n" " If no file is specified, then all that happens"
+	     "\n" " If no file is specified, then all that happens"
 	     " is that flash info is dumped.\n\n");
 	exit(1);
 }
@@ -245,6 +265,7 @@ int main(int argc, char *argv[])
 		{"force", 0, 0, 'f'},
 		{"layout", 1, 0, 'l'},
 		{"image", 1, 0, 'i'},
+		{"list-supported", 0, 0, 'L'},
 		{"help", 0, 0, 'h'},
 		{"version", 0, 0, 'R'},
 		{0, 0, 0, 0}
@@ -264,7 +285,7 @@ int main(int argc, char *argv[])
 	}
 
 	setbuf(stdout, NULL);
-	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:h",
+	while ((opt = getopt_long(argc, argv, "rRwvVEfc:s:e:m:l:i:Lh",
 				  long_options, &option_index)) != EOF) {
 		switch (opt) {
 		case 'r':
@@ -316,6 +337,12 @@ int main(int argc, char *argv[])
 		case 'i':
 			tempstr = strdup(optarg);
 			find_romentry(tempstr);
+			break;
+		case 'L':
+			print_supported_chips();
+			print_supported_chipsets();
+			print_supported_boards();
+			exit(0);
 			break;
 		case 'R':
 			print_version();
@@ -403,6 +430,10 @@ int main(int argc, char *argv[])
 
 	if (erase_it) {
 		printf("Erasing flash chip\n");
+		if (!flash->erase) {
+			fprintf(stderr, "Error: flashrom has no erase function for this flash chip.\n");
+			return 1;
+		}
 		flash->erase(flash);
 		exit(0);
 	} else if (read_it) {
@@ -471,8 +502,13 @@ int main(int argc, char *argv[])
 
 	// ////////////////////////////////////////////////////////////
 
-	if (write_it)
+	if (write_it) {
+		if (!flash->write) {
+			fprintf(stderr, "Error: flashrom has no write function for this flash chip.\n");
+			return 1;
+		}
 		ret |= flash->write(flash, buf);
+	}
 
 	if (verify_it)
 		ret |= verify_flash(flash, buf);
