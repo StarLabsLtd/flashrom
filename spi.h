@@ -29,6 +29,16 @@
 #define JEDEC_RDID_OUTSIZE	0x01
 #define JEDEC_RDID_INSIZE	0x03
 
+/* AT25F512A has bit 3 as don't care bit in commands */
+#define AT25F512A_RDID		0x15
+#define AT25F512A_RDID_OUTSIZE	0x01
+#define AT25F512A_RDID_INSIZE	0x02
+
+/* Read Electronic Manufacturer Signature */
+#define JEDEC_REMS		0x90
+#define JEDEC_REMS_OUTSIZE	0x04
+#define JEDEC_REMS_INSIZE	0x02
+
 /* Read Electronic Signature */
 #define JEDEC_RES		0xab
 #define JEDEC_RES_OUTSIZE	0x04
@@ -54,7 +64,7 @@
 #define JEDEC_CE_C7_OUTSIZE	0x01
 #define JEDEC_CE_C7_INSIZE	0x00
 
-/* Block Erase 0x52 is supported by SST chips. */
+/* Block Erase 0x52 is supported by SST and old Atmel chips. */
 #define JEDEC_BE_52		0x52
 #define JEDEC_BE_52_OUTSIZE	0x04
 #define JEDEC_BE_52_INSIZE	0x00
@@ -74,6 +84,11 @@
 #define JEDEC_RDSR_OUTSIZE	0x01
 #define JEDEC_RDSR_INSIZE	0x01
 #define JEDEC_RDSR_BIT_WIP	(0x01 << 0)
+
+/* Write Status Enable */
+#define JEDEC_EWSR		0x50
+#define JEDEC_EWSR_OUTSIZE	0x01
+#define JEDEC_EWSR_INSIZE	0x00
 
 /* Write Status Register */
 #define JEDEC_WRSR		0x01
