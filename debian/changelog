@@ -1,3 +1,11 @@
+flashrom (1.2-1) unstable; urgency=medium
+
+  * New upstream version. (Closes: #948192)
+  * Bump standards version to 4.5.0.
+  * Add Vcs fields.
+
+ -- Gürkan Myczko <gurkan@phys.ethz.ch>  Mon, 10 Feb 2020 07:05:32 +0100
+
 flashrom (1.1-1) unstable; urgency=medium
 
   * New upstream version.

@@ -100,9 +100,11 @@ static int probe_spi_rdid_generic(struct flashctx *flash, int bytes)
 	uint32_t id1;
 	uint32_t id2;
 
-	if (spi_rdid(flash, readarr, bytes)) {
+	const int ret = spi_rdid(flash, readarr, bytes);
+	if (ret == SPI_INVALID_LENGTH)
+		msg_cinfo("%d byte RDID not supported on this SPI controller\n", bytes);
+	if (ret)
 		return 0;
-	}
 
 	if (!oddparity(readarr[0]))
 		msg_cdbg("RDID byte 0 parity violation. ");
@@ -147,24 +149,7 @@ int probe_spi_rdid(struct flashctx *flash)
 
 int probe_spi_rdid4(struct flashctx *flash)
 {
-	/* Some SPI controllers do not support commands with writecnt=1 and
-	 * readcnt=4.
-	 */
-	switch (flash->mst->spi.type) {
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-	case SPI_CONTROLLER_IT87XX:
-	case SPI_CONTROLLER_WBSIO:
-		msg_cinfo("4 byte RDID not supported on this SPI controller\n");
-		return 0;
-		break;
-#endif
-#endif
-	default:
-		return probe_spi_rdid_generic(flash, 4);
-	}
-
-	return 0;
+	return probe_spi_rdid_generic(flash, 4);
 }
 
 int probe_spi_rems(struct flashctx *flash)
@@ -363,7 +348,7 @@ static int spi_write_extended_address_register(struct flashctx *const flash, con
 	return result;
 }
 
-static int spi_set_extended_address(struct flashctx *const flash, const uint8_t addr_high)
+int spi_set_extended_address(struct flashctx *const flash, const uint8_t addr_high)
 {
 	if (flash->address_high_byte != addr_high &&
 	    spi_write_extended_address_register(flash, addr_high))
@@ -455,19 +440,19 @@ static int spi_write_cmd(struct flashctx *const flash, const uint8_t op,
 	return result ? result : status;
 }
 
-int spi_chip_erase_60(struct flashctx *flash)
+static int spi_chip_erase_60(struct flashctx *flash)
 {
 	/* This usually takes 1-85s, so wait in 1s steps. */
 	return spi_simple_write_cmd(flash, 0x60, 1000 * 1000);
 }
 
-int spi_chip_erase_62(struct flashctx *flash)
+static int spi_chip_erase_62(struct flashctx *flash)
 {
 	/* This usually takes 2-5s, so wait in 100ms steps. */
 	return spi_simple_write_cmd(flash, 0x62, 100 * 1000);
 }
 
-int spi_chip_erase_c7(struct flashctx *flash)
+static int spi_chip_erase_c7(struct flashctx *flash)
 {
 	/* This usually takes 1-85s, so wait in 1s steps. */
 	return spi_simple_write_cmd(flash, 0xc7, 1000 * 1000);
@@ -657,43 +642,20 @@ int spi_nbyte_read(struct flashctx *flash, unsigned int address, uint8_t *bytes,
 
 /*
  * Read a part of the flash chip.
- * FIXME: Use the chunk code from Michael Karcher instead.
- * Each naturally aligned area is read separately in chunks with a maximum size of chunksize.
+ * Data is read in chunks with a maximum size of chunksize.
  */
 int spi_read_chunked(struct flashctx *flash, uint8_t *buf, unsigned int start,
 		     unsigned int len, unsigned int chunksize)
 {
-	int rc = 0;
-	unsigned int i, j, starthere, lenhere, toread;
-	/* Limit for multi-die 4-byte-addressing chips. */
-	unsigned int area_size = min(flash->chip->total_size * 1024, 16 * 1024 * 1024);
-
-	/* Warning: This loop has a very unusual condition and body.
-	 * The loop needs to go through each area with at least one affected
-	 * byte. The lowest area number is (start / area_size) since that
-	 * division rounds down. The highest area number we want is the area
-	 * where the last byte of the range lives. That last byte has the
-	 * address (start + len - 1), thus the highest area number is
-	 * (start + len - 1) / area_size. Since we want to include that last
-	 * area as well, the loop condition uses <=.
-	 */
-	for (i = start / area_size; i <= (start + len - 1) / area_size; i++) {
-		/* Byte position of the first byte in the range in this area. */
-		/* starthere is an offset to the base address of the chip. */
-		starthere = max(start, i * area_size);
-		/* Length of bytes in the range in this area. */
-		lenhere = min(start + len, (i + 1) * area_size) - starthere;
-		for (j = 0; j < lenhere; j += chunksize) {
-			toread = min(chunksize, lenhere - j);
-			rc = spi_nbyte_read(flash, starthere + j, buf + starthere - start + j, toread);
-			if (rc)
-				break;
-		}
-		if (rc)
-			break;
+	int ret;
+	size_t to_read;
+	for (; len; len -= to_read, buf += to_read, start += to_read) {
+		to_read = min(chunksize, len);
+		ret = spi_nbyte_read(flash, start, buf, to_read);
+		if (ret)
+			return ret;
 	}
-
-	return rc;
+	return 0;
 }
 
 /*
@@ -766,20 +728,6 @@ int default_spi_write_aai(struct flashctx *flash, const uint8_t *buf, unsigned i
 		JEDEC_AAI_WORD_PROGRAM,
 	};
 
-	switch (flash->mst->spi.type) {
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-	case SPI_CONTROLLER_IT87XX:
-	case SPI_CONTROLLER_WBSIO:
-		msg_perr("%s: impossible with this SPI controller,"
-				" degrading to byte program\n", __func__);
-		return spi_chip_write_1(flash, buf, start, len);
-#endif
-#endif
-	default:
-		break;
-	}
-
 	/* The even start address and even length requirements can be either
 	 * honored outside this function, or we can call spi_byte_program
 	 * for the first and/or last byte and use AAI for the rest.
@@ -834,7 +782,6 @@ int default_spi_write_aai(struct flashctx *flash, const uint8_t *buf, unsigned i
 	if (pos < start + len) {
 		if (spi_chip_write_1(flash, buf + pos - start, pos, pos % 2))
 			return SPI_GENERIC_ERROR;
-		pos += pos % 2;
 	}
 
 	return 0;

@@ -150,13 +150,13 @@
 #define ATMEL_AT25SF041		0x8401
 #define ATMEL_AT25SF081		0x8501
 #define ATMEL_AT25SF161		0x8601
+#define ATMEL_AT25SF321		0x8701
 #define ATMEL_AT25SL128A	0x4218
 #define ATMEL_AT26DF041		0x4400
 #define ATMEL_AT26DF081		0x4500	/* guessed, no datasheet available */
 #define ATMEL_AT26DF081A	0x4501
 #define ATMEL_AT26DF161		0x4600
 #define ATMEL_AT26DF161A	0x4601
-#define ATMEL_AT26DF321		0x4700	/* Same as 25DF321 */
 #define ATMEL_AT26F004		0x0400
 #define ATMEL_AT29LV512		0x3D
 #define ATMEL_AT29LV010A	0x35	/* Same as AT29BV010A, the latter works down to 2.7V */
@@ -373,6 +373,7 @@
 #define GIGADEVICE_GD25Q32	0x4016	/* Same as GD25Q32B */
 #define GIGADEVICE_GD25Q64	0x4017	/* Same as GD25Q64B */
 #define GIGADEVICE_GD25Q128	0x4018	/* GD25Q128B and GD25Q128C only, can be distinguished by SFDP */
+#define GIGADEVICE_GD25Q256D	0x4019
 #define GIGADEVICE_GD25VQ21B	0x4212
 #define GIGADEVICE_GD25VQ41B	0x4213  /* Same as GD25VQ40C, can be distinguished by SFDP */
 #define GIGADEVICE_GD25VQ80C	0x4214
@@ -382,7 +383,7 @@
 #define GIGADEVICE_GD25LQ16	0x6015
 #define GIGADEVICE_GD25LQ32	0x6016
 #define GIGADEVICE_GD25LQ64	0x6017	/* Same as GD25LQ64B (which is faster) */
-#define GIGADEVICE_GD25LQ128	0x6018
+#define GIGADEVICE_GD25LQ128CD	0x6018
 #define GIGADEVICE_GD29GL064CAB	0x7E0601
 
 #define HYUNDAI_ID		0xAD	/* Hyundai */
@@ -491,7 +492,7 @@
 #define MACRONIX_MX25L25635F	0x2019	/* Same as MX25L25639F, but the latter seems to not support REMS */
 #define MACRONIX_MX25L1635D	0x2415
 #define MACRONIX_MX25L1635E	0x2515	/* MX25L1635{E} */
-#define MACRONIX_MX66L51235F	0x201a	/* MX66L51235F */
+#define MACRONIX_MX66L51235F	0x201a	/* MX66L51235F, MX25L51245G */
 #define MACRONIX_MX25U8032E	0x2534
 #define MACRONIX_MX25U1635E	0x2535
 #define MACRONIX_MX25U3235E	0x2536	/* Same as MX25U6435F */
@@ -601,7 +602,7 @@
 #define PMC_PM49FL004		0x6E
 
 /*
- * The Sanyo chip found so far uses SPI, first byte is manufacture code,
+ * The Sanyo chip found so far uses SPI, first byte is manufacturer code,
  * second byte is the device code,
  * third byte is a dummy byte.
  */
@@ -852,6 +853,9 @@
 #define ST_M58WR032KT		0x8814
 #define ST_M58WR064KB		0x8811
 #define ST_M58WR064KT		0x8810
+
+#define ST_M95M02		0x0012	/* ST M95XXX 2Mbit (256KiB) */
+
 #define ST_MT28GU01G___1	0x88B0
 #define ST_MT28GU01G___2	0x88B1
 #define ST_MT28GU256___1	0x8901
@@ -863,13 +867,16 @@
 #define ST_N25Q032__1E		0xBB16	/* N25Q032, 1.8V, (uniform sectors expected) */
 #define ST_N25Q064__3E		0xBA17	/* N25Q064, 3.0V, (uniform sectors expected) */
 #define ST_N25Q064__1E		0xBB17	/* N25Q064, 1.8V, (uniform sectors expected) */
-#define ST_N25Q128__3E		0xBA18	/* N25Q128, 3.0V, (uniform sectors expected) */
-#define ST_N25Q128__1E		0xBB18	/* N25Q128, 1.8V, (uniform sectors expected) */
-#define ST_N25Q256__3E		0xBA19	/* N25Q256, 3.0V, (uniform sectors expected) */
-#define ST_N25Q256__1E		0xBB19	/* N25Q256, 1.8V, (uniform sectors expected) */
-#define ST_N25Q512__3E		0xBA20	/* N25Q512, 3.0V, (uniform sectors expected) */
-#define ST_N25Q512__1E		0xBB20	/* N25Q512, 1.8V, (uniform sectors expected) */
-#define ST_N25Q00A__3E		0xBA21	/* N25Q00A, 3.0V, (uniform sectors expected) */
+#define ST_N25Q128__3E		0xBA18	/* N25Q128/MT25QL128, 3.0V, (uniform sectors expected) */
+#define ST_N25Q128__1E		0xBB18	/* N25Q128/MT25QU128, 1.8V, (uniform sectors expected) */
+#define ST_N25Q256__3E		0xBA19	/* N25Q256/MT25QL256, 3.0V, (uniform sectors expected) */
+#define ST_N25Q256__1E		0xBB19	/* N25Q256/MT25QU256, 1.8V, (uniform sectors expected) */
+#define ST_N25Q512__3G		0xBA20	/* N25Q512/MT25QL512, 3.0V, (uniform sectors expected) */
+#define ST_N25Q512__1G		0xBB20	/* N25Q512/MT25QU512, 1.8V, (uniform sectors expected) */
+#define ST_N25Q00A__3G		0xBA21	/* N25Q00A/MT25QL01G, 3.0V, (uniform sectors expected) */
+#define ST_N25Q00A__1G		0xBB21	/* N25Q00A/MT25QU01G, 1.8V, (uniform sectors expected) */
+#define ST_MT25QL02G		0xBA22	/* MT25QL02G, 3.0V, (uniform sectors expected) */
+#define ST_MT25QU02G		0xBB22	/* MT25QU02G, 1.8V, (uniform sectors expected) */
 #define ST_NP5Q032		0xDA16	/* Phase-change memory (PCM), 3V */
 #define ST_NP5Q064		0xDA17	/* Phase-change memory (PCM), 3V */
 #define ST_NP5Q128		0xDA18	/* Phase-change memory (PCM), 3V */
@@ -933,6 +940,7 @@
 #define WINBOND_NEX_W25Q128_W	0x6018	/* W25Q128FW; W25Q128FV in QPI mode */
 #define WINBOND_NEX_W25Q128_V_M	0x7018	/* W25Q128JVSM */
 #define WINBOND_NEX_W25Q256JV_M	0x7019	/* W25Q256JV_M (QE=0) */
+#define WINBOND_NEX_W25Q128_DTR	0x8018	/* W25Q128JW_DTR */
 
 #define WINBOND_ID		0xDA	/* Winbond */
 #define WINBOND_W19B160BB	0x49

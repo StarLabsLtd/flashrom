@@ -76,7 +76,8 @@ static int buspirate_commbuf_grow(int bufsize)
 static int buspirate_sendrecv(unsigned char *buf, unsigned int writecnt,
 			      unsigned int readcnt)
 {
-	int i, ret = 0;
+	unsigned int i;
+	int ret = 0;
 
 	msg_pspew("%s: write %i, read %i ", __func__, writecnt, readcnt);
 	if (!writecnt && !readcnt) {
@@ -112,7 +113,7 @@ static int buspirate_sendrecv(unsigned char *buf, unsigned int writecnt,
 	return 0;
 }
 
-static int buspirate_wait_for_string(unsigned char *buf, char *key)
+static int buspirate_wait_for_string(unsigned char *buf, const char *key)
 {
 	unsigned int keylen = strlen(key);
 	int ret;
@@ -133,7 +134,6 @@ static int buspirate_spi_send_command_v2(struct flashctx *flash, unsigned int wr
 					 const unsigned char *writearr, unsigned char *readarr);
 
 static struct spi_master spi_master_buspirate = {
-	.type		= SPI_CONTROLLER_BUSPIRATE,
 	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_UNSPECIFIED,
 	.max_data_write	= MAX_DATA_UNSPECIFIED,

@@ -26,12 +26,17 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
-#include <linux/spi/spidev.h>
-#include <linux/ioctl.h>
 #include "flash.h"
 #include "chipdrivers.h"
 #include "programmer.h"
 #include "spi.h"
+/*
+ * Linux versions prior to v4.14-rc7 may need linux/ioctl.h included here due
+ * to missing from linux/spi/spidev.h. This was fixed in the following commit:
+ * a2b4a79b88b2 spi: uapi: spidev: add missing ioctl header
+ */
+#include <linux/ioctl.h>
+#include <linux/spi/spidev.h>
 
 /* Devices known to work with this module (FIXME: export as struct dev_entry):
  * Beagle Bone Black
@@ -54,7 +59,6 @@ static int linux_spi_write_256(struct flashctx *flash, const uint8_t *buf,
 			       unsigned int start, unsigned int len);
 
 static const struct spi_master spi_master_linux = {
-	.type		= SPI_CONTROLLER_LINUX,
 	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_UNSPECIFIED, /* TODO? */
 	.max_data_write	= MAX_DATA_UNSPECIFIED, /* TODO? */
@@ -138,8 +142,7 @@ int linux_spi_init(void)
 	}
 
 	char buf[10];
-	memset(buf, 0, sizeof(buf));
-	if (!fread(buf, 1, sizeof(buf) - 1, fp)) {
+	if (!fgets(buf, sizeof(buf), fp)) {
 		if (feof(fp))
 			msg_pwarn("Cannot read %s: file is empty.\n", BUF_SIZE_FROM_SYSFS);
 		else

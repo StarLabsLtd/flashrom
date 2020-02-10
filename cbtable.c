@@ -34,7 +34,7 @@ static char *cb_vendor = NULL, *cb_model = NULL;
  *	-1	if IDs in the image do not match the IDs embedded in the current firmware,
  *	 0	if the IDs could not be found in the image or if they match correctly.
  */
-int cb_check_image(const uint8_t *image, int size)
+int cb_check_image(const uint8_t *image, unsigned int size)
 {
 	const unsigned int *walk;
 	unsigned int mb_part_offset, mb_vendor_offset;
@@ -138,10 +138,10 @@ static unsigned long compute_checksum(void *addr, unsigned long length)
 		((((char *)rec) + rec->size) <= (((char *)head) + sizeof(*head) + head->table_bytes)); \
 		rec = (struct lb_record *)(((char *)rec) + rec->size))
 
-static int count_lb_records(struct lb_header *head)
+static unsigned int count_lb_records(struct lb_header *head)
 {
 	struct lb_record *rec;
-	int count;
+	unsigned int count;
 
 	count = 0;
 	for_each_lbrec(head, rec) {
@@ -149,6 +149,42 @@ static int count_lb_records(struct lb_header *head)
 	}
 
 	return count;
+}
+
+static int lb_header_valid(struct lb_header *head, unsigned long addr)
+{
+	if (memcmp(head->signature, "LBIO", 4) != 0)
+		return 0;
+	msg_pdbg("Found candidate at: %08lx-%08lx\n",
+		     addr, addr + sizeof(*head) + head->table_bytes);
+	if (head->header_bytes != sizeof(*head)) {
+		msg_perr("Header bytes of %d are incorrect.\n",
+			head->header_bytes);
+		return 0;
+	}
+	if (compute_checksum((uint8_t *) head, sizeof(*head)) != 0) {
+		msg_perr("Bad header checksum.\n");
+		return 0;
+	}
+
+	return 1;
+}
+
+static int lb_table_valid(struct lb_header *head, struct lb_record *recs)
+{
+	if (compute_checksum(recs, head->table_bytes)
+	    != head->table_checksum) {
+		msg_perr("Bad table checksum: %04x.\n",
+			head->table_checksum);
+		return 0;
+	}
+	if (count_lb_records(head) != head->table_entries) {
+		msg_perr("Bad record count: %d.\n",
+			head->table_entries);
+		return 0;
+	}
+
+	return 1;
 }
 
 static struct lb_header *find_lb_table(void *base, unsigned long start,
@@ -162,30 +198,10 @@ static struct lb_header *find_lb_table(void *base, unsigned long start,
 		    (struct lb_header *)(((char *)base) + addr);
 		struct lb_record *recs =
 		    (struct lb_record *)(((char *)base) + addr + sizeof(*head));
-		if (memcmp(head->signature, "LBIO", 4) != 0)
+		if (!lb_header_valid(head, addr))
 			continue;
-		msg_pdbg("Found candidate at: %08lx-%08lx\n",
-			     addr, addr + head->table_bytes);
-		if (head->header_bytes != sizeof(*head)) {
-			msg_perr("Header bytes of %d are incorrect.\n",
-				head->header_bytes);
+		if (!lb_table_valid(head, recs))
 			continue;
-		}
-		if (count_lb_records(head) != head->table_entries) {
-			msg_perr("Bad record count: %d.\n",
-				head->table_entries);
-			continue;
-		}
-		if (compute_checksum((uint8_t *) head, sizeof(*head)) != 0) {
-			msg_perr("Bad header checksum.\n");
-			continue;
-		}
-		if (compute_checksum(recs, head->table_bytes)
-		    != head->table_checksum) {
-			msg_perr("Bad table checksum: %04x.\n",
-				head->table_checksum);
-			continue;
-		}
 		msg_pdbg("Found coreboot table at 0x%08lx.\n", addr);
 		return head;
 

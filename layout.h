@@ -33,13 +33,13 @@ typedef uint32_t chipsize_t; /* Able to store the number of bytes of any support
 #define PRIxCHIPOFF "06"PRIx32
 #define PRIuCHIPSIZE PRIu32
 
-#define MAX_ROMLAYOUT	32
+#define MAX_ROMLAYOUT	128
 
 struct romentry {
 	chipoff_t start;
 	chipoff_t end;
 	bool included;
-	char name[256];
+	char *name;
 };
 
 struct flashrom_layout {
@@ -54,11 +54,17 @@ struct single_layout {
 	struct romentry entry;
 };
 
+struct layout_include_args {
+	char *name;
+	struct layout_include_args *next;
+};
+
 struct flashrom_layout *get_global_layout(void);
 struct flashrom_flashctx;
 const struct flashrom_layout *get_layout(const struct flashrom_flashctx *const flashctx);
 
-int process_include_args(struct flashrom_layout *);
+int process_include_args(struct flashrom_layout *l, const struct layout_include_args *const args);
 const struct romentry *layout_next_included_region(const struct flashrom_layout *, chipoff_t);
+const struct romentry *layout_next_included(const struct flashrom_layout *, const struct romentry *);
 
 #endif				/* !__LAYOUT_H__ */

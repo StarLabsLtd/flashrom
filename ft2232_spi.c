@@ -154,7 +154,6 @@ static int ft2232_spi_send_command(struct flashctx *flash,
 				   unsigned char *readarr);
 
 static const struct spi_master spi_master_ft2232 = {
-	.type		= SPI_CONTROLLER_FT2232,
 	.features	= SPI_MASTER_4BA,
 	.max_data_read	= 64 * 1024,
 	.max_data_write	= 256,
@@ -270,6 +269,12 @@ int ft2232_spi_init(void)
 		} else if (!strcasecmp(arg, "google-servo-v2-legacy")) {
 			ft2232_vid = GOOGLE_VID;
 			ft2232_type = GOOGLE_SERVO_V2_PID0;
+		} else if (!strcasecmp(arg, "flyswatter")) {
+			ft2232_type = FTDI_FT2232H_PID;
+			channel_count = 2;
+			/* Flyswatter and Flyswatter-2 require GPIO bits 0x80
+			 * and 0x40 to be driven low to enable output buffers */
+			pindir = 0xcb;
 		} else {
 			msg_perr("Error: Invalid device type specified.\n");
 			free(arg);
@@ -321,9 +326,8 @@ int ft2232_spi_init(void)
 				 "Valid are even values between 2 and 131072.\n", arg);
 			free(arg);
 			return -2;
-		} else {
-			divisor = (uint32_t)temp;
 		}
+		divisor = (uint32_t)temp;
 	}
 	free(arg);
 
@@ -336,11 +340,10 @@ int ft2232_spi_init(void)
 				 "Valid values are between 0 and 3.\n", arg);
 			free(arg);
 			return -2;
-		} else {
-			unsigned int pin = temp + 4;
-			cs_bits |= 1 << pin;
-			pindir |= 1 << pin;
 		}
+		unsigned int pin = temp + 4;
+		cs_bits |= 1 << pin;
+		pindir |= 1 << pin;
 	}
 	free(arg);
 

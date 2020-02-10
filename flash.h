@@ -37,6 +37,12 @@
 #include "libflashrom.h"
 #include "layout.h"
 
+#define KiB (1024)
+#define MiB (1024 * KiB)
+
+/* Assumes `n` and `a` are at most 64-bit wide (to avoid typeof() operator). */
+#define ALIGN_DOWN(n, a) ((n) & ~((uint64_t)(a) - 1))
+
 #define ERROR_PTR ((void*)-1)
 
 /* Error codes */
@@ -295,7 +301,11 @@ void print_supported_wiki(void);
 
 /* helpers.c */
 uint32_t address_to_bits(uint32_t addr);
-int bitcount(unsigned long a);
+unsigned int bitcount(unsigned long a);
+#undef MIN
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#undef MAX
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 int max(int a, int b);
 int min(int a, int b);
 char *strcat_realloc(char *dest, const char *src);
@@ -304,6 +314,7 @@ uint8_t reverse_byte(uint8_t x);
 void reverse_bytes(uint8_t *dst, const uint8_t *src, size_t length);
 #ifdef __MINGW32__
 char* strtok_r(char *str, const char *delim, char **nextp);
+char *strndup(const char *str, size_t size);
 #endif
 #if defined(__DJGPP__) || (!defined(__LIBPAYLOAD__) && !defined(HAVE_STRNLEN))
 size_t strnlen(const char *str, size_t n);
@@ -391,10 +402,10 @@ __attribute__((format(printf, 2, 3)));
 #define msg_cspew(...)	print(FLASHROM_MSG_SPEW, __VA_ARGS__)	/* chip debug spew  */
 
 /* layout.c */
-int register_include_arg(char *name);
+int register_include_arg(struct layout_include_args **args, char *name);
 int read_romlayout(const char *name);
 int normalize_romentries(const struct flashctx *flash);
-void layout_cleanup(void);
+void layout_cleanup(struct layout_include_args **args);
 
 /* spi.c */
 struct spi_command {

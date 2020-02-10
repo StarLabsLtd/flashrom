@@ -67,7 +67,7 @@ void sio_mask(uint16_t port, uint8_t reg, uint8_t data, uint8_t mask)
 }
 
 /* Winbond W83697 documentation indicates that the index register has to be written for each access. */
-void sio_mask_alzheimer(uint16_t port, uint8_t reg, uint8_t data, uint8_t mask)
+static void sio_mask_alzheimer(uint16_t port, uint8_t reg, uint8_t data, uint8_t mask)
 {
 	uint8_t tmp;
 
@@ -373,7 +373,8 @@ void probe_superio_winbond(void)
 
 static const struct winbond_chip *winbond_superio_chipdef(void)
 {
-	int i, j;
+	int i;
+	unsigned int j;
 
 	for (i = 0; i < superio_count; i++) {
 		if (superios[i].vendor != SUPERIO_VENDOR_WINBOND)
@@ -519,7 +520,7 @@ static void w836xx_memw_enable(uint16_t port)
  * Supported chips:
  * W83697HF/F/HG, W83697SF/UF/UG
  */
-void w83697xx_memw_enable(uint16_t port)
+static void w83697xx_memw_enable(uint16_t port)
 {
 	w836xx_ext_enter(port);
 	if (!(sio_read(port, 0x24) & 0x02)) { /* Flash ROM enabled? */
@@ -600,12 +601,15 @@ int it8705f_write_enable(uint8_t port)
 	uint8_t tmp;
 	int ret = 0;
 
+	if (!(internal_buses_supported & BUS_PARALLEL))
+		return 1;
+
 	enter_conf_mode_ite(port);
 	tmp = sio_read(port, 0x24);
 	/* Check if at least one flash segment is enabled. */
 	if (tmp & 0xf0) {
 		/* The IT8705F will respond to LPC cycles and translate them. */
-		internal_buses_supported = BUS_PARALLEL;
+		internal_buses_supported &= BUS_PARALLEL;
 		/* Flash ROM I/F Writes Enable */
 		tmp |= 0x04;
 		msg_pdbg("Enabling IT8705F flash ROM interface write.\n");
@@ -1704,6 +1708,7 @@ static int intel_ich_gpio20_raise(void)
  *  - ASUS P4P800-E Deluxe: Intel socket478 + 865PE + ICH5R
  *  - ASUS P4P800-VM: Intel socket478 + 865PE + ICH5R
  *  - ASUS P4P800-X: Intel socket478 + 865PE + ICH5R
+ *  - ASUS P4P800SE: Intel socket478 + 865PE + ICH5R
  *  - ASUS P5GD1 Pro: Intel LGA 775 + 915P + ICH6R
  *  - ASUS P5GD2 Premium: Intel LGA775 + 915G + ICH6R
  *  - ASUS P5GDC Deluxe: Intel socket775 + 915P + ICH6R
@@ -2358,6 +2363,7 @@ const struct board_match board_matches[] = {
 	{0x8086, 0x2570, 0x1043, 0x80f2,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-E$", NULL, NULL,           P3, "ASUS",        "P4P800-E Deluxe",       0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x2570, 0x1043, 0x80a5,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-VM$", NULL, NULL,          P3, "ASUS",        "P4P800-VM",             0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x2570, 0x1043, 0x80f2,  0x8086, 0x24d3, 0x1043, 0x80a6, "^P4P800-X$", NULL, NULL,           P3, "ASUS",        "P4P800-X",              0,   OK, intel_ich_gpio21_raise},
+	{0x8086, 0x2570, 0x1043, 0x80f2,  0x8086, 0x24d3,      0,      0, "^P4P800SE$", NULL, NULL,           P3, "ASUS",        "P4P800SE",              0,   OK, intel_ich_gpio21_raise},
 	{0x8086, 0x2570, 0x1043, 0x80b2,  0x8086, 0x24c3, 0x1043, 0x8089, "^P4PE-X/TE$",NULL, NULL,           P3, "ASUS",        "P4PE-X/TE",             0,   NT, intel_ich_gpio21_raise},
 	{0x1039, 0x0651, 0x1043, 0x8081,  0x1039, 0x0962,      0,      0, NULL,         NULL, NULL,           P3, "ASUS",        "P4SC-E",                0,   OK, it8707f_write_enable_2e},
 	{0x8086, 0x2570, 0x1043, 0x80A5,  0x105A, 0x24D3, 0x1043, 0x80A6, NULL,         NULL, NULL,           P3, "ASUS",        "P4SD-LA",               0,   NT, intel_ich_gpio32_raise},
@@ -2487,7 +2493,7 @@ int selfcheck_board_enables(void)
 
 	int ret = 0;
 	unsigned int i;
-	for (i = 0; i < ARRAY_SIZE(board_matches) - 1; i++) {
+	for (i = 0; i + 1 < ARRAY_SIZE(board_matches); i++) {
 		const struct board_match *b = &board_matches[i];
 		if (b->vendor_name == NULL || b->board_name == NULL) {
 			msg_gerr("ERROR: Board enable #%d does not define a vendor and board name.\n"
@@ -2512,7 +2518,7 @@ int selfcheck_board_enables(void)
  * Parameters vendor and model will be overwritten. Returns 0 on success.
  * Note: strtok modifies the original string, so we work on a copy and allocate memory for the results.
  */
-int board_parse_parameter(const char *boardstring, const char **vendor, const char **model)
+int board_parse_parameter(const char *boardstring, char **vendor, char **model)
 {
 	/* strtok may modify the original string. */
 	char *tempstr = strdup(boardstring);

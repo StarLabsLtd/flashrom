@@ -74,9 +74,9 @@
 #endif  /* LPC_IO */
 
 #ifdef LPC_IO
-unsigned int shm_io_base;
+static unsigned int shm_io_base;
 #endif
-unsigned char *ce_high, *ce_low;
+static unsigned char *ce_high, *ce_low;
 static int it85xx_scratch_rom_reenter = 0;
 
 /* This function will poll the keyboard status register until either
@@ -106,7 +106,7 @@ static int wait_for(const unsigned int mask, const unsigned int expected_value,
 
 /* IT8502 employs a scratch RAM when flash is being updated. Call the following
  * two functions before/after flash erase/program. */
-void it85xx_enter_scratch_rom(void)
+static void it85xx_enter_scratch_rom(void)
 {
 	int ret, tries;
 
@@ -163,7 +163,7 @@ void it85xx_enter_scratch_rom(void)
 	}
 }
 
-void it85xx_exit_scratch_rom(void)
+static void it85xx_exit_scratch_rom(void)
 {
 #if 0
 	int ret;
@@ -276,7 +276,6 @@ static int it85xx_spi_send_command(struct flashctx *flash,
 				   unsigned char *readarr);
 
 static const struct spi_master spi_master_it85xx = {
-	.type		= SPI_CONTROLLER_IT85XX,
 	.max_data_read	= 64,
 	.max_data_write	= 64,
 	.command	= it85xx_spi_send_command,
@@ -328,7 +327,7 @@ static int it85xx_spi_send_command(struct flashctx *flash,
 				   const unsigned char *writearr,
 				   unsigned char *readarr)
 {
-	int i;
+	unsigned int i;
 
 	it85xx_enter_scratch_rom();
 	/* Exit scratch ROM ONLY when programmer shuts down. Otherwise, the

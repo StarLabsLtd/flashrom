@@ -48,7 +48,7 @@
 const struct dev_entry devs_usbblasterspi[] = {
 	{ALTERA_VID, ALTERA_USBBLASTER_PID, OK, "Altera", "USB-Blaster"},
 
-	{}
+	{0}
 };
 
 static const struct spi_master spi_master_usbblaster;
@@ -67,7 +67,7 @@ static struct ftdi_context ftdic;
 
 /* The programmer shifts bits in the wrong order for SPI, so we use this method to reverse the bits when needed.
  * http://graphics.stanford.edu/~seander/bithacks.html#ReverseByteWith32Bits */
-uint8_t reverse(uint8_t b)
+static uint8_t reverse(uint8_t b)
 {
 	return ((b * 0x0802LU & 0x22110LU) | (b * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16;
 }
@@ -119,11 +119,11 @@ int usbblaster_spi_init(void)
 
 static int send_write(unsigned int writecnt, const unsigned char *writearr)
 {
-	int i;
 	uint8_t buf[BUF_SIZE];
 
 	memset(buf, 0, sizeof(buf));
 	while (writecnt) {
+		unsigned int i;
 		unsigned int n_write = min(writecnt, BUF_SIZE - 1);
 		msg_pspew("writing %d-byte packet\n", n_write);
 
@@ -208,7 +208,6 @@ static int usbblaster_spi_send_command(struct flashctx *flash, unsigned int writ
 
 
 static const struct spi_master spi_master_usbblaster = {
-	.type		= SPI_CONTROLLER_USBBLASTER,
 	.max_data_read	= 256,
 	.max_data_write	= 256,
 	.command	= usbblaster_spi_send_command,
