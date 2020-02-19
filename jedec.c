@@ -408,7 +408,8 @@ retry:
 int write_jedec_1(struct flashctx *flash, const uint8_t *src, unsigned int start,
 		  unsigned int len)
 {
-	int i, failed = 0;
+	unsigned int i;
+	int failed = 0;
 	chipaddr dst = flash->virtual_memory + start;
 	chipaddr olddst;
 	unsigned int mask;
@@ -430,7 +431,8 @@ int write_jedec_1(struct flashctx *flash, const uint8_t *src, unsigned int start
 static int write_page_write_jedec_common(struct flashctx *flash, const uint8_t *src,
 					 unsigned int start, unsigned int page_size)
 {
-	int i, tried = 0, failed;
+	unsigned int i;
+	int tried = 0, failed;
 	const uint8_t *s = src;
 	chipaddr bios = flash->virtual_memory;
 	chipaddr dst = bios + start;
@@ -550,14 +552,6 @@ int erase_block_jedec(struct flashctx *flash, unsigned int page,
 	return erase_block_jedec_common(flash, page, size, mask);
 }
 
-int erase_chip_jedec(struct flashctx *flash)
-{
-	unsigned int mask;
-
-	mask = getaddrmask(flash->chip);
-	return erase_chip_jedec_common(flash, mask);
-}
-
 struct unlockblock {
 	unsigned int size;
 	unsigned int count;
@@ -614,11 +608,6 @@ static int printlock_regspace2_block(const struct flashctx *flash, chipaddr lock
 		break;
 	}
 	return 0;
-}
-
-int printlock_regspace2_blocks(const struct flashctx *flash, const struct unlockblock *blocks)
-{
-	return regspace2_walk_unlockblocks(flash, blocks, &printlock_regspace2_block);
 }
 
 static int printlock_regspace2_uniform(struct flashctx *flash, unsigned long block_size)

@@ -96,7 +96,7 @@ static off_t fmap_lsearch(const uint8_t *buf, size_t len)
 	off_t offset;
 	bool fmap_found = 0;
 
-	for (offset = 0; offset <= len - sizeof(struct fmap); offset++) {
+	for (offset = 0; offset <= (off_t)(len - sizeof(struct fmap)); offset++) {
 		if (is_valid_fmap((struct fmap *)&buf[offset])) {
 			fmap_found = 1;
 			break;
@@ -132,9 +132,8 @@ int fmap_read_from_buffer(struct fmap **fmap_out, const uint8_t *const buf, size
 	if (offset < 0) {
 		msg_gdbg("Unable to find fmap in provided buffer.\n");
 		return 2;
-	} else {
-		msg_gdbg("Found fmap at offset 0x%06zx\n", (size_t)offset);
 	}
+	msg_gdbg("Found fmap at offset 0x%06zx\n", (size_t)offset);
 
 	const struct fmap *fmap = (const struct fmap *)(buf + offset);
 	*fmap_out = malloc(fmap_size(fmap));
@@ -179,7 +178,7 @@ _finalize_ret:
 }
 
 static int fmap_bsearch_rom(struct fmap **fmap_out, struct flashctx *const flashctx,
-		size_t rom_offset, size_t len, int min_stride)
+		size_t rom_offset, size_t len, size_t min_stride)
 {
 	size_t stride, fmap_len = 0;
 	int ret = 1, fmap_found = 0, check_offset_0 = 1;
@@ -251,10 +250,9 @@ static int fmap_bsearch_rom(struct fmap **fmap_out, struct flashctx *const flash
 				msg_gdbg("fmap found at offset 0x%06zx\n", offset);
 				fmap_found = 1;
 				break;
-			} else {
-				msg_gerr("fmap signature found at %zu but header is invalid.\n", offset);
-				ret = 2;
 			}
+			msg_gerr("fmap signature found at %zu but header is invalid.\n", offset);
+			ret = 2;
 		}
 
 		if (fmap_found)

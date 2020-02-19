@@ -57,7 +57,7 @@ void exit_conf_mode_ite(uint16_t port)
 	sio_write(port, 0x02, 0x02);
 }
 
-uint16_t probe_id_ite(uint16_t port)
+static uint16_t probe_id_ite(uint16_t port)
 {
 	uint16_t id;
 
@@ -108,14 +108,13 @@ static int it8716f_spi_chip_write_256(struct flashctx *flash, const uint8_t *buf
 				      unsigned int start, unsigned int len);
 
 static const struct spi_master spi_master_it87xx = {
-	.type		= SPI_CONTROLLER_IT87XX,
 	.max_data_read	= MAX_DATA_UNSPECIFIED,
 	.max_data_write	= MAX_DATA_UNSPECIFIED,
 	.command	= it8716f_spi_send_command,
 	.multicommand	= default_spi_send_multicommand,
 	.read		= it8716f_spi_chip_read,
 	.write_256	= it8716f_spi_chip_write_256,
-	.write_aai	= default_spi_write_aai,
+	.write_aai	= spi_chip_write_1,
 };
 
 static uint16_t it87spi_probe(uint16_t port)
@@ -282,7 +281,6 @@ static int it8716f_spi_send_command(struct flashctx *flash,
 				    unsigned char *readarr)
 {
 	uint8_t busy, writeenc;
-	int i;
 
 	do {
 		busy = INB(it8716f_flashport) & 0x80;
@@ -331,6 +329,8 @@ static int it8716f_spi_send_command(struct flashctx *flash,
 		| ((readcnt & 0x3) << 2) | (writeenc), it8716f_flashport);
 
 	if (readcnt > 0) {
+		unsigned int i;
+
 		do {
 			busy = INB(it8716f_flashport) & 0x80;
 		} while (busy);

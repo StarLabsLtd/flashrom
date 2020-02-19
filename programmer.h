@@ -121,6 +121,12 @@ enum programmer {
 #if CONFIG_JLINK_SPI == 1
 	PROGRAMMER_JLINK_SPI,
 #endif
+#if CONFIG_NI845X_SPI == 1
+	PROGRAMMER_NI845X_SPI,
+#endif
+#if CONFIG_STLINKV3_SPI == 1
+	PROGRAMMER_STLINKV3_SPI,
+#endif
 	PROGRAMMER_INVALID /* This must always be the last entry. */
 };
 
@@ -159,33 +165,7 @@ extern const struct programmer_entry programmer_table[];
 int programmer_init(enum programmer prog, const char *param);
 int programmer_shutdown(void);
 
-enum bitbang_spi_master_type {
-	BITBANG_SPI_INVALID	= 0, /* This must always be the first entry. */
-#if CONFIG_RAYER_SPI == 1
-	BITBANG_SPI_MASTER_RAYER,
-#endif
-#if CONFIG_PONY_SPI == 1
-	BITBANG_SPI_MASTER_PONY,
-#endif
-#if CONFIG_NICINTEL_SPI == 1
-	BITBANG_SPI_MASTER_NICINTEL,
-#endif
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-	BITBANG_SPI_MASTER_MCP,
-#endif
-#endif
-#if CONFIG_OGP_SPI == 1
-	BITBANG_SPI_MASTER_OGP,
-#endif
-#if CONFIG_DEVELOPERBOX_SPI == 1
-	BITBANG_SPI_MASTER_DEVELOPERBOX,
-#endif
-};
-
 struct bitbang_spi_master {
-	enum bitbang_spi_master_type type;
-
 	/* Note that CS# is active low, so val=0 means the chip is active. */
 	void (*set_cs) (int val);
 	void (*set_sck) (int val);
@@ -226,6 +206,7 @@ int rpci_write_long(struct pci_dev *dev, int reg, uint32_t data);
 struct penable {
 	uint16_t vendor_id;
 	uint16_t device_id;
+	enum chipbustype buses;
 	const enum test_state status;
 	const char *vendor_name;
 	const char *device_name;
@@ -297,7 +278,7 @@ void internal_delay(unsigned int usecs);
 #if CONFIG_INTERNAL == 1
 /* board_enable.c */
 int selfcheck_board_enables(void);
-int board_parse_parameter(const char *boardstring, const char **vendor, const char **model);
+int board_parse_parameter(const char *boardstring, char **vendor, char **model);
 void w836xx_ext_enter(uint16_t port);
 void w836xx_ext_leave(uint16_t port);
 void probe_superio_winbond(void);
@@ -329,7 +310,7 @@ void cleanup_cpu_msr(void);
 
 /* cbtable.c */
 int cb_parse_table(const char **vendor, const char **model);
-int cb_check_image(const uint8_t *bios, int size);
+int cb_check_image(const uint8_t *bios, unsigned int size);
 
 /* dmi.c */
 #if defined(__i386__) || defined(__x86_64__)
@@ -523,6 +504,12 @@ int pickit2_spi_init(void);
 extern const struct dev_entry devs_pickit2_spi[];
 #endif
 
+/* stlinkv3_spi.c */
+#if CONFIG_STLINKV3_SPI == 1
+int stlinkv3_spi_init(void);
+extern const struct dev_entry devs_stlinkv3_spi[];
+#endif
+
 /* rayer_spi.c */
 #if CONFIG_RAYER_SPI == 1
 int rayer_spi_init(void);
@@ -581,6 +568,11 @@ extern const struct dev_entry devs_digilent_spi[];
 int jlink_spi_init(void);
 #endif
 
+/* ni845x_spi.c */
+#if CONFIG_NI845X_SPI == 1
+int ni845x_spi_init(void);
+#endif
+
 /* flashrom.c */
 struct decode_sizes {
 	uint32_t parallel;
@@ -596,64 +588,6 @@ unsigned int count_max_decode_exceedings(const struct flashctx *flash);
 char *extract_programmer_param(const char *param_name);
 
 /* spi.c */
-enum spi_controller {
-	SPI_CONTROLLER_NONE,
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-	SPI_CONTROLLER_ICH7,
-	SPI_CONTROLLER_ICH9,
-	SPI_CONTROLLER_IT85XX,
-	SPI_CONTROLLER_IT87XX,
-	SPI_CONTROLLER_SB600,
-	SPI_CONTROLLER_YANGTZE,
-	SPI_CONTROLLER_VIA,
-	SPI_CONTROLLER_WBSIO,
-#endif
-#endif
-#if CONFIG_FT2232_SPI == 1
-	SPI_CONTROLLER_FT2232,
-#endif
-#if CONFIG_DUMMY == 1
-	SPI_CONTROLLER_DUMMY,
-#endif
-#if CONFIG_BUSPIRATE_SPI == 1
-	SPI_CONTROLLER_BUSPIRATE,
-#endif
-#if CONFIG_DEDIPROG == 1
-	SPI_CONTROLLER_DEDIPROG,
-#endif
-#if CONFIG_OGP_SPI == 1 || CONFIG_NICINTEL_SPI == 1 || CONFIG_RAYER_SPI == 1 || CONFIG_PONY_SPI == 1 || (CONFIG_INTERNAL == 1 && (defined(__i386__) || defined(__x86_64__)))
-	SPI_CONTROLLER_BITBANG,
-#endif
-#if CONFIG_LINUX_MTD == 1
-	SPI_CONTROLLER_LINUX_MTD,
-#endif
-#if CONFIG_LINUX_SPI == 1
-	SPI_CONTROLLER_LINUX,
-#endif
-#if CONFIG_SERPROG == 1
-	SPI_CONTROLLER_SERPROG,
-#endif
-#if CONFIG_USBBLASTER_SPI == 1
-	SPI_CONTROLLER_USBBLASTER,
-#endif
-#if CONFIG_MSTARDDC_SPI == 1
-	SPI_CONTROLLER_MSTARDDC,
-#endif
-#if CONFIG_PICKIT2_SPI == 1
-	SPI_CONTROLLER_PICKIT2,
-#endif
-#if CONFIG_CH341A_SPI == 1
-	SPI_CONTROLLER_CH341A_SPI,
-#endif
-#if CONFIG_DIGILENT_SPI == 1
-	SPI_CONTROLLER_DIGILENT_SPI,
-#endif
-#if CONFIG_JLINK_SPI == 1
-	SPI_CONTROLLER_JLINK_SPI,
-#endif
-};
-
 #define MAX_DATA_UNSPECIFIED 0
 #define MAX_DATA_READ_UNLIMITED 64 * 1024
 #define MAX_DATA_WRITE_UNLIMITED 256
@@ -663,7 +597,6 @@ enum spi_controller {
 						        register, 4BA mode switch) don't work */
 
 struct spi_master {
-	enum spi_controller type;
 	uint32_t features;
 	unsigned int max_data_read; // (Ideally,) maximum data read size in one go (excluding opcode+address).
 	unsigned int max_data_write; // (Ideally,) maximum data write size in one go (excluding opcode+address).
@@ -710,6 +643,8 @@ enum ich_chipset {
 	CHIPSET_9_SERIES_WILDCAT_POINT_LP,
 	CHIPSET_100_SERIES_SUNRISE_POINT, /* also 6th/7th gen Core i/o (LP) variants */
 	CHIPSET_C620_SERIES_LEWISBURG,
+	CHIPSET_300_SERIES_CANNON_POINT,
+	CHIPSET_APOLLO_LAKE,
 };
 
 /* ichspi.c */

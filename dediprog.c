@@ -43,7 +43,7 @@
 #define REQTYPE_OTHER_IN (LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_OTHER)	/* 0xC3 */
 #define REQTYPE_EP_OUT (LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_ENDPOINT)	/* 0x42 */
 #define REQTYPE_EP_IN (LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_ENDPOINT)	/* 0xC2 */
-struct libusb_context *usb_ctx;
+static struct libusb_context *usb_ctx;
 static libusb_device_handle *dediprog_handle;
 static int dediprog_in_endpoint;
 static int dediprog_out_endpoint;
@@ -159,7 +159,7 @@ const struct dev_entry devs_dediprog[] = {
 };
 
 static int dediprog_firmwareversion = FIRMWARE_VERSION(0, 0, 0);
-enum dediprog_devtype dediprog_devicetype = DEV_UNKNOWN;
+static enum dediprog_devtype dediprog_devicetype = DEV_UNKNOWN;
 
 #if defined(LIBUSB_MAJOR) && defined(LIBUSB_MINOR) && defined(LIBUSB_MICRO) && \
     LIBUSB_MAJOR <= 1 && LIBUSB_MINOR == 0 && LIBUSB_MICRO < 9
@@ -360,8 +360,17 @@ static int dediprog_set_spi_speed(unsigned int spispeed_idx)
 	return 0;
 }
 
-static void fill_rw_cmd_payload(uint8_t *data_packet, unsigned int count, uint8_t dedi_spi_cmd,
-		unsigned int *value, unsigned int *idx, unsigned int start, int is_read) {
+static int prepare_rw_cmd(
+		struct flashctx *const flash, uint8_t *data_packet, unsigned int count,
+		uint8_t dedi_spi_cmd, unsigned int *value, unsigned int *idx, unsigned int start, int is_read)
+{
+	if (count >= 1 << 16) {
+		msg_perr("%s: Unsupported transfer length of %u blocks! "
+			 "Please report a bug at flashrom@flashrom.org\n",
+			 __func__, count);
+		return 1;
+	}
+
 	/* First 5 bytes are common in both generations. */
 	data_packet[0] = count & 0xff;
 	data_packet[1] = (count >> 8) & 0xff;
@@ -370,6 +379,15 @@ static void fill_rw_cmd_payload(uint8_t *data_packet, unsigned int count, uint8_
 	data_packet[4] = 0; /* "Opcode". Specs imply necessity only for READ_MODE_4B_ADDR_FAST and WRITE_MODE_4B_ADDR_256B_PAGE_PGM */
 
 	if (protocol() >= PROTOCOL_V2) {
+		if (is_read && flash->chip->feature_bits & FEATURE_4BA_FAST_READ) {
+			data_packet[3] = READ_MODE_4B_ADDR_FAST_0x0C;
+			data_packet[4] = JEDEC_READ_4BA_FAST;
+		} else if (dedi_spi_cmd == WRITE_MODE_PAGE_PGM
+			   && (flash->chip->feature_bits & FEATURE_4BA_WRITE)) {
+			data_packet[3] = WRITE_MODE_4B_ADDR_256B_PAGE_PGM_0x12;
+			data_packet[4] = JEDEC_BYTE_PROGRAM_4BA;
+		}
+
 		*value = *idx = 0;
 		data_packet[5] = 0; /* RFU */
 		data_packet[6] = (start >>  0) & 0xff;
@@ -390,9 +408,23 @@ static void fill_rw_cmd_payload(uint8_t *data_packet, unsigned int count, uint8_
 			}
 		}
 	} else {
-		*value = start % 0x10000;
-		*idx = start / 0x10000;
+		if (flash->chip->feature_bits & FEATURE_4BA_EXT_ADDR) {
+			if (spi_set_extended_address(flash, start >> 24))
+				return 1;
+		} else if (start >> 24) {
+			msg_cerr("Can't handle 4-byte address with dediprog.\n");
+			return 1;
+		}
+		/*
+		 * We don't know how the dediprog firmware handles 4-byte
+		 * addresses. So let's not tell it what we are doing and
+		 * only send the lower 3 bytes.
+		 */
+		*value = start & 0xffff;
+		*idx = (start >> 16) & 0xff;
 	}
+
+	return 0;
 }
 
 /* Bulk read interface, will read multiple 512 byte chunks aligned to 512 bytes.
@@ -438,10 +470,11 @@ static int dediprog_spi_bulk_read(struct flashctx *flash, uint8_t *buf, unsigned
 
 	uint8_t data_packet[command_packet_size];
 	unsigned int value, idx;
-	fill_rw_cmd_payload(data_packet, count, READ_MODE_STD, &value, &idx, start, 1);
+	if (prepare_rw_cmd(flash, data_packet, count, READ_MODE_STD, &value, &idx, start, 1))
+		return 1;
 
 	int ret = dediprog_write(CMD_READ, value, idx, data_packet, sizeof(data_packet));
-	if (ret != sizeof(data_packet)) {
+	if (ret != (int)sizeof(data_packet)) {
 		msg_perr("Command Read SPI Bulk failed, %i %s!\n", ret, libusb_error_name(ret));
 		return 1;
 	}
@@ -454,7 +487,7 @@ static int dediprog_spi_bulk_read(struct flashctx *flash, uint8_t *buf, unsigned
 
 	/* Allocate bulk transfers. */
 	unsigned int i;
-	for (i = 0; i < min(DEDIPROG_ASYNC_TRANSFERS, count); ++i) {
+	for (i = 0; i < MIN(DEDIPROG_ASYNC_TRANSFERS, count); ++i) {
 		transfers[i] = libusb_alloc_transfer(0);
 		if (!transfers[i]) {
 			msg_perr("Allocating libusb transfer %i failed: %s!\n", i, libusb_error_name(ret));
@@ -594,9 +627,10 @@ static int dediprog_spi_bulk_write(struct flashctx *flash, const uint8_t *buf, u
 
 	uint8_t data_packet[command_packet_size];
 	unsigned int value, idx;
-	fill_rw_cmd_payload(data_packet, count, dedi_spi_cmd, &value, &idx, start, 0);
+	if (prepare_rw_cmd(flash, data_packet, count, dedi_spi_cmd, &value, &idx, start, 0))
+		return 1;
 	int ret = dediprog_write(CMD_WRITE, value, idx, data_packet, sizeof(data_packet));
-	if (ret != sizeof(data_packet)) {
+	if (ret != (int)sizeof(data_packet)) {
 		msg_perr("Command Write SPI Bulk failed, %s!\n", libusb_error_name(ret));
 		return 1;
 	}
@@ -638,8 +672,8 @@ static int dediprog_spi_write(struct flashctx *flash, const uint8_t *buf,
 	if (residue) {
 		msg_pdbg("Slow write for partial block from 0x%x, length 0x%x\n",
 			 start, residue);
-		/* No idea about the real limit. Maybe 12, maybe more. */
-		ret = spi_write_chunked(flash, buf, start, residue, 12);
+		/* No idea about the real limit. Maybe 16 including command and address, maybe more. */
+		ret = spi_write_chunked(flash, buf, start, residue, 11);
 		if (ret) {
 			dediprog_set_leds(LED_ERROR);
 			return ret;
@@ -659,7 +693,7 @@ static int dediprog_spi_write(struct flashctx *flash, const uint8_t *buf,
 		msg_pdbg("Slow write for partial block from 0x%x, length 0x%x\n",
 			 start, len);
 		ret = spi_write_chunked(flash, buf + residue + bulklen,
-				        start + residue + bulklen, len, 12);
+				        start + residue + bulklen, len, 11);
 		if (ret) {
 			dediprog_set_leds(LED_ERROR);
 			return ret;
@@ -709,7 +743,7 @@ static int dediprog_spi_send_command(struct flashctx *flash,
 		value = 0;
 	}
 	ret = dediprog_write(CMD_TRANSCEIVE, value, idx, writearr, writecnt);
-	if (ret != writecnt) {
+	if (ret != (int)writecnt) {
 		msg_perr("Send SPI failed, expected %i, got %i %s!\n",
 			 writecnt, ret, libusb_error_name(ret));
 		return 1;
@@ -736,7 +770,7 @@ static int dediprog_spi_send_command(struct flashctx *flash,
 	ret = dediprog_read(CMD_TRANSCEIVE, value, idx, readarr, readcnt);
 	*/
 	ret = dediprog_read(CMD_TRANSCEIVE, 0, 0, readarr, readcnt);
-	if (ret != readcnt) {
+	if (ret != (int)readcnt) {
 		msg_perr("Receive SPI failed, expected %i, got %i %s!\n", readcnt, ret, libusb_error_name(ret));
 		return 1;
 	}
@@ -770,7 +804,7 @@ static int dediprog_check_devicestring(void)
 	int sfnum;
 	int fw[3];
 	if (sscanf(buf, "SF%d V:%d.%d.%d ", &sfnum, &fw[0], &fw[1], &fw[2]) != 4 ||
-	    sfnum != dediprog_devicetype) {
+	    sfnum != (int)dediprog_devicetype) {
 		msg_perr("Unexpected firmware version string '%s'\n", buf);
 		return 1;
 	}
@@ -787,6 +821,33 @@ static int dediprog_check_devicestring(void)
 	}
 
 	return 0;
+}
+
+/*
+ * Read the id from the dediprog. This should return the numeric part of the
+ * serial number found on a sticker on the back of the dediprog. Note this
+ * number is stored in writable eeprom, so it could get out of sync. Also note,
+ * this function only supports SF100 at this time, but SF600 support is not too
+ * much different.
+ * @return  the id on success, -1 on failure
+ */
+static int dediprog_read_id(void)
+{
+	int ret;
+	uint8_t buf[3];
+
+	ret = libusb_control_transfer(dediprog_handle, REQTYPE_OTHER_IN,
+				      0x7,    /* request */
+				      0,      /* value */
+				      0xEF00, /* index */
+				      buf, sizeof(buf),
+				      DEFAULT_TIMEOUT);
+	if (ret != sizeof(buf)) {
+		msg_perr("Failed to read dediprog id, error %d!\n", ret);
+		return -1;
+	}
+
+	return buf[0] << 16 | buf[1] << 8 | buf[2];
 }
 
 /*
@@ -931,8 +992,7 @@ static int parse_voltage(char *voltage)
 	return millivolt;
 }
 
-static const struct spi_master spi_master_dediprog = {
-	.type		= SPI_CONTROLLER_DEDIPROG,
+static struct spi_master spi_master_dediprog = {
 	.features	= SPI_MASTER_NO_4BA_MODES,
 	.max_data_read	= 16, /* 18 seems to work fine as well, but 19 times out sometimes with FW 5.15. */
 	.max_data_write	= 16,
@@ -942,6 +1002,40 @@ static const struct spi_master spi_master_dediprog = {
 	.write_256	= dediprog_spi_write_256,
 	.write_aai	= dediprog_spi_write_aai,
 };
+
+/*
+ * Open a dediprog_handle with the USB device at the given index.
+ * @index   index of the USB device
+ * @return  0 for success, -1 for error, -2 for busy device
+ */
+static int dediprog_open(int index)
+{
+	const uint16_t vid = devs_dediprog[0].vendor_id;
+	const uint16_t pid = devs_dediprog[0].device_id;
+	int ret;
+
+	dediprog_handle = usb_dev_get_by_vid_pid_number(usb_ctx, vid, pid, (unsigned int) index);
+	if (!dediprog_handle) {
+		msg_perr("Could not find a Dediprog programmer on USB.\n");
+		libusb_exit(usb_ctx);
+		return -1;
+	}
+	ret = libusb_set_configuration(dediprog_handle, 1);
+	if (ret != 0) {
+		msg_perr("Could not set USB device configuration: %i %s\n",
+			 ret, libusb_error_name(ret));
+		libusb_close(dediprog_handle);
+		return -2;
+	}
+	ret = libusb_claim_interface(dediprog_handle, 0);
+	if (ret < 0) {
+		msg_perr("Could not claim USB device interface %i: %i %s\n",
+			 0, ret, libusb_error_name(ret));
+		libusb_close(dediprog_handle);
+		return -2;
+	}
+	return 0;
+}
 
 static int dediprog_shutdown(void *data)
 {
@@ -963,9 +1057,11 @@ static int dediprog_shutdown(void *data)
 
 int dediprog_init(void)
 {
-	char *voltage, *device, *spispeed, *target_str;
+	char *voltage, *id_str, *device, *spispeed, *target_str;
 	int spispeed_idx = 1;
 	int millivolt = 3500;
+	int id = -1; /* -1 defaults to enumeration order */
+	int found_id;
 	long usedevice = 0;
 	long target = FLASH_TYPE_APPLICATION_FLASH_1;
 	int i, ret;
@@ -995,9 +1091,35 @@ int dediprog_init(void)
 		msg_pinfo("Setting voltage to %i mV\n", millivolt);
 	}
 
+	id_str = extract_programmer_param("id");
+	if (id_str) {
+		char prefix0, prefix1;
+		if (sscanf(id_str, "%c%c%d", &prefix0, &prefix1, &id) != 3) {
+			msg_perr("Error: Could not parse dediprog 'id'.\n");
+			msg_perr("Expected a string like SF012345 or DP012345.\n");
+			free(id_str);
+			return 1;
+		}
+		if (id < 0 || id >= 0x1000000) {
+			msg_perr("Error: id %s is out of range!\n", id_str);
+			free(id_str);
+			return 1;
+		}
+		if (!(prefix0 == 'S' && prefix1 == 'F') && !(prefix0 == 'D' && prefix1 == 'P')) {
+			msg_perr("Error: %s is an invalid id!\n", id_str);
+			free(id_str);
+			return 1;
+		}
+		msg_pinfo("Will search for dediprog id %s.\n", id_str);
+	}
+	free(id_str);
+
 	device = extract_programmer_param("device");
 	if (device) {
 		char *dev_suffix;
+		if (id != -1) {
+			msg_perr("Error: Cannot use 'id' and 'device'.\n");
+		}
 		errno = 0;
 		usedevice = strtol(device, &dev_suffix, 10);
 		if (errno != 0 || device == dev_suffix) {
@@ -1005,7 +1127,7 @@ int dediprog_init(void)
 			free(device);
 			return 1;
 		}
-		if (usedevice < 0 || usedevice > UINT_MAX) {
+		if (usedevice < 0 || usedevice > INT_MAX) {
 			msg_perr("Error: Value for 'device' is out of range.\n");
 			free(device);
 			return 1;
@@ -1061,27 +1183,49 @@ int dediprog_init(void)
 		return 1;
 	}
 
-	const uint16_t vid = devs_dediprog[0].vendor_id;
-	const uint16_t pid = devs_dediprog[0].device_id;
-	dediprog_handle = usb_dev_get_by_vid_pid_number(usb_ctx, vid, pid, (unsigned int) usedevice);
-	if (!dediprog_handle) {
-		msg_perr("Could not find a Dediprog programmer on USB.\n");
-		libusb_exit(usb_ctx);
-		return 1;
+	if (id != -1) {
+		for (i = 0; ; i++) {
+			ret = dediprog_open(i);
+			if (ret == -1) {
+				/* no dev */
+				libusb_exit(usb_ctx);
+				return 1;
+			} else if (ret == -2) {
+				/* busy dev */
+				continue;
+			}
+
+			/* Notice we can only call dediprog_read_id() after
+			 * libusb_set_configuration() and
+			 * libusb_claim_interface(). When searching by id and
+			 * either configuration or claim fails (usually the
+			 * device is in use by another instance of flashrom),
+			 * the device is skipped and the next device is tried.
+			 */
+			found_id = dediprog_read_id();
+			if (found_id < 0) {
+				msg_perr("Could not read id.\n");
+				libusb_release_interface(dediprog_handle, 0);
+				libusb_close(dediprog_handle);
+				continue;
+			}
+			msg_pinfo("Found dediprog id SF%06d.\n", found_id);
+			if (found_id != id) {
+				libusb_release_interface(dediprog_handle, 0);
+				libusb_close(dediprog_handle);
+				continue;
+			}
+			break;
+		}
+	} else {
+		if (dediprog_open(usedevice)) {
+			return 1;
+		}
+		found_id = dediprog_read_id();
 	}
-	ret = libusb_set_configuration(dediprog_handle, 1);
-	if (ret != 0) {
-		msg_perr("Could not set USB device configuration: %i %s\n", ret, libusb_error_name(ret));
-		libusb_close(dediprog_handle);
-		libusb_exit(usb_ctx);
-		return 1;
-	}
-	ret = libusb_claim_interface(dediprog_handle, 0);
-	if (ret < 0) {
-		msg_perr("Could not claim USB device interface %i: %i %s\n", 0, ret, libusb_error_name(ret));
-		libusb_close(dediprog_handle);
-		libusb_exit(usb_ctx);
-		return 1;
+
+	if (found_id >= 0) {
+		msg_pinfo("Using dediprog id SF%06d.\n", found_id);
 	}
 
 	if (register_shutdown(dediprog_shutdown, NULL))
@@ -1123,6 +1267,12 @@ int dediprog_init(void)
 
 	if (dediprog_standalone_mode())
 		return 1;
+
+	if (dediprog_devicetype == DEV_SF100 && protocol() == PROTOCOL_V1)
+		spi_master_dediprog.features &= ~SPI_MASTER_NO_4BA_MODES;
+
+	if (protocol() == PROTOCOL_V2)
+		spi_master_dediprog.features |= SPI_MASTER_4BA;
 
 	if (register_spi_master(&spi_master_dediprog) || dediprog_set_leds(LED_NONE))
 		return 1;

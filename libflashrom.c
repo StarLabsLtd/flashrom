@@ -20,6 +20,7 @@
  * Have a look at the Modules section for a function reference.
  */
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
@@ -103,7 +104,150 @@ int print(const enum flashrom_log_level level, const char *const fmt, ...)
  * @{
  */
 
-/* TBD */
+/**
+ * @brief Returns flashrom version
+ * @return flashrom version
+ */
+const char *flashrom_version_info(void)
+{
+	return flashrom_version;
+}
+
+/**
+ * @brief Returns list of supported programmers
+ * @return List of supported programmers, or NULL if an error occurred
+ */
+const char **flashrom_supported_programmers(void)
+{
+	enum programmer p = 0;
+	const char **supported_programmers = malloc((PROGRAMMER_INVALID + 1) * sizeof(char*));
+
+	if (supported_programmers != NULL) {
+		for (; p < PROGRAMMER_INVALID; ++p) {
+			supported_programmers[p] = programmer_table[p].name;
+		}
+	} else {
+		msg_gerr("Memory allocation error!\n");
+	}
+
+	return supported_programmers;
+}
+
+/**
+ * @brief Returns list of supported flash chips
+ * @return List of supported flash chips, or NULL if an error occurred
+ */
+struct flashrom_flashchip_info *flashrom_supported_flash_chips(void)
+{
+	unsigned int i = 0;
+	struct flashrom_flashchip_info *supported_flashchips =
+		malloc(flashchips_size * sizeof(*supported_flashchips));
+
+	if (supported_flashchips != NULL) {
+		for (; i < flashchips_size; ++i) {
+			supported_flashchips[i].vendor = flashchips[i].vendor;
+			supported_flashchips[i].name = flashchips[i].name;
+			supported_flashchips[i].tested.erase =
+				(enum flashrom_test_state)flashchips[i].tested.erase;
+			supported_flashchips[i].tested.probe =
+				(enum flashrom_test_state)flashchips[i].tested.probe;
+			supported_flashchips[i].tested.read =
+				(enum flashrom_test_state)flashchips[i].tested.read;
+			supported_flashchips[i].tested.write =
+				(enum flashrom_test_state)flashchips[i].tested.write;
+			supported_flashchips[i].total_size = flashchips[i].total_size;
+		}
+	} else {
+		msg_gerr("Memory allocation error!\n");
+	}
+
+	return supported_flashchips;
+}
+
+/**
+ * @brief Returns list of supported mainboards
+ * @return List of supported mainboards, or NULL if an error occurred
+ */
+struct flashrom_board_info *flashrom_supported_boards(void)
+{
+#if CONFIG_INTERNAL == 1
+	int boards_known_size = 0;
+	int i = 0;
+	const struct board_info *binfo = boards_known;
+
+	while ((binfo++)->vendor)
+		++boards_known_size;
+	binfo = boards_known;
+	/* add place for {0} */
+	++boards_known_size;
+
+	struct flashrom_board_info *supported_boards =
+		malloc(boards_known_size * sizeof(*binfo));
+
+	if (supported_boards != NULL) {
+		for (; i < boards_known_size; ++i) {
+			supported_boards[i].vendor = binfo[i].vendor;
+			supported_boards[i].name = binfo[i].name;
+			supported_boards[i].working = binfo[i].working;
+		}
+	} else {
+		msg_gerr("Memory allocation error!\n");
+	}
+
+	return supported_boards;
+#else
+	return NULL;
+#endif
+}
+
+/**
+ * @brief Returns list of supported chipsets
+ * @return List of supported chipsets, or NULL if an error occurred
+ */
+struct flashrom_chipset_info *flashrom_supported_chipsets(void)
+{
+#if CONFIG_INTERNAL == 1
+	int chipset_enables_size = 0;
+	int i = 0;
+	const struct penable *chipset = chipset_enables;
+
+	while ((chipset++)->vendor_name)
+		++chipset_enables_size;
+	chipset = chipset_enables;
+	/* add place for {0}*/
+	++chipset_enables_size;
+
+	struct flashrom_chipset_info *supported_chipsets =
+		malloc(chipset_enables_size * sizeof(*supported_chipsets));
+
+	if (supported_chipsets != NULL) {
+		for (; i < chipset_enables_size; ++i) {
+			supported_chipsets[i].vendor = chipset[i].vendor_name;
+			supported_chipsets[i].chipset = chipset[i].device_name;
+			supported_chipsets[i].vendor_id = chipset[i].vendor_id;
+			supported_chipsets[i].chipset_id = chipset[i].device_id;
+			supported_chipsets[i].status = chipset[i].status;
+	  }
+	} else {
+		msg_gerr("Memory allocation error!\n");
+	}
+
+	return supported_chipsets;
+#else
+	return NULL;
+#endif
+}
+
+/**
+ * @brief Frees memory allocated by libflashrom API
+ * @param Pointer to block of memory which should be freed
+ * @return 0 on success
+ */
+int flashrom_data_free(void *const p)
+{
+	free(p);
+	return 0;
+}
 
 /** @} */ /* end flashrom-query */
 
@@ -283,27 +427,6 @@ bool flashrom_flag_get(const struct flashrom_flashctx *const flashctx, const enu
  */
 
 /**
- * @brief Mark given region as included.
- *
- * @param layout The layout to alter.
- * @param name   The name of the region to include.
- *
- * @return 0 on success,
- *         1 if the given name can't be found.
- */
-int flashrom_layout_include_region(struct flashrom_layout *const layout, const char *name)
-{
-	size_t i;
-	for (i = 0; i < layout->num_entries; ++i) {
-		if (!strcmp(layout->entries[i].name, name)) {
-			layout->entries[i].included = true;
-			return 0;
-		}
-	}
-	return 1;
-}
-
-/**
  * @brief Read a layout from the Intel ICH descriptor in the flash.
  *
  * Optionally verify that the layout matches the one in the given
@@ -353,18 +476,21 @@ int flashrom_layout_read_from_ifd(struct flashrom_layout **const layout, struct 
 	msg_cinfo("done.\n");
 
 	if (layout_from_ich_descriptors(chip_layout, desc, 0x1000)) {
+		msg_cerr("Couldn't parse the descriptor!\n");
 		ret = 3;
 		goto _finalize_ret;
 	}
 
 	if (dump) {
 		if (layout_from_ich_descriptors(&dump_layout, dump, len)) {
+			msg_cerr("Couldn't parse the descriptor!\n");
 			ret = 4;
 			goto _finalize_ret;
 		}
 
 		if (chip_layout->base.num_entries != dump_layout.base.num_entries ||
 		    memcmp(chip_layout->entries, dump_layout.entries, sizeof(dump_layout.entries))) {
+			msg_cerr("Descriptors don't match!\n");
 			ret = 5;
 			goto _finalize_ret;
 		}
@@ -402,9 +528,12 @@ static int flashrom_layout_parse_fmap(struct flashrom_layout **layout,
 		l->entries[l->num_entries].start = fmap->areas[i].offset;
 		l->entries[l->num_entries].end = fmap->areas[i].offset + fmap->areas[i].size - 1;
 		l->entries[l->num_entries].included = false;
-		memset(l->entries[l->num_entries].name, 0, sizeof(l->entries[i].name));
-		memcpy(l->entries[l->num_entries].name, fmap->areas[i].name,
-			min(FMAP_STRLEN, sizeof(l->entries[i].name)));
+		l->entries[l->num_entries].name =
+			strndup((const char *)fmap->areas[i].name, FMAP_STRLEN);
+		if (!l->entries[l->num_entries].name) {
+			msg_gerr("Error adding layout entry: %s\n", strerror(errno));
+			return 1;
+		}
 		msg_gdbg("fmap %08x - %08x named %s\n",
 			l->entries[l->num_entries].start,
 			l->entries[l->num_entries].end,
@@ -501,19 +630,6 @@ _free_ret:
 _ret:
 	return ret;
 #endif
-}
-
-/**
- * @brief Free a layout.
- *
- * @param layout Layout to free.
- */
-void flashrom_layout_release(struct flashrom_layout *const layout)
-{
-	if (layout == get_global_layout())
-		return;
-
-	free(layout);
 }
 
 /**

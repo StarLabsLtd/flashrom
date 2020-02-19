@@ -58,6 +58,7 @@ int spi_read_chunked(struct flashctx *flash, uint8_t *buf, unsigned int start, u
 int spi_write_chunked(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len, unsigned int chunksize);
 int spi_enter_4ba(struct flashctx *flash);
 int spi_exit_4ba(struct flashctx *flash);
+int spi_set_extended_address(struct flashctx *, uint8_t addr_high);
 
 
 /* spi25_statusreg.c */
@@ -200,5 +201,9 @@ int edi_chip_block_erase(struct flashctx *flash, unsigned int page, unsigned int
 int edi_chip_write(struct flashctx *flash, const uint8_t *buf, unsigned int start, unsigned int len);
 int edi_chip_read(struct flashctx *flash, uint8_t *buf, unsigned int start, unsigned int len);
 int edi_probe_kb9012(struct flashctx *flash);
+
+/* spi95.c */
+int probe_spi_st95(struct flashctx *flash);
+int spi_block_erase_emulation(struct flashctx *flash, unsigned int addr, unsigned int blocklen);
 
 #endif /* !__CHIPDRIVERS_H__ */

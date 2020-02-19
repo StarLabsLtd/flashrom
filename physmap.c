@@ -97,7 +97,7 @@ static void *sys_physmap(uintptr_t phys_addr, size_t len)
 #define sys_physmap_rw_uncached	sys_physmap
 #define sys_physmap_ro_cached	sys_physmap
 
-void sys_physunmap_unaligned(void *virt_addr, size_t len)
+static void sys_physunmap_unaligned(void *virt_addr, size_t len)
 {
 	__dpmi_meminfo mi;
 
@@ -126,7 +126,7 @@ void *sys_physmap(uintptr_t phys_addr, size_t len)
 #define sys_physmap_rw_uncached	sys_physmap
 #define sys_physmap_ro_cached	sys_physmap
 
-void sys_physunmap_unaligned(void *virt_addr, size_t len)
+static void sys_physunmap_unaligned(void *virt_addr, size_t len)
 {
 }
 #elif defined(__MACH__) && defined(__APPLE__)
@@ -147,7 +147,7 @@ static void *sys_physmap(uintptr_t phys_addr, size_t len)
 #define sys_physmap_rw_uncached	sys_physmap
 #define sys_physmap_ro_cached	sys_physmap
 
-void sys_physunmap_unaligned(void *virt_addr, size_t len)
+static void sys_physunmap_unaligned(void *virt_addr, size_t len)
 {
 	unmap_physical(virt_addr, len);
 }
@@ -200,7 +200,7 @@ static void *sys_physmap_ro_cached(uintptr_t phys_addr, size_t len)
 	return MAP_FAILED == virt_addr ? ERROR_PTR : virt_addr;
 }
 
-void sys_physunmap_unaligned(void *virt_addr, size_t len)
+static void sys_physunmap_unaligned(void *virt_addr, size_t len)
 {
 	munmap(virt_addr, len);
 }
@@ -363,6 +363,7 @@ void *physmap_ro_unaligned(const char *descr, uintptr_t phys_addr, size_t len)
 	return physmap_common(descr, phys_addr, len, PHYSM_RO, PHYSM_NOCLEANUP, PHYSM_EXACT);
 }
 
+#if CONFIG_INTERNAL == 1
 /* MSR abstraction implementations for Linux, OpenBSD, FreeBSD/Dragonfly, OSX, libpayload
  * and a non-working default implementation on the bottom. See also hwaccess.h for some (re)declarations. */
 #if defined(__i386__) || defined(__x86_64__)
@@ -687,3 +688,4 @@ void cleanup_cpu_msr(void)
 #else // x86
 /* Does MSR exist on non-x86 architectures? */
 #endif // arch switches for MSR code
+#endif // CONFIG_INTERNAL == 1

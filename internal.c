@@ -21,17 +21,6 @@
 #include "programmer.h"
 #include "hwaccess.h"
 
-struct pci_dev *pci_dev_find_filter(struct pci_filter filter)
-{
-	struct pci_dev *temp;
-
-	for (temp = pacc->devices; temp; temp = temp->next)
-		if (pci_filter_match(&filter, temp))
-			return temp;
-
-	return NULL;
-}
-
 struct pci_dev *pci_dev_find_vendorclass(uint16_t vendor, uint16_t devclass)
 {
 	struct pci_dev *temp;
@@ -156,8 +145,8 @@ int internal_init(void)
 	int ret = 0;
 	int force_laptop = 0;
 	int not_a_laptop = 0;
-	const char *board_vendor = NULL;
-	const char *board_model = NULL;
+	char *board_vendor = NULL;
+	char *board_model = NULL;
 #if IS_X86
 	const char *cb_vendor = NULL;
 	const char *cb_model = NULL;
@@ -221,8 +210,10 @@ int internal_init(void)
 	}
 	free(arg);
 
-	if (rget_io_perms())
-		return 1;
+	if (rget_io_perms()) {
+		ret = 1;
+		goto internal_init_exit;
+	}
 
 	/* Default to Parallel/LPC/FWH flash devices. If a known host controller
 	 * is found, the host controller init routine sets the
@@ -230,17 +221,22 @@ int internal_init(void)
 	 */
 	internal_buses_supported = BUS_NONSPI;
 
-	if (try_mtd() == 0)
-		return 0;
+	if (try_mtd() == 0) {
+		ret = 0;
+		goto internal_init_exit;
+	}
 
 	/* Initialize PCI access for flash enables */
-	if (pci_init_common() != 0)
-		return 1;
+	if (pci_init_common() != 0) {
+		ret = 1;
+		goto internal_init_exit;
+	}
 
 	if (processor_flash_enable()) {
 		msg_perr("Processor detection/init failed.\n"
 			 "Aborting.\n");
-		return 1;
+		ret = 1;
+		goto internal_init_exit;
 	}
 
 #if IS_X86
@@ -249,14 +245,18 @@ int internal_init(void)
 			msg_pwarn("Warning: The mainboard IDs set by -p internal:mainboard (%s:%s) do not\n"
 				  "         match the current coreboot IDs of the mainboard (%s:%s).\n",
 				  board_vendor, board_model, cb_vendor, cb_model);
-			if (!force_boardmismatch)
-				return 1;
+			if (!force_boardmismatch) {
+				ret = 1;
+				goto internal_init_exit;
+			}
 			msg_pinfo("Continuing anyway.\n");
 		}
 	}
 #endif
 
 #if IS_X86
+	is_laptop = 2; /* Assume that we don't know by default. */
+
 	dmi_init();
 
 	/* In case Super I/O probing would cause pretty explosions. */
@@ -275,17 +275,54 @@ int internal_init(void)
 	/* Check laptop whitelist. */
 	board_handle_before_laptop();
 
-	/* Warn if a non-whitelisted laptop is detected. */
+	/*
+	 * Disable all internal buses by default if we are not sure
+	 * this isn't a laptop. Board-enables may override this,
+	 * non-legacy buses (SPI and opaque atm) are probed anyway.
+	 */
+	if (is_laptop && !(laptop_ok || force_laptop || (not_a_laptop && is_laptop == 2)))
+		internal_buses_supported = BUS_NONE;
+
+	/* try to enable it. Failure IS an option, since not all motherboards
+	 * really need this to be done, etc., etc.
+	 */
+	ret = chipset_flash_enable();
+	if (ret == -2) {
+		msg_perr("WARNING: No chipset found. Flash detection "
+			 "will most likely fail.\n");
+	} else if (ret == ERROR_FATAL) {
+		goto internal_init_exit;
+	}
+
+#if IS_X86
+	/* Probe unconditionally for ITE Super I/O chips. This enables LPC->SPI translation on IT87* and
+	 * parallel writes on IT8705F. Also, this handles the manual chip select for Gigabyte's DualBIOS. */
+	init_superio_ite();
+
+	if (board_flash_enable(board_vendor, board_model, cb_vendor, cb_model)) {
+		msg_perr("Aborting to be safe.\n");
+		ret = 1;
+		goto internal_init_exit;
+	}
+#endif
+
+	if (internal_buses_supported & BUS_NONSPI)
+		register_par_master(&par_master_internal, internal_buses_supported);
+
+	/* Report if a non-whitelisted laptop is detected that likely uses a legacy bus. */
 	if (is_laptop && !laptop_ok) {
-		msg_perr("========================================================================\n");
+		msg_pinfo("========================================================================\n");
 		if (is_laptop == 1) {
-			msg_perr("WARNING! You seem to be running flashrom on an unsupported laptop.\n");
+			msg_pinfo("You seem to be running flashrom on an unknown laptop. Some\n"
+				  "internal buses have been disabled for safety reasons.\n\n");
 		} else {
-			msg_perr("WARNING! You may be running flashrom on an unsupported laptop. We could\n"
-				 "not detect this for sure because your vendor has not setup the SMBIOS\n"
-				 "tables correctly. You can enforce execution by adding\n"
-				 "'-p internal:laptop=this_is_not_a_laptop' to the command line, but\n"
-				 "please read the following warning if you are not sure.\n\n");
+			msg_pinfo("You may be running flashrom on an unknown laptop. We could not\n"
+				  "detect this for sure because your vendor has not set up the SMBIOS\n"
+				  "tables correctly. Some internal buses have been disabled for\n"
+				  "safety reasons. You can enforce using all buses by adding\n"
+				  "  -p internal:laptop=this_is_not_a_laptop\n"
+				  "to the command line, but please read the following warning if you\n"
+				  "are not sure.\n\n");
 		}
 		msg_perr("Laptops, notebooks and netbooks are difficult to support and we\n"
 			 "recommend to use the vendor flashing utility. The embedded controller\n"
@@ -297,38 +334,15 @@ int internal_init(void)
 			 "failure and sudden poweroff.\n"
 			 "You have been warned.\n"
 			 "========================================================================\n");
-
-		if (force_laptop || (not_a_laptop && (is_laptop == 2))) {
-			msg_perr("Proceeding anyway because user forced us to.\n");
-		} else {
-			msg_perr("Aborting.\n");
-			return 1;
-		}
 	}
 
-	/* try to enable it. Failure IS an option, since not all motherboards
-	 * really need this to be done, etc., etc.
-	 */
-	ret = chipset_flash_enable();
-	if (ret == -2) {
-		msg_perr("WARNING: No chipset found. Flash detection "
-			 "will most likely fail.\n");
-	} else if (ret == ERROR_FATAL)
-		return ret;
+	ret = 0;
 
-#if IS_X86
-	/* Probe unconditionally for ITE Super I/O chips. This enables LPC->SPI translation on IT87* and
-	 * parallel writes on IT8705F. Also, this handles the manual chip select for Gigabyte's DualBIOS. */
-	init_superio_ite();
+internal_init_exit:
+	free(board_vendor);
+	free(board_model);
 
-	if (board_flash_enable(board_vendor, board_model, cb_vendor, cb_model)) {
-		msg_perr("Aborting to be safe.\n");
-		return 1;
-	}
-#endif
-
-	register_par_master(&par_master_internal, internal_buses_supported);
-	return 0;
+	return ret;
 }
 
 static void internal_chip_writeb(const struct flashctx *flash, uint8_t val,

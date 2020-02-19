@@ -44,10 +44,12 @@
 .SH NAME
 flashrom \- detect, read, write, verify and erase flash chips
 .SH SYNOPSIS
-.B flashrom \fR[\fB\-h\fR|\fB\-R\fR|\fB\-L\fR|\fB\-z\fR|\fB\-p\fR <programmername>[:<parameters>]
-            [\fB\-E\fR|\fB\-r\fR <file>|\fB\-w\fR <file>|\fB\-v\fR <file>] [\fB\-c\fR <chipname>]
-            [(\fB\-l\fR <file>|\fB\-\-ifd|\fB \-\-fmap\fR|\fB\-\-fmap-file\fR <file>) [\fB\-i\fR <image>]]
-            [\fB\-n\fR] [\fB\-N\fR] [\fB\-f\fR]]
+.B flashrom \fR[\fB\-h\fR|\fB\-R\fR|\fB\-L\fR|\fB\-z\fR|
+          \fB\-p\fR <programmername>[:<parameters>] [\fB\-c\fR <chipname>]
+            (\fB\-\-flash\-name\fR|\fB\-\-flash\-size\fR|
+             [\fB\-E\fR|\fB\-r\fR <file>|\fB\-w\fR <file>|\fB\-v\fR <file>]
+             [(\fB\-l\fR <file>|\fB\-\-ifd|\fB \-\-fmap\fR|\fB\-\-fmap-file\fR <file>) [\fB\-i\fR <image>]]
+             [\fB\-n\fR] [\fB\-N\fR] [\fB\-f\fR])]
          [\fB\-V\fR[\fBV\fR[\fBV\fR]]] [\fB-o\fR <logfile>]
 .SH DESCRIPTION
 .B flashrom
@@ -242,6 +244,12 @@ Only flash region/image
 .B <imagename>
 from flash layout.
 .TP
+.B "\-\-flash\-name"
+Prints out the detected flash chips name.
+.TP
+.B "\-\-flash\-size"
+Prints out the detected flash chips size.
+.TP
 .B "\-L, \-\-list\-supported"
 List the flash chips, chipsets, mainboards, and external programmers
 (including PCI, USB, parallel port, and serial port based devices)
@@ -332,6 +340,10 @@ bitbanging adapter)
 .BR "* digilent_spi" " (for SPI flash ROMs attached to iCEblink40 development boards)"
 .sp
 .BR "* jlink_spi" " (for SPI flash ROMs attached to SEGGER J-Link and compatible devices)"
+.sp
+.BR "* ni845x_spi" " (for SPI flash ROMs attached to National Instruments USB-8451 or USB-8452)"
+.sp
+.BR "* stlinkv3_spi" " (for SPI flash ROMs attached to STMicroelectronics STLINK V3 devices)"
 .sp
 Some programmers have optional or mandatory parameters which are described
 in detail in the
@@ -543,21 +555,22 @@ Example:
 .TP
 .B Laptops
 .sp
-Using flashrom on laptops is dangerous and may easily make your hardware
-unusable (see also the
+Using flashrom on older laptops that don't boot from the SPI bus is
+dangerous and may easily make your hardware unusable (see also the
 .B BUGS
-section). The embedded controller (EC) in these
-machines often interacts badly with flashing.
+section). The embedded controller (EC) in some
+machines may interact badly with flashing.
 More information is
 .URLB https://flashrom.org/Laptops "in the wiki" .
-For example the EC firmware sometimes resides on the same
-flash chip as the host firmware. While flashrom tries to change the contents of
+Problems occur when the flash chip is shared between BIOS
+and EC firmware, and the latter does not expect flashrom
+to access the chip. While flashrom tries to change the contents of
 that memory the EC might need to fetch new instructions or data from it and
 could stop working correctly. Probing for and reading from the chip may also
 irritate your EC and cause fan failure, backlight failure, sudden poweroff, and
-other nasty effects. flashrom will attempt to detect if it is running on a
-laptop and abort immediately for safety reasons if it clearly identifies the
-host computer as one. If you want to proceed anyway at your own risk, use
+other nasty effects. flashrom will attempt to detect if it is running on such a
+laptop and limit probing to SPI buses. If you want to probe the LPC bus
+anyway at your own risk, use
 .sp
 .B "  flashrom \-p internal:laptop=force_I_want_a_brick"
 .sp
@@ -568,8 +581,8 @@ You have been warned.
 .sp
 Currently we rely on the chassis type encoded in the DMI/SMBIOS data to detect
 laptops. Some vendors did not implement those bits correctly or set them to
-generic and/or dummy values. flashrom will then issue a warning and bail out
-like above. In this case you can use
+generic and/or dummy values. flashrom will then issue a warning and restrict
+buses like above. In this case you can use
 .sp
 .B "  flashrom \-p internal:laptop=this_is_not_a_laptop"
 .sp
@@ -747,7 +760,8 @@ Atmel AT25128, AT25256, Micron (ST) M95128, M95256 and OnSemi (Catalyst) CAT25CS
 This module supports various programmers based on FTDI FT2232/FT4232H/FT232H chips including the DLP Design
 DLP-USB1232H, openbiosprog-spi, Amontec JTAGkey/JTAGkey-tiny/JTAGkey-2, Dangerous Prototypes Bus Blaster,
 Olimex ARM-USB-TINY/-H, Olimex ARM-USB-OCD/-H, OpenMoko Neo1973 Debug board (V2+), TIAO/DIYGADGET USB
-Multi-Protocol Adapter (TUMPA), TUMPA Lite, GOEPEL PicoTAP and Google Servo v1/v2.
+Multi-Protocol Adapter (TUMPA), TUMPA Lite, GOEPEL PicoTAP, Google Servo v1/v2 and Tin Can Tools
+Flyswatter/Flyswatter 2.
 .sp
 An optional parameter specifies the controller
 type, channel/interface/port and GPIO-based chip select it should support. For that you have to use the
@@ -1117,6 +1131,68 @@ Please also note that the mstarddc_spi driver only works on Linux.
 The WCH CH341A programmer does not support any parameters currently. SPI frequency is fixed at 2 MHz, and CS0 is
 used as per the device.
 .SS
+.BR "ni845x_spi " programmer
+.IP
+An optional
+.B voltage
+parameter could be used to specify the IO voltage. This parameter is available for the NI USB-8452 device.
+The default unit is Volt if no unit is specified. You can use
+.BR mV ", " milliVolt ", " V " or " Volt
+as unit specifier.
+Syntax is
+.sp
+.B "  flashrom \-p ni845x_spi:voltage=value"
+.sp
+where
+.B value
+can be
+.BR 1.2V ", " 1.5V ", " 1.8V ", " 2.5V ", " 3.3V
+or the equivalent in mV.
+.sp
+In the case if none of the programmer's supported IO voltage is within the supported voltage range of
+the detected flash chip the flashrom will abort the operation (to prevent damaging the flash chip).
+You can override this behaviour by passing "yes" to the
+.B ignore_io_voltage_limits
+parameter (for e.g. if you are using an external voltage translator circuit).
+Syntax is
+.sp
+.B "  flashrom \-p ni845x_spi:ignore_io_voltage_limits=yes"
+.sp
+You can use the
+.B serial
+parameter to explicitly specify which connected NI USB-845x device should be used.
+You should use your device's 7 digit hexadecimal serial number.
+Usage example to select the device with 1230A12 serial number:
+.sp
+.B "  flashrom \-p ni845x_spi:serial=1230A12"
+.sp
+An optional
+.B spispeed
+parameter specifies the frequency of the SPI bus.
+Syntax is
+.sp
+.B "  flashrom \-p ni845x_spi:spispeed=frequency"
+.sp
+where
+.B frequency
+should a number corresponding to the desired frequency in kHz.
+The maximum
+.B frequency
+is 12 MHz (12000 kHz) for the USB-8451 and 50 MHz (50000 kHz) for the USB-8452.
+The default is a frequency of 1 MHz (1000 kHz).
+.sp
+An optional
+.B cs
+parameter specifies which target chip select line should be used. Syntax is
+.sp
+.B "  flashrom \-p ni845x_spi:csnumber=value"
+.sp
+where
+.B value
+should be between
+.BR 0 " and " 7
+By default the CS0 is used.
+.SS
 .BR "digilent_spi " programmer
 .IP
 An optional
@@ -1185,6 +1261,31 @@ The SPI speed can be selected by using the
 .sp
 syntax where \fBfrequency\fP is the SPI clock frequency in kHz.
 The maximum speed depends on the device in use.
+.SS
+.BR "stlinkv3_spi " programmer
+.IP
+This module supports SPI flash programming through the STMicroelectronics
+STLINK V3 programmer/debugger's SPI bridge interface
+.sp
+.B "  flashrom \-p stlinkv3_spi"
+.sp
+If there is more than one compatible device connected, you can select which one
+should be used by specifying its serial number with the
+.sp
+.B "  flashrom \-p stlinkv3_spi:serial=number"
+.sp
+syntax where
+.B number
+is the serial number of the device (which can be found for example in the
+output of lsusb -v).
+.sp
+The SPI speed can be selected by using the
+.sp
+.B "  flashrom \-p stlinkv3_spi:spispeed=frequency"
+.sp
+syntax where \fBfrequency\fP is the SPI clock frequency in kHz.
+If the passed frequency is not supported by the adapter the nearest lower
+supported frequency will be used.
 .SS
 
 .SH EXAMPLES
@@ -1291,10 +1392,10 @@ channel.
 .SS
 .B Laptops
 .sp
-Using flashrom on laptops is dangerous and may easily make your hardware
-unusable. flashrom will attempt to detect if it is running on a laptop and abort
-immediately for safety reasons. Please see the detailed discussion of this topic
-and associated flashrom options in the
+Using flashrom on older laptops is dangerous and may easily make your hardware
+unusable. flashrom will attempt to detect if it is running on a susceptible
+laptop and restrict flash-chip probing for safety reasons. Please see the
+detailed discussion of this topic and associated flashrom options in the
 .B Laptops
 paragraph in the
 .B internal programmer
@@ -1333,6 +1434,8 @@ David Borg
 David Hendricks
 .br
 Dominik Geyer
+.br
+Edward O'Callaghan
 .br
 Eric Biederman
 .br

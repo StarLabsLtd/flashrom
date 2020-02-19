@@ -71,8 +71,8 @@ static uint8_t *sp_write_n_buf;
 static uint32_t sp_write_n_bytes = 0;
 
 /* sp_streamed_* used for flow control checking */
-static int sp_streamed_transmit_ops = 0;
-static int sp_streamed_transmit_bytes = 0;
+static unsigned int sp_streamed_transmit_ops = 0;
+static unsigned int sp_streamed_transmit_bytes = 0;
 
 /* sp_opbuf_usage used for counting the amount of
 	on-device operation buffer used */
@@ -300,7 +300,6 @@ static int serprog_spi_send_command(struct flashctx *flash,
 				    const unsigned char *writearr,
 				    unsigned char *readarr);
 static struct spi_master spi_master_serprog = {
-	.type		= SPI_CONTROLLER_SERPROG,
 	.features	= SPI_MASTER_4BA,
 	.max_data_read	= MAX_DATA_READ_UNLIMITED,
 	.max_data_write	= MAX_DATA_WRITE_UNLIMITED,
@@ -937,9 +936,8 @@ void *serprog_map(const char *descr, uintptr_t phys_addr, size_t len)
 	 * needed for non-SPI chips). Below we make sure that the requested range is within this window. */
 	if ((phys_addr & 0xFF000000) == 0xFF000000) {
 		return (void*)phys_addr;
-	} else {
-		msg_pwarn(MSGHEADER "requested mapping %s is incompatible: 0x%zx bytes at 0x%0*" PRIxPTR ".\n",
-			  descr, len, PRIxPTR_WIDTH, phys_addr);
-		return NULL;
 	}
+	msg_pwarn(MSGHEADER "requested mapping %s is incompatible: 0x%zx bytes at 0x%0*" PRIxPTR ".\n",
+		  descr, len, PRIxPTR_WIDTH, phys_addr);
+	return NULL;
 }

@@ -449,6 +449,30 @@ const struct programmer_entry programmer_table[] = {
 	},
 #endif
 
+#if CONFIG_NI845X_SPI == 1
+	{
+		.name			= "ni845x_spi",
+		.type			= OTHER, // choose other because NI-845x uses own USB implementation
+		.devs.note		= "National Instruments USB-845x\n",
+		.init			= ni845x_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
+#if CONFIG_STLINKV3_SPI == 1
+	{
+		.name			= "stlinkv3_spi",
+		.type			= USB,
+		.devs.dev		= devs_stlinkv3_spi,
+		.init			= stlinkv3_spi_init,
+		.map_flash_region	= fallback_map,
+		.unmap_flash_region	= fallback_unmap,
+		.delay			= internal_delay,
+	},
+#endif
+
 	{0}, /* This entry corresponds to PROGRAMMER_INVALID. */
 };
 
@@ -738,8 +762,7 @@ static int compare_range(const uint8_t *wantbuf, const uint8_t *havebuf, unsigne
 }
 
 /* start is an offset to the base address of the flash chip */
-int check_erased_range(struct flashctx *flash, unsigned int start,
-		       unsigned int len)
+static int check_erased_range(struct flashctx *flash, unsigned int start, unsigned int len)
 {
 	int ret;
 	uint8_t *cmpbuf = malloc(len);
@@ -976,142 +999,6 @@ static unsigned int get_next_write(const uint8_t *have, const uint8_t *want, uns
 	return first_len;
 }
 
-/* This function generates various test patterns useful for testing controller
- * and chip communication as well as chip behaviour.
- *
- * If a byte can be written multiple times, each time keeping 0-bits at 0
- * and changing 1-bits to 0 if the new value for that bit is 0, the effect
- * is essentially an AND operation. That's also the reason why this function
- * provides the result of AND between various patterns.
- *
- * Below is a list of patterns (and their block length).
- * Pattern 0 is 05 15 25 35 45 55 65 75 85 95 a5 b5 c5 d5 e5 f5 (16 Bytes)
- * Pattern 1 is 0a 1a 2a 3a 4a 5a 6a 7a 8a 9a aa ba ca da ea fa (16 Bytes)
- * Pattern 2 is 50 51 52 53 54 55 56 57 58 59 5a 5b 5c 5d 5e 5f (16 Bytes)
- * Pattern 3 is a0 a1 a2 a3 a4 a5 a6 a7 a8 a9 aa ab ac ad ae af (16 Bytes)
- * Pattern 4 is 00 10 20 30 40 50 60 70 80 90 a0 b0 c0 d0 e0 f0 (16 Bytes)
- * Pattern 5 is 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f (16 Bytes)
- * Pattern 6 is 00 (1 Byte)
- * Pattern 7 is ff (1 Byte)
- * Patterns 0-7 have a big-endian block number in the last 2 bytes of each 256
- * byte block.
- *
- * Pattern 8 is 00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f 10 11... (256 B)
- * Pattern 9 is ff fe fd fc fb fa f9 f8 f7 f6 f5 f4 f3 f2 f1 f0 ef ee... (256 B)
- * Pattern 10 is 00 00 00 01 00 02 00 03 00 04... (128 kB big-endian counter)
- * Pattern 11 is ff ff ff fe ff fd ff fc ff fb... (128 kB big-endian downwards)
- * Pattern 12 is 00 (1 Byte)
- * Pattern 13 is ff (1 Byte)
- * Patterns 8-13 have no block number.
- *
- * Patterns 0-3 are created to detect and efficiently diagnose communication
- * slips like missed bits or bytes and their repetitive nature gives good visual
- * cues to the person inspecting the results. In addition, the following holds:
- * AND Pattern 0/1 == Pattern 4
- * AND Pattern 2/3 == Pattern 5
- * AND Pattern 0/1/2/3 == AND Pattern 4/5 == Pattern 6
- * A weakness of pattern 0-5 is the inability to detect swaps/copies between
- * any two 16-byte blocks except for the last 16-byte block in a 256-byte bloc.
- * They work perfectly for detecting any swaps/aliasing of blocks >= 256 bytes.
- * 0x5 and 0xa were picked because they are 0101 and 1010 binary.
- * Patterns 8-9 are best for detecting swaps/aliasing of blocks < 256 bytes.
- * Besides that, they provide for bit testing of the last two bytes of every
- * 256 byte block which contains the block number for patterns 0-6.
- * Patterns 10-11 are special purpose for detecting subblock aliasing with
- * block sizes >256 bytes (some Dataflash chips etc.)
- * AND Pattern 8/9 == Pattern 12
- * AND Pattern 10/11 == Pattern 12
- * Pattern 13 is the completely erased state.
- * None of the patterns can detect aliasing at boundaries which are a multiple
- * of 16 MBytes (but such chips do not exist anyway for Parallel/LPC/FWH/SPI).
- */
-int generate_testpattern(uint8_t *buf, uint32_t size, int variant)
-{
-	int i;
-
-	if (!buf) {
-		msg_gerr("Invalid buffer!\n");
-		return 1;
-	}
-
-	switch (variant) {
-	case 0:
-		for (i = 0; i < size; i++)
-			buf[i] = (i & 0xf) << 4 | 0x5;
-		break;
-	case 1:
-		for (i = 0; i < size; i++)
-			buf[i] = (i & 0xf) << 4 | 0xa;
-		break;
-	case 2:
-		for (i = 0; i < size; i++)
-			buf[i] = 0x50 | (i & 0xf);
-		break;
-	case 3:
-		for (i = 0; i < size; i++)
-			buf[i] = 0xa0 | (i & 0xf);
-		break;
-	case 4:
-		for (i = 0; i < size; i++)
-			buf[i] = (i & 0xf) << 4;
-		break;
-	case 5:
-		for (i = 0; i < size; i++)
-			buf[i] = i & 0xf;
-		break;
-	case 6:
-		memset(buf, 0x00, size);
-		break;
-	case 7:
-		memset(buf, 0xff, size);
-		break;
-	case 8:
-		for (i = 0; i < size; i++)
-			buf[i] = i & 0xff;
-		break;
-	case 9:
-		for (i = 0; i < size; i++)
-			buf[i] = ~(i & 0xff);
-		break;
-	case 10:
-		for (i = 0; i < size % 2; i++) {
-			buf[i * 2] = (i >> 8) & 0xff;
-			buf[i * 2 + 1] = i & 0xff;
-		}
-		if (size & 0x1)
-			buf[i * 2] = (i >> 8) & 0xff;
-		break;
-	case 11:
-		for (i = 0; i < size % 2; i++) {
-			buf[i * 2] = ~((i >> 8) & 0xff);
-			buf[i * 2 + 1] = ~(i & 0xff);
-		}
-		if (size & 0x1)
-			buf[i * 2] = ~((i >> 8) & 0xff);
-		break;
-	case 12:
-		memset(buf, 0x00, size);
-		break;
-	case 13:
-		memset(buf, 0xff, size);
-		break;
-	}
-
-	if ((variant >= 0) && (variant <= 7)) {
-		/* Write block number in the last two bytes of each 256-byte
-		 * block, big endian for easier reading of the hexdump.
-		 * Note that this wraps around for chips larger than 2^24 bytes
-		 * (16 MB).
-		 */
-		for (i = 0; i < size / 256; i++) {
-			buf[i * 256 + 254] = (i >> 8) & 0xff;
-			buf[i * 256 + 255] = i & 0xff;
-		}
-	}
-
-	return 0;
-}
-
 /* Returns the number of busses commonly supported by the current programmer and flash chip where the latter
  * can not be completely accessed due to size/address limits of the programmer. */
 unsigned int count_max_decode_exceedings(const struct flashctx *flash)
@@ -1338,7 +1225,11 @@ notfound:
 	fallback->entry.start		= 0;
 	fallback->entry.end		= flash->chip->total_size * 1024 - 1;
 	fallback->entry.included	= true;
-	strcpy(fallback->entry.name, "complete flash");
+	fallback->entry.name		= strdup("complete flash");
+	if (!fallback->entry.name) {
+		msg_cerr("Failed to probe chip: %s\n", strerror(errno));
+		return -1;
+	}
 
 	tmp = flashbuses_to_text(flash->chip->bustype);
 	msg_cinfo("%s %s flash chip \"%s\" (%d kB, %s) ", force ? "Assuming" : "Found",
@@ -1386,7 +1277,7 @@ int read_buf_from_file(unsigned char *buf, unsigned long size,
 		ret = 1;
 		goto out;
 	}
-	if (image_stat.st_size != size) {
+	if (image_stat.st_size != (intmax_t)size) {
 		msg_gerr("Error: Image size (%jd B) doesn't match the flash chip's size (%lu B)!\n",
 			 (intmax_t)image_stat.st_size, size);
 		ret = 1;
@@ -1593,14 +1484,11 @@ static int check_block_eraser(const struct flashctx *flash, int k, int log)
 static int read_by_layout(struct flashctx *const flashctx, uint8_t *const buffer)
 {
 	const struct flashrom_layout *const layout = get_layout(flashctx);
+	const struct romentry *entry = NULL;
 
-	size_t i;
-	for (i = 0; i < layout->num_entries; ++i) {
-		if (!layout->entries[i].included)
-			continue;
-
-		const chipoff_t region_start	= layout->entries[i].start;
-		const chipsize_t region_len	= layout->entries[i].end - layout->entries[i].start + 1;
+	while ((entry = layout_next_included(layout, entry))) {
+		const chipoff_t region_start	= entry->start;
+		const chipsize_t region_len	= entry->end - entry->start + 1;
 
 		if (flashctx->chip->read(flashctx, buffer + region_start, region_start, region_len))
 			return 1;
@@ -1677,17 +1565,14 @@ static int walk_by_layout(struct flashctx *const flashctx, struct walk_info *con
 			  const per_blockfn_t per_blockfn)
 {
 	const struct flashrom_layout *const layout = get_layout(flashctx);
+	const struct romentry *entry = NULL;
 
 	all_skipped = true;
 	msg_cinfo("Erasing and writing flash chip... ");
 
-	size_t i;
-	for (i = 0; i < layout->num_entries; ++i) {
-		if (!layout->entries[i].included)
-			continue;
-
-		info->region_start = layout->entries[i].start;
-		info->region_end   = layout->entries[i].end;
+	while ((entry = layout_next_included(layout, entry))) {
+		info->region_start = entry->start;
+		info->region_end   = entry->end;
 
 		size_t j;
 		int error = 1; /* retry as long as it's 1 */
@@ -1958,14 +1843,11 @@ static int verify_by_layout(struct flashctx *const flashctx,
 			    void *const curcontents, const uint8_t *const newcontents)
 {
 	const struct flashrom_layout *const layout = get_layout(flashctx);
+	const struct romentry *entry = NULL;
 
-	size_t i;
-	for (i = 0; i < layout->num_entries; ++i) {
-		if (!layout->entries[i].included)
-			continue;
-
-		const chipoff_t region_start	= layout->entries[i].start;
-		const chipsize_t region_len	= layout->entries[i].end - layout->entries[i].start + 1;
+	while ((entry = layout_next_included(layout, entry))) {
+		const chipoff_t region_start	= entry->start;
+		const chipsize_t region_len	= entry->end - entry->start + 1;
 
 		if (flashctx->chip->read(flashctx, curcontents + region_start, region_start, region_len))
 			return 1;
@@ -2009,18 +1891,6 @@ static void emergency_help_message(void)
 			 "mail flashrom@flashrom.org, thanks!\n");
 }
 
-/* The way to go if you want a delimited list of programmers */
-void list_programmers(const char *delim)
-{
-	enum programmer p;
-	for (p = 0; p < PROGRAMMER_INVALID; p++) {
-		msg_ginfo("%s", programmer_table[p].name);
-		if (p < PROGRAMMER_INVALID - 1)
-			msg_ginfo("%s", delim);
-	}
-	msg_ginfo("\n");
-}
-
 void list_programmers_linebreak(int startcol, int cols, int paren)
 {
 	const char *pname;
@@ -2060,7 +1930,7 @@ void list_programmers_linebreak(int startcol, int cols, int paren)
 	}
 }
 
-void print_sysinfo(void)
+static void print_sysinfo(void)
 {
 #if IS_WINDOWS
 	SYSTEM_INFO si;
@@ -2240,8 +2110,8 @@ int selfcheck(void)
 /* FIXME: This function signature needs to be improved once doit() has a better
  * function signature.
  */
-int chip_safety_check(const struct flashctx *flash, int force, int read_it, int write_it, int erase_it,
-		      int verify_it)
+static int chip_safety_check(const struct flashctx *flash, int force,
+			     int read_it, int write_it, int erase_it, int verify_it)
 {
 	const struct flashchip *chip = flash->chip;
 
