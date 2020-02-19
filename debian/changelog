@@ -1,3 +1,11 @@
+flashrom (1.2-2) unstable; urgency=medium
+
+  * Build additional packages. (Closes: #951589)
+  * d/control: drop CDBS.
+  * Bump debhelper version to 11.
+
+ -- Gürkan Myczko <gurkan@phys.ethz.ch>  Wed, 19 Feb 2020 07:09:31 +0100
+
 flashrom (1.2-1) unstable; urgency=medium
 
   * New upstream version. (Closes: #948192)
