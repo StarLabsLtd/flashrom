@@ -74,6 +74,7 @@ Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips
 Package: libflashrom-dev
 Section: libdevel
 Architecture: any
+Multi-Arch: same
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: BIOS/ROM/flash chips - development files
  flashrom is a tool for identifying, reading, writing, verifying and erasing

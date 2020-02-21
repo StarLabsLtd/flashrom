@@ -2,3 +2,4 @@
 m/libflashrom.so.1.0.0 usr/lib/${DEB_HOST_MULTIARCH}/
 m/libflashrom.so usr/lib/${DEB_HOST_MULTIARCH}/
 m/libflashrom.so.1 usr/lib/${DEB_HOST_MULTIARCH}/
+m/meson-private/flashrom.pc usr/lib/pkgconfig

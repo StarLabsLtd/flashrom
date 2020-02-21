@@ -1,5 +1,5 @@
 #!/usr/bin/dh-exec
 *.h usr/include/flashrom/
-#debian/flashrom.pc usr/lib/pkgconfig
+#m/meson-private/flashrom.pc usr/lib/pkgconfig
 #m/libflashrom.so usr/lib/${DEB_HOST_MULTIARCH}/
 #m/libflashrom.so.1 usr/lib/${DEB_HOST_MULTIARCH}/
