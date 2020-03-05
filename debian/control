@@ -3,7 +3,7 @@ Section: electronics
 Priority: optional
 Maintainer: Debian EFI <debian-efi@lists.debian.org>
 Uploaders: Jeremiah C. Foster <jeremiah.foster@puri.sm>, Mario Limonciello <mario.limonciello@dell.com>, Gürkan Myczko <gurkan@phys.ethz.ch>
-Build-Depends: debhelper (>= 11), pkg-config, libpci-dev, libusb-dev [!kfreebsd-any], libusb-1.0-0-dev [!hurd-i386], libftdi1-dev [!hurd-i386], ninja-build, meson, dh-exec
+Build-Depends: debhelper (>= 11), pkg-config, libpci-dev, libusb-1.0-0-dev [!hurd-i386], libftdi1-dev [!hurd-i386], meson
 Standards-Version: 4.5.0
 Vcs-Browser: https://salsa.debian.org/myczko-guest/flashrom
 Vcs-Git: https://salsa.debian.org/myczko-guest/flashrom.git
@@ -75,7 +75,7 @@ Package: libflashrom-dev
 Section: libdevel
 Architecture: any
 Multi-Arch: same
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: libflashrom1 (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
 Description: BIOS/ROM/flash chips - development files
  flashrom is a tool for identifying, reading, writing, verifying and erasing
  flash chips. It's often used to flash BIOS/EFI/coreboot/firmware/optionROM
@@ -98,6 +98,7 @@ Description: BIOS/ROM/flash chips - development files
 Package: libflashrom1
 Section: libs
 Architecture: any
+Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Identify, read, write, erase, and verify BIOS/ROM/flash chips - library

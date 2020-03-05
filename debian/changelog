@@ -1,3 +1,17 @@
+flashrom (1.2-5) unstable; urgency=medium
+
+  [ Mario Limonciello ]
+  * debian/control:
+    - Explicitly depend on libflashrom1 in libflashrom-dev
+    - Drop ninja-build dependency (meson depends on it)
+    - Drop dh-exec dependency (not needed)
+
+  [ Pino Toscano ]
+  * debian/control:
+    - Remove extra libusb-dev dep (Closes: #951798)
+
+ -- Mario Limonciello <mario.limonciello@dell.com>  Thu, 05 Mar 2020 07:50:28 -0600
+
 flashrom (1.2-4) unstable; urgency=medium
 
   * debian/rules:
