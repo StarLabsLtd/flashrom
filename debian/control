@@ -1,8 +1,8 @@
 Source: flashrom
 Section: electronics
 Priority: optional
-Maintainer: Gürkan Myczko <gurkan@phys.ethz.ch>
-Uploaders: Jeremiah C. Foster <jeremiah.foster@puri.sm>
+Maintainer: Debian EFI <debian-efi@lists.debian.org>
+Uploaders: Jeremiah C. Foster <jeremiah.foster@puri.sm>, Mario Limonciello <mario.limonciello@dell.com>, Gürkan Myczko <gurkan@phys.ethz.ch>
 Build-Depends: debhelper (>= 11), pkg-config, libpci-dev, libusb-dev [!kfreebsd-any], libusb-1.0-0-dev [!hurd-i386], libftdi1-dev [!hurd-i386], ninja-build, meson, dh-exec
 Standards-Version: 4.5.0
 Vcs-Browser: https://salsa.debian.org/myczko-guest/flashrom

@@ -1,3 +1,23 @@
+flashrom (1.2-4) unstable; urgency=medium
+
+  * debian/rules:
+    - Don't build twice with meson and autotools
+    - Remove unneeded comments
+    - Only build configuration options that work on x86 on x86
+      (Fix FTBFS on many architectures)
+  * debian/*.install
+    - Use wildcards to install all the files
+  * Fix the pkgconfig location
+  * Only install the headers that are needed
+  * debian/control:
+    - Add me to uploaders.
+    - Set EFI team as new maintainer.
+  * debian/libflashrom.install:
+    - Fix installation of .so file to correct package
+    - Remove dh-exec from header
+
+ -- Mario Limonciello <mario.limonciello@dell.com>  Wed, 04 Mar 2020 20:06:53 -0600
+
 flashrom (1.2-3) unstable; urgency=medium
 
   * Also install pkg-config file.
