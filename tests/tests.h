@@ -47,6 +47,7 @@ void nicrealtek_init_and_shutdown_test_success(void **state);
 void dediprog_init_and_shutdown_test_success(void **state);
 void ene_lpc_init_and_shutdown_test_success(void **state);
 void linux_spi_init_and_shutdown_test_success(void **state);
+void realtek_mst_init_and_shutdown_test_success(void **state);
 
 /* layout.c */
 void included_regions_dont_overlap_test_success(void **state);
@@ -55,5 +56,9 @@ void region_not_included_overlap_test_success(void **state);
 void layout_pass_sanity_checks_test_success(void **state);
 void layout_region_invalid_address_test_success(void **state);
 void layout_region_invalid_range_test_success(void **state);
+
+/* chip.c */
+void erase_chip_test_success(void **state);
+void erase_chip_with_dummyflasher_test_success(void **state);
 
 #endif /* TESTS_H */

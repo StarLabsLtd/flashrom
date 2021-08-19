@@ -20,6 +20,7 @@ srcs = [
   'spi25.c',
   'init_shutdown.c',
   'layout.c',
+  'chip.c',
 ]
 
 mocks = [
@@ -34,6 +35,8 @@ mocks = [
   '-Wl,--wrap=open',
   '-Wl,--wrap=open64',
   '-Wl,--wrap=ioctl',
+  '-Wl,--wrap=read',
+  '-Wl,--wrap=write',
   '-Wl,--wrap=fopen',
   '-Wl,--wrap=fopen64',
   '-Wl,--wrap=rget_io_perms',
