@@ -9,6 +9,7 @@
  */
 
 #include <stddef.h>
+#include <stdlib.h>
 #include "platform/string.h"
 #include <stdbool.h>
 #include "flashchips.h"
@@ -353,8 +354,28 @@ static int spi_write_extended_address_register(struct flashctx *const flash, con
 	return result;
 }
 
+static int spi_restore_extended_address(struct flashctx *flash, void *data)
+{
+	const uint8_t original = *(uint8_t *)data;
+	free(data);
+	return spi_write_extended_address_register(flash, original);
+}
+
 int spi_set_extended_address(struct flashctx *const flash, const uint8_t addr_high)
 {
+	if (flash->address_high_byte == -1) {
+		const uint8_t command = flash->chip->feature_bits & FEATURE_4BA_EAR_C5C8 ?
+			JEDEC_READ_EXT_ADDR_REG : ALT_READ_EXT_ADDR_REG_16;
+		uint8_t *original = malloc(sizeof(*original));
+		if (!original)
+			return -1;
+		if (spi_send_command(flash, 1, 1, &command, original) ||
+		    register_chip_restore(spi_restore_extended_address, flash, original)) {
+			free(original);
+			return -1;
+		}
+		flash->address_high_byte = *original;
+	}
 	if (flash->address_high_byte != addr_high &&
 	    spi_write_extended_address_register(flash, addr_high))
 		return -1;
